@@ -1,5 +1,5 @@
-import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, addItem, takeItem, log, masteryLevel, recalcHp } from "../engine/state.js";
-import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration } from "../engine/sim.js";
+import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, addItem, takeItem, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap } from "../engine/state.js";
+import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
 
@@ -67,7 +67,13 @@ function handle(ctx, act, arg, el) {
   const { state } = ctx;
   const err = (m) => { if (m) toast(ctx, m); };
   switch (act) {
-    case "skill": selectedSkill = arg; ctx.render(); break;
+    case "skill": {
+      const lock = skillLocked(state, arg);
+      if (lock) { err(`Locked until ${lock}. That's the fork — train the requirement, or ignore this art.`); break; }
+      selectedSkill = arg; ctx.render(); break;
+    }
+    case "checkpoint": err(spendCheckpoint(state, arg)); ctx.render(); break;
+    case "dismiss-level": state.levelUps = []; ctx.render(); break;
     case "start": err(startAction(state, arg)); ctx.render(); break;
     case "stop": stopAction(state); stopFight(state); ctx.render(); break;
     case "fight": err(startFight(state, arg)); ctx.render(); break;
@@ -209,7 +215,8 @@ export function renderShell(ctx) {
   const left = SKILLS.map((s) => {
     const lv = skillLevel(state, s.id);
     const on = selectedSkill === s.id ? "on" : "";
-    return `<button class="skill ${on}" data-act="skill" data-arg="${s.id}"><span>${s.icon}</span><span class="sn">${s.name}</span><span class="lv">${lv}</span></button>`;
+    const lock = skillLocked(state, s.id);
+    return `<button class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}><span>${s.icon}</span><span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : lv}</span></button>`;
   }).join("");
   root.querySelector("#skill-nav").innerHTML = left;
   renderTop(ctx);
@@ -283,10 +290,35 @@ function renderTop(ctx) {
       bar.style.width = pct + "%";
       bar.classList.remove("combat");
     } else {
-      lab.textContent = "Idle — pick a craft or a war.";
+      lab.textContent = "Idle — one craft or one war. Halt to change.";
       bar.style.width = "0%";
       bar.classList.remove("combat");
     }
+  }
+  const commit = document.getElementById("commit");
+  if (commit) {
+    if (m) {
+      const foodN = bankCount(state, state.combat.foodId);
+      commit.innerHTML = `<b>Committed:</b> fighting ${m.name} · ${foodN} food · Halt to leave. Soil/Drove still tick.`;
+      commit.className = "danger";
+    } else if (act) {
+      const a = CONTENT.actions[act.id];
+      commit.innerHTML = `<b>Committed:</b> ${a?.name || act.id} (${skillName(act.skill)}). Everything else waits. Halt to switch.`;
+      commit.className = "";
+    } else {
+      commit.innerHTML = `<b>Uncommitted.</b> Pick one action. You cannot train 22 skills at once — that was never the game.`;
+      commit.className = "idle";
+    }
+  }
+  const modal = document.getElementById("level-modal");
+  if (modal) {
+    const ev = (state.levelUps || [])[0];
+    if (ev) {
+      modal.hidden = false;
+      modal.innerHTML = `<div class="sheet"><h3>${skillName(ev.skill)} ${ev.to}</h3>
+        <p>${(ev.unlocks || []).length ? "Unlocked: " + ev.unlocks.join(", ") : "The citadel noticed."}</p>
+        <button type="button" data-act="dismiss-level">Continue</button></div>`;
+    } else modal.hidden = true;
   }
 }
 
@@ -348,8 +380,10 @@ function renderCenter(ctx) {
   const pct = next === prev ? 100 : Math.min(100, 100 * (xp - prev) / (next - prev));
   const guild = state.skills[sk.id].guildRank;
   const gtask = CONTENT.guildTasks[sk.id][guild];
+  const lock = skillLocked(state, sk.id);
   let body = "";
-  if (sk.kind === "gather" || sk.kind === "artisan") body = renderActions(ctx, sk.id);
+  if (lock) body = `<p class="blurb">Locked until <strong>${lock}</strong>. Train that instead — opportunity cost is the whole game.</p>`;
+  else if (sk.kind === "gather" || sk.kind === "artisan") body = renderActions(ctx, sk.id);
   else if (sk.id === "course") body = renderCourse(ctx);
   else if (sk.id === "whisper") body = renderActions(ctx, "whisper");
   else if (sk.id === "soil") body = renderSoil(ctx);
@@ -364,7 +398,7 @@ function renderCenter(ctx) {
       </div>
       <div class="xpbar"><i style="width:${pct}%"></i><span>${Math.floor(xp).toLocaleString()} / ${next.toLocaleString()} xp</span></div>
     </div>
-    <div class="guild">Guild ${guild}/10 ${gtask ? `· ${gtask.name}: ${state.skills[sk.id].guildProgress.toLocaleString()} / ${gtask.need.toLocaleString()} · ${gtask.bonus.label}` : "· Maxed"}</div>
+    <div class="guild">Pool ${state.skills[sk.id].pool || 0} · spend it on one node, not all of them · Guild ${guild}/10 ${gtask ? `· ${gtask.name}: ${state.skills[sk.id].guildProgress.toLocaleString()} / ${gtask.need.toLocaleString()} · ${gtask.bonus.label}` : "· Maxed"}</div>
     ${body}
   `;
 }
@@ -419,16 +453,22 @@ function renderActions(ctx, skill) {
         (a.inputs || []).forEach((i) => invBits.push(`${bankCount(state, i.item)} ${itemName(i.item)}`));
         (a.outputs || []).forEach((i) => invBits.push(`${bankCount(state, i.item)} ${itemName(i.item)}`));
         const inv = [...new Set(invBits)].slice(0, 4).join(" · ");
-        return `<button class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
+        const cp = state.skills[skill].checkpoints?.[a.masteryId] || 0;
+        const cost = checkpointCost(state, a.id);
+        const pool = state.skills[skill].pool || 0;
+        return `<div class="cardwrap">
+        <button class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
           <strong>${a.name}</strong>
-          <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · M${ml}</span>
+          <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · M${ml} · CP${cp}</span>
           <div class="io">
             ${ins ? `<span class="in">In ${ins}</span>` : `<span class="in">No inputs</span>`}
             ${outs ? `<span class="out">Out ${outs}</span>` : `<span class="out">${a.desc || "No listed outputs"}</span>`}
           </div>
           ${inv ? `<span class="inv">Bank ${inv}</span>` : ""}
           ${why ? `<em class="lock-why">${why}</em>` : ""}
-        </button>`;
+        </button>
+        <button type="button" class="tiny" data-act="checkpoint" data-arg="${a.id}">Spend ${cost} pool on THIS node (have ${pool}) — skip the rest</button>
+        </div>`;
       }).join("")}
     </div>
   `).join("");
@@ -671,7 +711,7 @@ function renderBank(ctx) {
   const worth = held.reduce((s, [id, n]) => s + (CONTENT.items[id]?.value || 0) * n, 0);
   const html = `<div class="tabs">${tabBtns}</div>
     <input id="bank-search" placeholder="Search bank" value="${esc(bankFilter)}" />
-    <div class="bank-meta"><span>${held.length} stacks</span><span>${worth.toLocaleString()} ✦</span></div>
+    <div class="bank-meta"><span>${held.length}/${bankCap(state)} stacks${held.length >= bankCap(state) ? " · FULL" : ""}</span><span>${worth.toLocaleString()} ✦</span></div>
     <div class="bank-grid">${rows || "<p class='blurb'>Empty tab.</p>"}</div>`;
   fillHtml(document.getElementById("bank"), html);
 }

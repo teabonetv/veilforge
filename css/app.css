@@ -302,6 +302,27 @@ button.locked, button:disabled { opacity: 0.45; cursor: not-allowed; }
   padding: 10px 16px; border-radius: 999px; opacity: 0; pointer-events: none; transition: 0.25s;
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#commit {
+  padding: 8px 16px;
+  background: #241430;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--gold);
+}
+#commit.danger { background: #3a1524; color: var(--rose); }
+#commit.idle { color: var(--muted); }
+.cardwrap { display: flex; flex-direction: column; gap: 4px; }
+button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
+#skill-nav .skill.locked { opacity: 0.45; }
+#level-modal {
+  position: fixed; inset: 0; background: #0c0714cc; display: grid; place-items: center; z-index: 40;
+}
+#level-modal[hidden] { display: none !important; }
+#level-modal .sheet {
+  background: var(--panel-solid); border: 1px solid var(--gold-dim); border-radius: 16px;
+  padding: 22px 26px; max-width: 420px; box-shadow: var(--shadow);
+}
+#level-modal h3 { margin: 0 0 8px; color: var(--gold); }
 .links { font-size: 11px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .links a { color: var(--gold); }
 .muted { color: var(--muted); font-size: 11px; }

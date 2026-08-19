@@ -6,7 +6,7 @@ const SAVE_KEY = "veilforge-save-v1";
 
 export function emptySkills() {
   const o = {};
-  for (const s of SKILLS) o[s.id] = { xp: 0, level: 1, mastery: {}, guildProgress: 0, guildRank: 0, actions: 0 };
+  for (const s of SKILLS) o[s.id] = { xp: 0, level: 1, mastery: {}, guildProgress: 0, guildRank: 0, actions: 0, pool: 0, checkpoints: {} };
   return o;
 }
 
@@ -18,8 +18,8 @@ export function createState() {
     lastSave: Date.now(),
     coins: 25,
     bank: {
-      "food-0": 10,
-      "log-0": 3
+      "food-0": 4,
+      "log-0": 2
     },
     bankTabs: ["General", "War", "Craft"],
     itemTabs: {},
@@ -36,7 +36,7 @@ export function createState() {
       hp: 10, maxHp: 10, area: null, monsterId: null, monsterHp: 0,
       nextHitAt: 0, enemyNextAt: 0, fighting: false, dungeon: null, dungeonIndex: 0,
       kills: {}, style: "might", spell: "gust-bolt", prayers: [], vow: 100, maxVow: 100,
-      foodId: "food-0", autoEat: 0.4, potionId: null, potionCharges: 0,
+      foodId: "food-0", autoEat: 0.5, potionId: null, potionCharges: 0,
       stunUntil: 0, poison: 0, ward: 0, dungeonDeaths: 0,
       spec: 0, useSpec: true
     },
@@ -54,7 +54,9 @@ export function createState() {
     settings: { toasts: true, reducedMotion: false, showCombatLog: true, tickScale: 1 },
     action: null,
     actionCounts: {},
-    now: 0
+    now: 0,
+    levelUps: [],
+    _fx: 0
   };
 }
 
@@ -72,6 +74,9 @@ export function addXp(state, skill, amount, content = CONTENT) {
   if (sk.level > before) {
     toasts.push(`${skillName(skill)} ${sk.level}`);
     if (skill === "vitality") recalcHp(state);
+    const unlocks = collectUnlocks(state, skill, before, sk.level);
+    state.levelUps = state.levelUps || [];
+    state.levelUps.push({ skill, from: before, to: sk.level, unlocks, t: Date.now() });
   }
   return toasts;
 }
@@ -102,6 +107,42 @@ export function bankCount(state, id) {
   return state.bank[id] || 0;
 }
 
+export function bankUsed(state) {
+  return Object.keys(state.bank).filter((id) => (state.bank[id] || 0) > 0).length;
+}
+
+export function bankCap(state) {
+  return 12 + (state.shopBought["shop-slots"] || 0) * 6;
+}
+
+export function skillLocked(state, skillId) {
+  const s = SKILLS.find((x) => x.id === skillId);
+  if (!s?.unlock) return null;
+  const u = s.unlock;
+  if (u.skill && skillLevel(state, u.skill) < u.level) {
+    return `${skillName(u.skill)} ${u.level}`;
+  }
+  if (u.kills && (state.stats.kills || 0) < u.kills) {
+    return `${u.kills} kills`;
+  }
+  if (u.quest && !(state.quests.done || []).includes(u.quest)) {
+    return "a sealed ledger page";
+  }
+  return null;
+}
+
+function collectUnlocks(state, skill, from, to) {
+  const out = [];
+  for (const act of Object.values(CONTENT.actions)) {
+    if (act.skill === skill && act.level > from && act.level <= to) out.push(act.name);
+  }
+  for (const s of SKILLS) {
+    if (!s.unlock) continue;
+    if (s.unlock.skill === skill && s.unlock.level > from && s.unlock.level <= to) out.push(`${s.name} skill`);
+  }
+  return out.slice(0, 6);
+}
+
 export function addItem(state, id, qty) {
   if (!id || qty <= 0) return false;
   if (id === "coins") {
@@ -110,6 +151,11 @@ export function addItem(state, id, qty) {
     state.coins += qty;
     state.stats.gp += qty;
     return true;
+  }
+  const exists = (state.bank[id] || 0) > 0;
+  if (!exists && bankUsed(state) >= bankCap(state)) {
+    state.bankFull = true;
+    return false;
   }
   state.bank[id] = (state.bank[id] || 0) + qty;
   return true;
@@ -136,12 +182,18 @@ export function masteryLevel(xp) {
   return Math.min(99, 1 + Math.floor(Math.sqrt(xp / 12)));
 }
 
-export function masteryBonus(state, masteryId) {
-  const skill = state.action?.skill;
-  if (!skill) return { speed: 0, preserve: 0, output: 0, rare: 0 };
+export function masteryBonus(state, masteryId, skillHint) {
+  const skill = skillHint || state.action?.skill;
+  if (!skill || !state.skills[skill]) return { speed: 0, preserve: 0, output: 0, rare: 0 };
   const xp = state.skills[skill].mastery[masteryId] || 0;
   const ml = masteryLevel(xp);
-  return { speed: ml * 0.0025, preserve: ml * 0.0015, output: ml * 0.001, rare: ml * 0.002 };
+  const cp = state.skills[skill].checkpoints?.[masteryId] || 0;
+  return {
+    speed: ml * 0.0025 + cp * 0.04,
+    preserve: ml * 0.0015 + cp * 0.03,
+    output: ml * 0.001 + cp * 0.02,
+    rare: ml * 0.002 + cp * 0.015
+  };
 }
 
 export function guildBonuses(state, skill) {

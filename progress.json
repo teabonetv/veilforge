@@ -1,32 +1,31 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-19T16:40:00Z",
-  "wave": 3,
-  "overall": "120 unique-named monsters across 20 fields, 10 dungeons, thicker spellbook, unique-skill engines, retimed ledger. Headless sim green. Fresh critic should play localhost now.",
+  "updatedAt": "2026-08-19T16:20:00Z",
+  "wave": 4,
+  "overall": "Wave 4 answers the live critic: one commitment, skill gates, bank cap, mastery pool spends, deadly docks, death tax, level-up sheet. Sim: fewer kills, lower HP — combat now bites.",
   "comparison": {
-    "melvorIdle": "pending live critic",
-    "melvorIdle2": "pending live critic",
+    "melvorIdle": "critic 1: Melvor Idle still ahead on compulsion",
+    "melvorIdle2": "critic 1 winner",
     "oursBetter": false,
-    "biggestGap": "Awaiting a critic who opened the running game"
+    "biggestGap": "Was: zero decisions. Wave 4 ships the decision layer. Fresh critic queued."
   },
   "pieces": [
-    {"id": "core-loop", "name": "Tick, save, offline, action bars", "status": "done", "critic": "sim green"},
-    {"id": "gathering", "name": "Timber, Trawl, Vein, Ember", "status": "done", "critic": "sim green"},
-    {"id": "artisan", "name": "Hearth, Anvil, Fletch, Loom, Sigil, Vial", "status": "done", "critic": "sim green"},
-    {"id": "unique-skills", "name": "Course, Whisper, Soil, Drove, Chart", "status": "done", "critic": "heat/streak/stack/slots"},
-    {"id": "combat", "name": "Might, Guard, Vitality, Mark, Weave, Vow, Bounty", "status": "done", "critic": "120 monsters / 10 dungeons"},
-    {"id": "guilds", "name": "Mastery + Guild tasks (MI2-inspired)", "status": "done", "critic": "sim green"},
-    {"id": "quests", "name": "Story ledger and side contracts", "status": "done", "critic": "2-minute loop retimed"},
-    {"id": "bank-shop", "name": "Bank, shop, tools, loadouts", "status": "done", "critic": "grouped stall"},
-    {"id": "threejs", "name": "Citadel scene, combat arena, skill dioramas", "status": "done", "critic": "dioramas"},
-    {"id": "ui-qol", "name": "Nav, toasts, stats, settings, identity", "status": "done", "critic": "HUD restyle"},
-    {"id": "pacing", "name": "Economy, drop tables, long-term goals", "status": "done", "critic": "content volume pass"},
-    {"id": "coherence", "name": "Whole-game playthrough polish", "status": "building", "critic": "fresh playtest"}
+    {"id": "core-loop", "name": "Tick, save, offline, action bars", "status": "done", "critic": "commitment banner"},
+    {"id": "gathering", "name": "Timber, Trawl, Vein, Ember", "status": "done", "critic": "log sinks + pool"},
+    {"id": "artisan", "name": "Hearth, Anvil, Fletch, Loom, Sigil, Vial", "status": "done", "critic": "gated unlocks"},
+    {"id": "unique-skills", "name": "Course, Whisper, Soil, Drove, Chart", "status": "done", "critic": "gated unlocks"},
+    {"id": "combat", "name": "Might, Guard, Vitality, Mark, Weave, Vow, Bounty", "status": "done", "critic": "dock gear checks + death tax"},
+    {"id": "guilds", "name": "Mastery + Guild tasks (MI2-inspired)", "status": "done", "critic": "pool checkpoints"},
+    {"id": "quests", "name": "Story ledger and side contracts", "status": "done", "critic": "2-minute loop"},
+    {"id": "bank-shop", "name": "Bank, shop, tools, loadouts", "status": "done", "critic": "12-stack cap"},
+    {"id": "threejs", "name": "Citadel scene, combat arena, skill dioramas", "status": "done", "critic": "action pulse"},
+    {"id": "ui-qol", "name": "Nav, toasts, stats, settings, identity", "status": "done", "critic": "level sheet"},
+    {"id": "pacing", "name": "Economy, drop tables, long-term goals", "status": "done", "critic": "scarcity pass"},
+    {"id": "coherence", "name": "Whole-game playthrough polish", "status": "building", "critic": "wave 4 re-critique"}
   ],
   "log": [
-    "20 combat fields, 120 uniquely named monsters (was recycled packs of 72).",
-    "Spellbook widened; Silent Stacks + The Last Page dungeons.",
-    "Unique skills: live Course times, Whisper heat, stacking Drove, slotted Chart."
+    "Critic 1 (live play): Melvor Idle 2 > Melvor Idle > Veilforge. Gap: zero meaningful decisions.",
+    "Wave 4: skill gates, bank cap, mastery checkpoints, one-commitment banner, deadly Cinder Docks, death tax, citadel pulse on actions."
   ]
 }

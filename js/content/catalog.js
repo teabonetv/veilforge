@@ -10,28 +10,28 @@ export const TIER_COLORS = [
 ];
 
 export const SKILLS = [
-  { id: "timber", name: "Timber", kind: "gather", icon: "🌲", blurb: "Fell remnant groves for living wood." },
-  { id: "trawl", name: "Trawl", kind: "gather", icon: "🎣", blurb: "Draw pale fish from drowned star-rivers." },
-  { id: "vein", name: "Vein", kind: "gather", icon: "⛏️", blurb: "Open citadel stone for sleeping ores." },
-  { id: "ember", name: "Ember", kind: "gather", icon: "🔥", blurb: "Burn wood to ash-heat and rare coals." },
-  { id: "hearth", name: "Hearth", kind: "artisan", icon: "🍳", blurb: "Cook catches into food that holds the line." },
-  { id: "anvil", name: "Anvil", kind: "artisan", icon: "⚒️", blurb: "Smelt and hammer war-metal into gear." },
-  { id: "fletch", name: "Fletch", kind: "artisan", icon: "🏹", blurb: "Shape bows, shafts, and hush-arrows." },
-  { id: "loom", name: "Loom", kind: "artisan", icon: "🧵", blurb: "Cut hides and gems into armor and jewelry." },
-  { id: "sigil", name: "Sigil", kind: "artisan", icon: "✦", blurb: "Carve runes from essence-dusted stone." },
-  { id: "vial", name: "Vial", kind: "artisan", icon: "⚗️", blurb: "Brew charged draughts with real combat identities." },
-  { id: "course", name: "Course", kind: "unique", icon: "🏃", blurb: "Build an agility circuit of mutually exclusive pillars." },
-  { id: "whisper", name: "Whisper", kind: "unique", icon: "👜", blurb: "Steal from dusk-market marks. Risk is the tax." },
-  { id: "soil", name: "Soil", kind: "unique", icon: "🌱", blurb: "Plant, tend, and harvest plots that tick while you wander." },
-  { id: "drove", name: "Drove", kind: "unique", icon: "🐏", blurb: "Ranch veil-beasts for products, traits, and rare sires." },
-  { id: "chart", name: "Chart", kind: "unique", icon: "🔭", blurb: "Study constellations that rewrite other skills' odds." },
-  { id: "might", name: "Might", kind: "combat", icon: "⚔️", blurb: "Melee accuracy and the weight of a blow." },
-  { id: "guard", name: "Guard", kind: "combat", icon: "🛡️", blurb: "Armour, evasion, and surviving the next hit." },
-  { id: "vitality", name: "Vitality", kind: "combat", icon: "♥", blurb: "Hitpoints. Food is a decision, not a wallpaper." },
-  { id: "mark", name: "Mark", kind: "combat", icon: "◎", blurb: "Ranged tempo, ammo, and kiting identity." },
-  { id: "weave", name: "Weave", kind: "combat", icon: "☄", blurb: "Spellbooks with costs, elements, and battlefield jobs." },
-  { id: "vow", name: "Vow", kind: "combat", icon: "🕯️", blurb: "Prayers that drain focus and change the triangle." },
-  { id: "bounty", name: "Bounty", kind: "combat", icon: "☠", blurb: "Slayer contracts, tokens, and hunted uniques." }
+  { id: "timber", name: "Timber", kind: "gather", icon: "🌲", blurb: "Fell remnant groves for living wood. Logs also want Ember and Fletch — pick a sink." },
+  { id: "trawl", name: "Trawl", kind: "gather", icon: "🎣", blurb: "Draw pale fish. Raw catch is worthless in a fight until Hearth sees it." },
+  { id: "vein", name: "Vein", kind: "gather", icon: "⛏️", blurb: "Open citadel stone. Ore is a dead weight until Anvil is unlocked." },
+  { id: "ember", name: "Ember", kind: "gather", icon: "🔥", blurb: "Burn wood you could have fletched. Essence vs arrows is a real fork." },
+  { id: "hearth", name: "Hearth", kind: "artisan", icon: "🍳", blurb: "Cook or starve. Combat without food is a dare, not a strategy." },
+  { id: "anvil", name: "Anvil", kind: "artisan", icon: "⚒️", blurb: "Smelt and hammer. Weapon jobs are different fights, not a ladder.", unlock: { skill: "vein", level: 5 } },
+  { id: "fletch", name: "Fletch", kind: "artisan", icon: "🏹", blurb: "Bows eat the same logs Ember wants.", unlock: { skill: "timber", level: 8 } },
+  { id: "loom", name: "Loom", kind: "artisan", icon: "🧵", blurb: "Hide armor for Mark. You will feel naked in plate against weavers.", unlock: { kills: 8 } },
+  { id: "sigil", name: "Sigil", kind: "artisan", icon: "✦", blurb: "Runes from essence. No essence, no Weave.", unlock: { skill: "ember", level: 10 } },
+  { id: "vial", name: "Vial", kind: "artisan", icon: "⚗️", blurb: "Draughts are loadout choices with charge counts.", unlock: { skill: "hearth", level: 12 } },
+  { id: "course", name: "Course", kind: "unique", icon: "🏃", blurb: "Mutually exclusive pillars. Greedy circuits are slower on purpose.", unlock: { skill: "timber", level: 15 } },
+  { id: "whisper", name: "Whisper", kind: "unique", icon: "👜", blurb: "Stun is the tax. Heat makes later marks meaner.", unlock: { kills: 4 } },
+  { id: "soil", name: "Soil", kind: "unique", icon: "🌱", blurb: "The one skill that grows while you war — if you planted.", unlock: { skill: "timber", level: 5 } },
+  { id: "drove", name: "Drove", kind: "unique", icon: "🐏", blurb: "Pens stack produce while you adventure. Collect is the engine.", unlock: { skill: "soil", level: 10 } },
+  { id: "chart", name: "Chart", kind: "unique", icon: "🔭", blurb: "Two slots. Aim the telescope; you cannot buff everything.", unlock: { skill: "ember", level: 8 } },
+  { id: "might", name: "Might", kind: "combat", icon: "⚔️", blurb: "Melee. Might beats Mark, loses to Weave." },
+  { id: "guard", name: "Guard", kind: "combat", icon: "🛡️", blurb: "Armour. The difference between a vault and a gravestone." },
+  { id: "vitality", name: "Vitality", kind: "combat", icon: "♥", blurb: "Hitpoints. Food is a decision, not wallpaper." },
+  { id: "mark", name: "Mark", kind: "combat", icon: "◎", blurb: "Ranged. Needs ammo. Beats Weave, loses to Might.", unlock: { skill: "might", level: 10 } },
+  { id: "weave", name: "Weave", kind: "combat", icon: "☄", blurb: "Spells eat runes. Beats Might, loses to Mark.", unlock: { skill: "sigil", level: 5 } },
+  { id: "vow", name: "Vow", kind: "combat", icon: "🕯️", blurb: "Two prayers. Vow drains — bury bones or go dark.", unlock: { skill: "vitality", level: 8 } },
+  { id: "bounty", name: "Bounty", kind: "combat", icon: "☠", blurb: "Contracts are opportunity cost: hunt THIS, not that.", unlock: { kills: 12 } }
 ];
 
 export const COMBAT_SKILLS = ["might", "guard", "vitality", "mark", "weave", "vow", "bounty"];
@@ -350,7 +350,8 @@ export function buildContent() {
     { id: "shop-eat", item: null, effect: "autoEat", cost: 5000, name: "Auto-Eat Threshold", desc: "Raise auto-eat from 40% to 60% vitality." },
     { id: "shop-eat2", item: null, effect: "autoEat2", cost: 40000, name: "Auto-Eat Mastery", desc: "Auto-eat at 75% and 8% extra healing." },
     { id: "shop-loadout", item: null, effect: "loadout", cost: 8000, repeatable: true, max: 5, name: "Gear Loadout", desc: "Save another equipment set." },
-    { id: "shop-offline", item: null, effect: "offlineHours", cost: 15000, name: "Deep Rest", desc: "Offline cap 18 → 24 hours." }
+    { id: "shop-offline", item: null, effect: "offlineHours", cost: 15000, name: "Deep Rest", desc: "Offline cap 18 → 24 hours." },
+    { id: "shop-slots", item: null, effect: "slots", cost: 400, repeatable: true, max: 20, name: "Bank Slots", desc: "+6 unique stacks. Full banks halt crafts — this is the Melvor tax." }
   );
 
   addItem({
@@ -420,7 +421,7 @@ export function buildContent() {
       const t = Math.min(13, Math.floor(ai * 1.1 + mi * 0.3));
       const id = idify(`${area.name}-${nm}`);
       const hp = 12 + ai * 18 + mi * 8;
-      const maxHit = 2 + ai * 3 + mi + (mi === 5 ? 5 : mi === 1 ? 2 : 0);
+      const maxHit = (ai === 0 ? 5 : 2) + ai * 3 + mi * 2 + (mi === 5 ? 6 : 0);
       const acc = 4 + ai * 7;
       const eva = 4 + ai * 6;
       const style = mi % 3 === 0 ? "might" : mi % 3 === 1 ? "mark" : "weave";

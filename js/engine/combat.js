@@ -14,6 +14,14 @@ export function startFight(state, monsterId, opts = {}) {
   const m = CONTENT.monsters[monsterId];
   if (!m) return "No such foe.";
   if (!state.equipment.weapon) return "Equip a weapon.";
+  const foodN = bankCount(state, state.combat.foodId);
+  const heal = CONTENT.items[state.combat.foodId]?.heal || 0;
+  if (m.maxHit >= state.combat.maxHp * 0.45) {
+    combatLog(state, `GEAR CHECK: ${m.name} can chunk ${m.maxHit} of your ${state.combat.maxHp} HP.`);
+  }
+  if (foodN * heal < m.maxHit * 3) {
+    log(state, `${m.name} outpaces your larder (${foodN} food). Cook, or pick a weaker dock rat.`);
+  }
   state.action = null;
   state.combat.fighting = true;
   state.combat.monsterId = monsterId;
@@ -550,7 +558,12 @@ function kill(state, m) {
 
 function die(state) {
   state.stats.deaths += 1;
-  state.combat.hp = Math.max(1, Math.floor(state.combat.maxHp * 0.4));
+  const tax = Math.max(3, Math.floor(state.coins * 0.12));
+  if (state.coins >= tax) {
+    state.coins -= tax;
+    log(state, `Death tax: ${tax} veilmarks. The citadel is not a charity.`);
+  }
+  state.combat.hp = Math.max(1, Math.floor(state.combat.maxHp * 0.35));
   const d = CONTENT.dungeons.find((x) => x.id === state.combat.dungeon);
   if (d) {
     const floor = (state.combat.dungeonIndex || 0) + 1;

@@ -1,7 +1,7 @@
 import {
   CONTENT, TICK_MS, skillLevel, addXp, addItem, takeItem, bankCount, log,
   masteryBonus, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses,
-  recalcHp, sumGear, masteryLevel
+  recalcHp, sumGear, masteryLevel, skillLocked, bankUsed, bankCap
 } from "./state.js";
 import { combatTick, startFight, stopFight, playerInterval, consumePotionCharge } from "./combat.js";
 import { checkQuests } from "./quests.js";
@@ -9,6 +9,8 @@ import { checkQuests } from "./quests.js";
 export function startAction(state, actionId) {
   const act = CONTENT.actions[actionId];
   if (!act) return "Unknown action.";
+  const lock = skillLocked(state, act.skill);
+  if (lock) return `Locked until ${lock}.`;
   if (skillLevel(state, act.skill) < act.level) return `Requires ${act.skill} ${act.level}.`;
   if (act.skill === "course" && act.id === "course-lap") {
     const chosen = Object.keys(state.course?.chosen || {}).filter((k) => state.course.chosen[k]);
@@ -143,9 +145,14 @@ function completeAction(state, act) {
 
   const outMul = 1 + (masteryBonus(state, act.masteryId).output || 0) + (guildBonuses(state, act.skill).output || 0) + (courseBonuses(state).outputMul || 0) + (chartBonuses(state).output || 0);
   if (act.outputs) {
+    let dumped = false;
     for (const o of act.outputs) {
       const n = Math.round((o.min + Math.floor(Math.random() * (o.max - o.min + 1))) * outMul);
-      addItem(state, o.item, n);
+      if (!addItem(state, o.item, n)) dumped = true;
+    }
+    if (dumped) {
+      log(state, `Bank full (${bankUsed(state)}/${bankCap(state)} stacks). Sell, cook, or buy slots — the grove waits.`);
+      state.action = null;
     }
   }
   if (act.rare) {
@@ -176,6 +183,8 @@ function grantSkillBits(state, act, xpMul, xpOverride) {
   state.actionCounts = state.actionCounts || {};
   state.actionCounts[act.id] = (state.actionCounts[act.id] || 0) + 1;
   sk.mastery[act.masteryId] = (sk.mastery[act.masteryId] || 0) + 4 * (1 + (cb.masteryMul || 0));
+  sk.pool = (sk.pool || 0) + Math.max(3, Math.round(4 * xpMul * (1 + (cb.masteryMul || 0))));
+  state._fx = 1;
   sk.guildProgress += 1;
   const tasks = CONTENT.guildTasks[act.skill];
   const next = tasks[sk.guildRank];
@@ -388,6 +397,26 @@ export function stockPen(state, i, animalId) {
   if (!takeItem(state, "coins", cost)) return `Need ${cost} veilmarks.`;
   const speed = 1 + (guildBonuses(state, "drove").speed || 0);
   state.drove.pens[i] = { animal: animalId, left: a.time / speed, ready: false, collected: 0, pending: 0, cyclesReady: 0 };
+  return null;
+}
+
+export function checkpointCost(state, actionId) {
+  const act = CONTENT.actions[actionId];
+  if (!act) return 0;
+  const n = state.skills[act.skill]?.checkpoints?.[act.masteryId] || 0;
+  return 20 + n * 18;
+}
+
+export function spendCheckpoint(state, actionId) {
+  const act = CONTENT.actions[actionId];
+  if (!act) return "Unknown action.";
+  const sk = state.skills[act.skill];
+  const cost = checkpointCost(state, actionId);
+  if ((sk.pool || 0) < cost) return `Need ${cost} pool (have ${sk.pool || 0}). Save it, or train this node more.`;
+  sk.pool -= cost;
+  sk.checkpoints = sk.checkpoints || {};
+  sk.checkpoints[act.masteryId] = (sk.checkpoints[act.masteryId] || 0) + 1;
+  log(state, `Checkpoint ${act.name} ×${sk.checkpoints[act.masteryId]} (−${cost} pool). This grove is now faster than the ones you skipped.`);
   return null;
 }
 

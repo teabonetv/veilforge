@@ -127,6 +127,12 @@ export function createWorld(canvas) {
     gold.intensity = skill === "anvil" || skill === "ember" || skill === "hearth" || skill === "vow"
       ? 5.4 + Math.sin(t * 7) * 1.8
       : 3.8 + Math.sin(t * 2.2) * 0.35;
+    if (state?._fx > 0) {
+      gold.intensity += state._fx * 6;
+      rim.intensity = 7 + state._fx * 8;
+      state._fx *= 0.82;
+      if (state._fx < 0.04) state._fx = 0;
+    }
     torchLight.intensity = 2.8 + Math.sin(t * 9.5) * 0.7 + Math.sin(t * 17) * 0.25;
     torchLight.position.y = 2.35 + Math.sin(t * 11) * 0.04;
 
