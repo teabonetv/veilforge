@@ -5,6 +5,7 @@ import { questProgress } from "../engine/quests.js";
 
 let forkFn = null;
 let shownLevelKey = "";
+let lastFloater = 0;
 let bankFilter = "";
 let bankTab = "All";
 let shopFilter = "";
