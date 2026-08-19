@@ -353,6 +353,16 @@ export function buildContent() {
     { id: "shop-offline", item: null, effect: "offlineHours", cost: 15000, name: "Deep Rest", desc: "Offline cap 18 → 24 hours." }
   );
 
+  addItem({ id: "lantern-cape", name: "Dock Lantern Cape", category: "equipment", slot: "cape", value: 60, stats: { def: 2, hp: 1 }, desc: "Workshop vanity. A little pride, a little defence." });
+  addItem({ id: "veil-circlet", name: "Veil Circlet", category: "equipment", slot: "amulet", value: 90, stats: { magic: 2, acc: 1 }, desc: "A dusk ribbon worn as an amulet. Looks expensive because it is." });
+  addItem({ id: "star-signet", name: "Star Signet", category: "equipment", slot: "ring", value: 120, stats: { acc: 2, str: 1, ranged: 1, magic: 1 }, desc: "A ring that remembers constellations." });
+  shop.push(
+    { id: "shop-lantern-cape", item: "lantern-cape", qty: 1, cost: 450, name: "Dock Lantern Cape", desc: "Cosmetic cape with a sliver of plate." },
+    { id: "shop-veil-circlet", item: "veil-circlet", qty: 1, cost: 800, name: "Veil Circlet", desc: "Jewelry for the workshop, not a BiS check." },
+    { id: "shop-star-signet", item: "star-signet", qty: 1, cost: 1400, name: "Star Signet", desc: "A ring stall classic." },
+    { id: "shop-chart-slot", item: null, effect: "chartSlot", cost: 20000, name: "Third Chart Slot", desc: "Aim one more constellation. Scarcity is the point of Chart." }
+  );
+
   const monsterNames = [
     ["Ash Mite", "Gutter Rat", "Dusk Imp", "Cinder Bat", "Moss Wolf", "Vault Crab"],
     ["Iron Wight", "Lantern Cultist", "Bog Knight", "Hollow Stag", "Silt Naga", "Forge Wasp"],

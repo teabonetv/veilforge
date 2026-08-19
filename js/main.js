@@ -45,13 +45,10 @@ function loop(now) {
   uiAcc += dt;
   renderTop(ctx);
   world.frame(state, skillSelect());
-  if (uiAcc > 250) {
+  if (uiAcc > 400) {
     uiAcc = 0;
     renderRight(ctx);
-    const centerBusy = document.getElementById("center");
-    if (centerBusy && (state.combat.fighting || state.action)) {
-      // keep action cards' ON state fresh without full skill rebuild every frame
-    }
+    if (state.combat.fighting || state.action) renderShell(ctx);
   }
   requestAnimationFrame(loop);
 }

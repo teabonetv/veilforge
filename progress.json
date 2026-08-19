@@ -1,32 +1,33 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-19T16:05:00Z",
-  "wave": 1,
-  "overall": "Playable vertical slice: 22 skills, 446 items, 410 actions, 72 monsters, quests, guilds, Three.js citadel. Headless sim: chopping and killing both work. Critics next.",
+  "updatedAt": "2026-08-19T16:25:00Z",
+  "wave": 2,
+  "overall": "Wave 2: combat identities, Three.js dioramas, Melvor-density HUD, stall cosmetics, area details that stay open. Headless sim still green. A harsh critic is playing the live game.",
   "comparison": {
-    "melvorIdle": "pending critic (play the running game, not this summary)",
-    "melvorIdle2": "pending critic",
+    "melvorIdle": "pending live critic",
+    "melvorIdle2": "pending live critic",
     "oursBetter": false,
-    "biggestGap": "Critics have not yet played a full session"
+    "biggestGap": "Awaiting critic who opened localhost, not this file"
   },
   "pieces": [
-    {"id": "core-loop", "name": "Tick, save, offline, action bars", "status": "done", "critic": "queued"},
-    {"id": "gathering", "name": "Timber, Trawl, Vein, Ember", "status": "done", "critic": "queued"},
-    {"id": "artisan", "name": "Hearth, Anvil, Fletch, Loom, Sigil, Vial", "status": "done", "critic": "queued"},
-    {"id": "unique-skills", "name": "Course, Whisper, Soil, Drove, Chart", "status": "done", "critic": "queued"},
-    {"id": "combat", "name": "Might, Guard, Vitality, Mark, Weave, Vow, Bounty", "status": "done", "critic": "queued"},
-    {"id": "guilds", "name": "Mastery + Guild tasks (MI2-inspired)", "status": "done", "critic": "queued"},
-    {"id": "quests", "name": "Story ledger and side contracts", "status": "done", "critic": "queued"},
-    {"id": "bank-shop", "name": "Bank, shop, tools, loadouts", "status": "done", "critic": "queued"},
-    {"id": "threejs", "name": "Citadel scene, combat arena, skill dioramas", "status": "done", "critic": "queued"},
-    {"id": "ui-qol", "name": "Nav, toasts, stats, settings, identity", "status": "building", "critic": "queued"},
+    {"id": "core-loop", "name": "Tick, save, offline, action bars", "status": "done", "critic": "in play"},
+    {"id": "gathering", "name": "Timber, Trawl, Vein, Ember", "status": "done", "critic": "in play"},
+    {"id": "artisan", "name": "Hearth, Anvil, Fletch, Loom, Sigil, Vial", "status": "done", "critic": "in play"},
+    {"id": "unique-skills", "name": "Course, Whisper, Soil, Drove, Chart", "status": "done", "critic": "in play"},
+    {"id": "combat", "name": "Might, Guard, Vitality, Mark, Weave, Vow, Bounty", "status": "done", "critic": "specials+triangle landed"},
+    {"id": "guilds", "name": "Mastery + Guild tasks (MI2-inspired)", "status": "done", "critic": "in play"},
+    {"id": "quests", "name": "Story ledger and side contracts", "status": "done", "critic": "in play"},
+    {"id": "bank-shop", "name": "Bank, shop, tools, loadouts", "status": "done", "critic": "grouped stall + vanity"},
+    {"id": "threejs", "name": "Citadel scene, combat arena, skill dioramas", "status": "done", "critic": "dioramas in"},
+    {"id": "ui-qol", "name": "Nav, toasts, stats, settings, identity", "status": "done", "critic": "HUD restyle in"},
     {"id": "pacing", "name": "Economy, drop tables, long-term goals", "status": "building", "critic": "queued"},
-    {"id": "coherence", "name": "Whole-game playthrough polish", "status": "queued", "critic": "queued"}
+    {"id": "coherence", "name": "Whole-game playthrough polish", "status": "queued", "critic": "in play"}
   ],
   "log": [
-    "Branch cursor/veilforge-idle-rpg-03e0 created.",
-    "Design: Veilforge — distinctive dusk-citadel identity, 22 skills, weapon identities, guild tasks, quests.",
-    "Headless self-test: 232 timber actions, 8 kills, Wake quest sealed. 446 items / 72 monsters."
+    "Wave 2 combat: weapon jobs, triangle logs, dungeon bosses, vow drain.",
+    "Wave 2 3D: skill dioramas, hit flashes, aurora.",
+    "Wave 2 UI: grouped stall, bank tiles, duel meters, dusk type.",
+    "Cosmetics stall stocked. Combat area <details> remember open state."
   ]
 }
