@@ -353,6 +353,11 @@ export function buildContent() {
     { id: "shop-offline", item: null, effect: "offlineHours", cost: 15000, name: "Deep Rest", desc: "Offline cap 18 → 24 hours." }
   );
 
+  addItem({
+    id: "dock-warden", name: "Dock Warden", category: "equipment", slot: "weapon", style: "might",
+    special: "riposte", interval: 2300, value: 180, stats: { acc: 16, str: 14, def: 4, hp: 2 },
+    desc: "A named dock saber. Ledger-forged identity, not another ladder rung."
+  });
   addItem({ id: "lantern-cape", name: "Dock Lantern Cape", category: "equipment", slot: "cape", value: 60, stats: { def: 2, hp: 1 }, desc: "Workshop vanity. A little pride, a little defence." });
   addItem({ id: "veil-circlet", name: "Veil Circlet", category: "equipment", slot: "amulet", value: 90, stats: { magic: 2, acc: 1 }, desc: "A dusk ribbon worn as an amulet. Looks expensive because it is." });
   addItem({ id: "star-signet", name: "Star Signet", category: "equipment", slot: "ring", value: 120, stats: { acc: 2, str: 1, ranged: 1, magic: 1 }, desc: "A ring that remembers constellations." });
@@ -546,24 +551,26 @@ export function buildContent() {
   });
 
   quests.push(
-    { id: "q-wake", name: "Wake in the Hollow", desc: "Speak to the Ledger. Chop a Drift log. The citadel notices those who work.", req: [{ type: "action", id: "timber-0", count: 5 }], reward: { coins: 50, xp: { timber: 40 }, items: [{ id: "food-0", qty: 15 }] } },
-    { id: "q-fire", name: "First Ember", desc: "Burn Drift logs. Ash is civilization.", req: [{ type: "action", id: "ember-0", count: 8 }], reward: { coins: 80, xp: { ember: 80 }, items: [{ id: "essence", qty: 6 }] } },
-    { id: "q-fish", name: "Docks at Dusk", desc: "Pull Drift catches and cook them. Combat without food is a dare.", req: [{ type: "action", id: "trawl-0", count: 10 }, { type: "action", id: "cook-0", count: 8 }], reward: { coins: 120, items: [{ id: "food-0", qty: 20 }, { id: "drift-saber", qty: 1 }] } },
-    { id: "q-ore", name: "Open the Vein", desc: "Mine and smelt Copper. The anvil is the game's spine.", req: [{ type: "action", id: "vein-1", count: 15 }, { type: "action", id: "smelt-1", count: 8 }], reward: { coins: 200, items: [{ id: "copper-pick", qty: 1 }] } },
-    { id: "q-blood", name: "First Blood", desc: "Defeat 8 monsters in Cinder Docks. Equip food. Watch the triangle.", req: [{ type: "kills", area: "Cinder Docks", count: 8 }], reward: { coins: 250, xp: { might: 120, vitality: 120 }, items: [{ id: "potion-0", qty: 3 }] } },
-    { id: "q-vault", name: "Dock Vault", desc: "Clear the Dock Vault dungeon. Sequential kills, no cowardice.", req: [{ type: "dungeon", id: "dock-vault" }], reward: { coins: 400, items: [{ id: "dungeon-key", qty: 1 }] } },
-    { id: "q-thief", name: "Quiet Hands", desc: "Pickpocket the Dock Beggar 25 times. Stun is the mechanic.", req: [{ type: "action", id: "whisper-dock-beggar", count: 25 }], reward: { coins: 180, xp: { whisper: 200 } } },
-    { id: "q-soil", name: "A Plot of Dusk", desc: "Harvest 6 Drift crops. Farming is the anti-click — it grows while you war.", req: [{ type: "harvest", count: 6 }], reward: { coins: 220, items: [{ id: "seed-1", qty: 8 }] } },
-    { id: "q-drove", name: "Keep a Ewe", desc: "Collect 10 Gloom Ewe products.", req: [{ type: "drove", animal: "gloom-ewe", count: 10 }], reward: { coins: 240, items: [{ id: "thread", qty: 20 }] } },
-    { id: "q-chart", name: "Name a Star", desc: "Study The Hatchet until Chart 10.", req: [{ type: "level", skill: "chart", level: 10 }], reward: { coins: 300 } },
-    { id: "q-course", name: "Raise a Circuit", desc: "Complete 40 course laps with at least 2 pillars chosen.", req: [{ type: "laps", count: 40 }], reward: { coins: 350, xp: { course: 400 } } },
-    { id: "q-bounty", name: "Take a Contract", desc: "Finish a bounty task. Tokens buy identity, not just more damage.", req: [{ type: "bounty", count: 1 }], reward: { coins: 500, items: [{ id: "bounty-token", qty: 8 }] } },
-    { id: "q-choir", name: "Choir Spire", desc: "Clear Choir Spire. Bring a style that isn't your comfort pick.", req: [{ type: "dungeon", id: "choir-spire" }], reward: { coins: 2000, items: [{ id: "runebound-crozier", qty: 1 }] } },
-    { id: "q-vow", name: "Keep an Oath", desc: "Reach Vow 30 and fight with a prayer active.", req: [{ type: "level", skill: "vow", level: 30 }], reward: { coins: 800 } },
-    { id: "q-guild", name: "Join a Guild", desc: "Complete any skill's Guild 3. Mastery Guilds are the long game.", req: [{ type: "guildRank", rank: 3 }], reward: { coins: 1500 } },
-    { id: "q-starwell", name: "Starwell", desc: "Clear Starwell. Late mid-game wall.", req: [{ type: "dungeon", id: "starwell" }], reward: { coins: 8000, items: [{ id: "celestial-saber", qty: 1 }] } },
-    { id: "q-veilheart", name: "Veilheart", desc: "Clear Veilheart. The citadel's last locked door.", req: [{ type: "dungeon", id: "veilheart" }], reward: { coins: 50000, items: [{ id: "veilborn-amulet", qty: 1 }] } },
-    { id: "q-cap", name: "One Hundred and Twenty", desc: "Reach level 120 in any skill. The MI2 cap is the horizon.", req: [{ type: "anyLevel", level: 120 }], reward: { coins: 120000, items: [{ id: "veilborn-cleaver", qty: 1 }] } }
+    { id: "q-wake", name: "Wake in the Hollow", desc: "Chop Drift groves. The citadel notices hands that work.", req: [{ type: "action", id: "timber-0", count: 3 }], reward: { coins: 40, xp: { timber: 30 }, items: [{ id: "drift-hatchet", qty: 1 }] } },
+    { id: "q-fire", name: "First Ember", desc: "Burn those logs. Ash is civilization.", req: [{ type: "action", id: "ember-0", count: 3 }], reward: { coins: 40, xp: { ember: 40 }, items: [{ id: "food-0", qty: 12 }] } },
+    { id: "q-fish", name: "Docks at Dusk", desc: "Pull Drift catches. The river feeds the line.", req: [{ type: "action", id: "trawl-0", count: 4 }], reward: { coins: 50, items: [{ id: "drift-rod", qty: 1 }] } },
+    { id: "q-cook", name: "Salt and Pan", desc: "Cook the catch. Combat without food is a dare.", req: [{ type: "action", id: "cook-0", count: 4 }], reward: { coins: 50, items: [{ id: "food-0", qty: 24 }] } },
+    { id: "q-blood", name: "First Blood", desc: "Fight in Cinder Docks. Equip food. Watch the triangle.", req: [{ type: "kills", area: "Cinder Docks", count: 4 }], reward: { coins: 80, xp: { might: 80, vitality: 80 }, items: [{ id: "dock-warden", qty: 1 }, { id: "potion-0", qty: 3 }, { id: "hide", qty: 4 }] } },
+    { id: "q-anvil", name: "Open the Vein", desc: "Mine Drift ore, smelt it, and hammer a saber. The anvil is the spine.", req: [{ type: "action", id: "vein-0", count: 6 }, { type: "action", id: "smelt-0", count: 3 }, { type: "action", id: "smith-drift-saber", count: 1 }], reward: { coins: 120, items: [{ id: "copper-pick", qty: 1 }, { id: "thread", qty: 6 }] } },
+    { id: "q-loom", name: "Cut and Stitch", desc: "Sew Drift hide into a cape. War-drops become a loadout.", req: [{ type: "action", id: "loom-drift-hide-cape", count: 1 }], reward: { coins: 120, items: [{ id: "lantern-cape", qty: 1 }, { id: "hide", qty: 8 }] } },
+    { id: "q-bounty", name: "Take a Contract", desc: "Finish a bounty. Tokens buy identity, not just more damage.", req: [{ type: "bounty", count: 1 }], reward: { coins: 150, items: [{ id: "bounty-token", qty: 8 }, { id: "food-1", qty: 20 }] } },
+    { id: "q-vault", name: "Dock Vault", desc: "Clear Dock Vault. Sequential kills, no cowardice.", req: [{ type: "dungeon", id: "dock-vault" }], reward: { coins: 200, items: [{ id: "dungeon-key", qty: 2 }, { id: "food-1", qty: 16 }] } },
+    { id: "whisper-dock-beggar", name: "Quiet Hands", desc: "Pickpocket the Dock Beggar. Stun is the tax.", req: [{ type: "action", id: "whisper-dock-beggar", count: 12 }], reward: { coins: 100, xp: { whisper: 160 }, items: [{ id: "veil-circlet", qty: 1 }] } },
+    { id: "q-soil", name: "A Plot of Dusk", desc: "Harvest Drift crops. Soil ticks while you war.", req: [{ type: "harvest", count: 6 }], reward: { coins: 140, items: [{ id: "seed-1", qty: 8 }, { id: "copper-rod", qty: 1 }] } },
+    { id: "q-drove", name: "Keep a Ewe", desc: "Collect Gloom Ewe hide. Ranching is a second clock.", req: [{ type: "drove", animal: "gloom-ewe", count: 8 }], reward: { coins: 140, items: [{ id: "thread", qty: 24 }] } },
+    { id: "q-chart", name: "Name a Star", desc: "Study The Hatchet until Chart 10.", req: [{ type: "level", skill: "chart", level: 10 }], reward: { coins: 160, items: [{ id: "star-signet", qty: 1 }] } },
+    { id: "q-course", name: "Raise a Circuit", desc: "Run 24 laps with pillars chosen. Course is a build, not a grind bar.", req: [{ type: "laps", count: 24 }], reward: { coins: 180, xp: { course: 300 }, items: [{ id: "food-2", qty: 16 }] } },
+    { id: "q-choir", name: "Choir Spire", desc: "Clear Choir Spire. Bring a style that isn't your comfort pick.", req: [{ type: "dungeon", id: "choir-spire" }], reward: { coins: 1200, items: [{ id: "runebound-crozier", qty: 1 }] } },
+    { id: "q-vow", name: "Keep an Oath", desc: "Reach Vow 30. Prayers drain; bones refill the well.", req: [{ type: "level", skill: "vow", level: 30 }], reward: { coins: 400, items: [{ id: "iron-amulet", qty: 1 }] } },
+    { id: "q-guild", name: "Join a Guild", desc: "Complete any skill's Guild 3. Mastery Guilds are the long game.", req: [{ type: "guildRank", rank: 3 }], reward: { coins: 600, items: [{ id: "iron-hatchet", qty: 1 }, { id: "iron-rod", qty: 1 }] } },
+    { id: "q-starwell", name: "Starwell", desc: "Clear Starwell. Late mid-game wall.", req: [{ type: "dungeon", id: "starwell" }], reward: { coins: 4000, items: [{ id: "celestial-saber", qty: 1 }] } },
+    { id: "q-veilheart", name: "Veilheart", desc: "Clear Veilheart. The citadel's last locked door.", req: [{ type: "dungeon", id: "veilheart" }], reward: { coins: 24000, items: [{ id: "veilborn-amulet", qty: 1 }] } },
+    { id: "q-cap", name: "One Hundred and Twenty", desc: "Reach level 120 in any skill. The MI2 cap is the horizon.", req: [{ type: "anyLevel", level: 120 }], reward: { coins: 60000, items: [{ id: "veilborn-cleaver", qty: 1 }] } }
   );
 
   SKILLS.forEach((sk) => {

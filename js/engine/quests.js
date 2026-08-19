@@ -3,17 +3,22 @@ import { CONTENT, skillLevel, addItem, addXp, log } from "./state.js";
 export function checkQuests(state) {
   for (const qid of [...state.quests.active]) {
     const q = CONTENT.quests.find((x) => x.id === qid);
-    if (!q) continue;
-    if (questReady(state, q)) completeQuest(state, q);
+    if (q && questReady(state, q)) completeQuest(state, q);
   }
-  // auto-offer next locked quests whose predecessors are done
   for (const q of CONTENT.quests) {
     if (state.quests.done.includes(q.id) || state.quests.active.includes(q.id)) continue;
-    const idx = CONTENT.quests.indexOf(q);
-    if (idx === 0 || state.quests.done.includes(CONTENT.quests[idx - 1].id) || state.quests.done.length >= Math.max(0, idx - 2)) {
-      if (state.quests.active.length < 4) state.quests.active.push(q.id);
-    }
+    if (canOffer(state, q) && state.quests.active.length < 4) state.quests.active.push(q.id);
   }
+}
+
+function canOffer(state, q) {
+  const list = CONTENT.quests;
+  const idx = list.indexOf(q);
+  if (q.after) return q.after.every((id) => state.quests.done.includes(id));
+  if (idx <= 0) return true;
+  if (state.quests.done.includes(list[idx - 1].id)) return true;
+  // First five pages overlap so chop → burn → fish → cook → fight lands in one sitting.
+  return idx < 5 && state.quests.done.length >= idx - 1;
 }
 
 function questReady(state, q) {
