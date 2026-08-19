@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Veilforge</string>
+    <string name="title_activity_main">Veilforge</string>
+    <string name="package_name">com.veilforge.idle</string>
+    <string name="custom_url_scheme">com.veilforge.idle</string>
+</resources>

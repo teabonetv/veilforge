@@ -13,7 +13,7 @@ export function emptySkills() {
 export function createState() {
   return {
     version: 1,
-    name: "Veilwright",
+    name: "Aelric",
     bornAt: Date.now(),
     lastSave: Date.now(),
     coins: 25,
@@ -291,7 +291,9 @@ export function load() {
     if (!raw) return null;
     const s = JSON.parse(raw);
     const base = createState();
-    return deepMerge(base, s);
+    const merged = deepMerge(base, s);
+    if ((merged.settings?.tickScale || 1) > 1.5) merged.settings.tickScale = 1.5;
+    return merged;
   } catch {
     return null;
   }

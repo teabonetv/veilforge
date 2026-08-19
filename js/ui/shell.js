@@ -2,6 +2,7 @@ import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCo
 import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
+import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -51,6 +52,10 @@ export function bindUI(ctx) {
       shopFilter = e.target.value.toLowerCase();
       renderShop(ctx);
     }
+    if (e.target.id === "vault-search") {
+      onVaultSearch(e.target.value);
+      renderDesks(ctx);
+    }
   });
   host.addEventListener("change", (e) => {
     if (e.target.dataset.act === "pillar") {
@@ -80,6 +85,11 @@ function handle(ctx, act, arg, el) {
     case "checkpoint": err(spendCheckpoint(state, arg)); ctx.render(); break;
     case "dismiss-level":
       state.levelUps = (state.levelUps || []).slice(1);
+      shownLevelKey = "";
+      renderLevelModal(ctx);
+      break;
+    case "dismiss-levels":
+      state.levelUps = [];
       shownLevelKey = "";
       renderLevelModal(ctx);
       break;
@@ -132,6 +142,18 @@ function handle(ctx, act, arg, el) {
       break;
     case "loadout-save": saveLoadout(state); toast(ctx, "Loadout saved."); break;
     case "loadout-load": loadLoadout(state, +arg); ctx.render(); break;
+    case "desk": setDesk(arg); ctx.render(); ctx.portraits?.resize?.(); break;
+    case "vault-pick": setVaultPick(el.dataset.kind || "item", arg); renderDesks(ctx); break;
+    case "vault-cat": onVaultCat(arg); renderDesks(ctx); break;
+    case "vault-lens": onVaultLens(arg); renderDesks(ctx); break;
+    case "kit": applyKit(state, arg); ctx.render(); break;
+    case "slot-focus": {
+      const id = state.equipment[arg];
+      if (id) setVaultPick("item", id);
+      setFocusedSlot(arg);
+      renderDesks(ctx);
+      break;
+    }
     case "export": navigator.clipboard.writeText(ctx.exportSave()); toast(ctx, "Save copied."); break;
     case "import": {
       const s = prompt("Paste save");
@@ -247,6 +269,7 @@ export function renderShell(ctx) {
   renderCodex(ctx);
   renderCenter(ctx);
   renderRight(ctx);
+  renderDesks(ctx);
   renderLevelModal(ctx);
 }
 
@@ -381,25 +404,50 @@ function confirmBusy(ctx, nextId, kind, fn) {
 
 function hideFork() {
   const el = document.getElementById("fork-modal");
-  if (el) { el.hidden = true; el.innerHTML = ""; }
+  if (el) { el.hidden = true; el.classList.remove("open"); el.innerHTML = ""; }
+}
+
+function foldLevelUps(list) {
+  const m = new Map();
+  for (const ev of list || []) {
+    const p = m.get(ev.skill);
+    if (!p) m.set(ev.skill, { ...ev, unlocks: [...(ev.unlocks || [])] });
+    else {
+      p.from = Math.min(p.from, ev.from);
+      p.to = Math.max(p.to, ev.to);
+      p.unlocks = [...new Set([...(p.unlocks || []), ...(ev.unlocks || [])])];
+    }
+  }
+  return [...m.values()];
 }
 
 function renderLevelModal(ctx) {
   const modal = document.getElementById("level-modal");
   if (!modal) return;
-  const ev = (ctx.state.levelUps || [])[0];
+  const folded = foldLevelUps(ctx.state.levelUps);
+  ctx.state.levelUps = folded;
+  const ev = folded[0];
   if (!ev) {
     shownLevelKey = "";
     modal.hidden = true;
     return;
   }
-  const key = `${ev.skill}-${ev.to}-${ev.t}`;
+  const key = folded.map((e) => `${e.skill}-${e.from}-${e.to}`).join("|");
   if (shownLevelKey === key && !modal.hidden) return;
   shownLevelKey = key;
   modal.hidden = false;
-  modal.innerHTML = `<div class="sheet"><h3>${skillName(ev.skill)} ${ev.to}</h3>
-    <p>${(ev.unlocks || []).length ? "Unlocked: " + ev.unlocks.join(", ") : "The citadel noticed."}</p>
-    <button type="button" data-act="dismiss-level">Continue</button></div>`;
+  const more = folded.length - 1;
+  const lines = folded.slice(0, 8).map((e) =>
+    `<p><strong>${skillName(e.skill)}</strong> ${e.from} → ${e.to}${e.unlocks?.length ? ` · ${e.unlocks.slice(0, 4).join(", ")}` : ""}</p>`
+  ).join("");
+  modal.innerHTML = `<div class="sheet">
+    <h3>${skillName(ev.skill)} ${ev.to}</h3>
+    <p>That stretch cost real dusk. The citadel does not mark a ledger this often.</p>
+    ${lines}
+    ${more > 0 ? `<p class="muted">${more} more arts waiting.</p>` : ""}
+    <button type="button" data-act="dismiss-level">Continue</button>
+    ${folded.length > 1 ? `<button type="button" data-act="dismiss-levels">Dismiss all ${folded.length}</button>` : ""}
+  </div>`;
 }
 
 function renderCodex(ctx) {
@@ -432,7 +480,8 @@ function renderCodex(ctx) {
     <span class="muted">${idle}</span>
     <div class="codex-acts">
       ${jump}
-      <button type="button" data-act="panel" data-arg="right">Stall / Bank</button>
+      <button type="button" data-act="desk" data-arg="bank">Open vault</button>
+      <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
       <button type="button" data-act="codex-toggle">Hide</button>
     </div>`;
 }
@@ -756,6 +805,7 @@ function renderGear(ctx) {
     const it = CONTENT.items[id];
     return `<div class="slot"><b>${s}</b> ${it ? `<span>${it.name}</span> <button data-act="unequip" data-arg="${s}">x</button>` : "<em>empty</em>"}</div>`;
   }).join("") + `<div class="slot"><b>tools</b> <span>axe ${CONTENT.items[state.tools.axe]?.name || "–"} · pick ${CONTENT.items[state.tools.pick]?.name || "–"} · rod ${CONTENT.items[state.tools.rod]?.name || "–"}</span></div>
+    <button data-act="desk" data-arg="loadout">Open wanderer</button>
     <button data-act="loadout-save">Save loadout</button>
     ${state.loadouts.map((l, i) => `<button data-act="loadout-load" data-arg="${i}">${l.name}</button>`).join("")}`;
 }
@@ -792,6 +842,7 @@ function renderBank(ctx) {
   const html = `<div class="tabs">${tabBtns}</div>
     <input id="bank-search" placeholder="Search bank" value="${esc(bankFilter)}" />
     <div class="bank-meta"><span>${held.length}/${bankCap(state)} stacks${held.length >= bankCap(state) ? " · FULL" : ""}</span><span>${worth.toLocaleString()} ✦</span></div>
+    <button data-act="desk" data-arg="bank">Open dedicated vault</button>
     <div class="bank-grid">${rows || "<p class='blurb'>Empty tab.</p>"}</div>`;
   fillHtml(document.getElementById("bank"), html);
 }
@@ -956,4 +1007,4 @@ function toast(ctx, msg) {
   toast._h = setTimeout(() => t.classList.remove("show"), 3200);
 }
 
-export { renderTop, recalcHp };
+export { renderTop, recalcHp, desk, inspectModelOf };

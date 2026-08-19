@@ -1,0 +1,3 @@
+# Steamworks placeholder — replace with your App ID from partner.steamgames.com
+# Copy this file next to the Veilforge executable as steam_appid.txt
+480

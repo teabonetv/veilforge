@@ -1,4 +1,6 @@
-import * as THREE from "three";
+import * as THREE from "../vendor/three.module.js";
+import { makeEntityModel } from "./models.js";
+import { CONTENT } from "../engine/state.js";
 
 const SKILL_TINT = {
   timber: 0x3d6b3a, trawl: 0x1b4d6e, vein: 0x5a5348, ember: 0xb45309,
@@ -85,10 +87,11 @@ export function createWorld(canvas) {
   const player = makeFighter(0x8eb4ff, mats);
   player.group.position.set(-1.25, 0, 1.55);
   scene.add(player.group);
-  const enemy = makeFighter(0xff8aa0, mats);
+  let enemy = makeFighter(0xff8aa0, mats);
   enemy.group.position.set(1.55, 0, 1.55);
   enemy.group.visible = false;
   scene.add(enemy.group);
+  let enemyId = "";
 
   const hpBars = buildHpBars();
   scene.add(hpBars.root);
@@ -179,6 +182,24 @@ export function createWorld(canvas) {
     lastMhp = mhp;
     pFlash *= 0.82;
     eFlash *= 0.82;
+
+    const mid = state?.combat?.monsterId || "";
+    if (fighting && mid && mid !== enemyId) {
+      enemyId = mid;
+      const mdl = CONTENT.monsters[mid]?.model || { kind: "beast-might", seed: 1, hue: 0 };
+      const old = enemy.group.userData.persona;
+      if (old) {
+        enemy.group.remove(old);
+        old.traverse((c) => { if (c.geometry) c.geometry.dispose(); });
+      }
+      const g = makeEntityModel(mdl);
+      g.position.set(0, 0.15, 0.12);
+      g.scale.setScalar(0.95);
+      enemy.group.children.forEach((c) => { if (c !== g) c.visible = false; });
+      enemy.group.add(g);
+      enemy.group.userData.persona = g;
+    }
+    if (!fighting) enemyId = "";
 
     enemy.group.visible = fighting;
     hpBars.root.visible = fighting;

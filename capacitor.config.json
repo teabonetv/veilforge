@@ -1,0 +1,29 @@
+{
+  "appId": "com.veilforge.idle",
+  "appName": "Veilforge",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#0c0714"
+  },
+  "ios": {
+    "backgroundColor": "#0c0714",
+    "contentInset": "automatic",
+    "preferredContentMode": "mobile"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 700,
+      "launchAutoHide": true,
+      "backgroundColor": "#0c0714",
+      "showSpinner": false
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "backgroundColor": "#0c0714"
+    }
+  }
+}

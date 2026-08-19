@@ -41,7 +41,7 @@ export function actionDuration(state, act) {
   if (act.skill === "course") {
     t = (act.time || 4000) * (cb.time || 1);
     const speed = 1 + mb.speed + gb.speed + ((pot.speedMul || 1) - 1);
-    return Math.max(480, t / speed);
+    return Math.max(2800, t / speed);
   }
   if (act.skill === "chart" && act.id?.startsWith("chart-study-")) {
     const starId = act.id.slice("chart-study-".length);
@@ -49,7 +49,7 @@ export function actionDuration(state, act) {
     t = (act.time || 8000) * (slotted ? 0.72 : 1.08);
   }
   const speed = 1 + mb.speed + gb.speed + cb.skillSpeed + (ch.speed || 0) + tool + ((pot.speedMul || 1) - 1);
-  return Math.max(280, t / speed);
+  return Math.max(2200, t / speed);
 }
 
 function isStarSlotted(state, starId) {

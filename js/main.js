@@ -3,9 +3,19 @@ import { tick, applyOffline, stopAction } from "./engine/sim.js";
 import { bindUI, renderShell, renderTop, renderRight } from "./ui/shell.js";
 import { createWorld } from "./scene/world.js";
 import { skillSelect } from "./ui/shell.js";
+import { desk, inspectModelOf } from "./ui/desks.js";
+import { createPortrait } from "./scene/portrait.js";
+import { bootPlatform } from "./platform.js";
+
+bootPlatform();
 
 const canvas = document.getElementById("view");
 const world = createWorld(canvas);
+const vaultPort = createPortrait(document.getElementById("vault-view"));
+const wanderPort = createPortrait(document.getElementById("wander-view"));
+let inspectKey = "";
+let wanderKey = "";
+let syncedDesk = "";
 let state = load() || createState();
 if (load()) {
   const gone = Date.now() - (state.lastSave || Date.now());
@@ -30,7 +40,36 @@ const ctx = {
     recalcHp(state);
     renderShell(ctx);
   },
-  render: () => renderShell(ctx)
+  render: () => renderShell(ctx),
+  portraits: {
+    resize() {
+      vaultPort.resize();
+      wanderPort.resize();
+    },
+    sync() {
+      if (desk === "bank") {
+        const m = inspectModelOf();
+        const key = `${m?.kind}:${m?.seed}`;
+        if (key !== inspectKey) {
+          inspectKey = key;
+          vaultPort.showModel(m);
+        }
+        vaultPort.resize();
+        requestAnimationFrame(() => vaultPort.resize());
+      }
+      if (desk === "loadout") {
+        if (syncedDesk !== "loadout") wanderKey = "";
+        const key = JSON.stringify(state.equipment);
+        if (key !== wanderKey) {
+          wanderKey = key;
+          wanderPort.showWanderer(state.equipment, CONTENT.items);
+        }
+        wanderPort.resize();
+        requestAnimationFrame(() => wanderPort.resize());
+      }
+      syncedDesk = desk;
+    }
+  }
 };
 
 bindUI(ctx);
@@ -42,10 +81,16 @@ function loop(now) {
   const dt = Math.min(250, now - last);
   last = now;
   try {
+    if (document.hidden) {
+      requestAnimationFrame(loop);
+      return;
+    }
     tick(state, dt);
     uiAcc += dt;
     renderTop(ctx);
     world.frame(state, skillSelect());
+    if (desk === "bank") vaultPort.frame();
+    if (desk === "loadout") wanderPort.frame();
     if (uiAcc > 500) {
       uiAcc = 0;
       renderRight(ctx);
@@ -63,6 +108,17 @@ requestAnimationFrame(loop);
 
 setInterval(() => save(state), 4000);
 window.addEventListener("beforeunload", () => save(state));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    save(state);
+    state._hiddenAt = Date.now();
+    return;
+  }
+  const gone = Date.now() - (state._hiddenAt || state.lastSave || Date.now());
+  if (gone > 8000) applyOffline(state, gone);
+  last = performance.now();
+  ctx.render();
+});
 
 document.getElementById("stop-all")?.addEventListener("click", () => {
   stopAction(state);
