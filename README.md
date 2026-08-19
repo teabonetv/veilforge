@@ -2,7 +2,7 @@
 
 A browser idle / incremental RPG in the spirit of Melvor Idle and Melvor Idle 2 — duskbound, not a reskin.
 
-Open `index.html` via any static server (or the Cloud Agent preview). Live build notes: `progress.html`.
+Open `index.html` via any static server (or the Cloud Agent preview). Live build notes: `progress.html`. Store packaging (Android, iOS, Steam): `RELEASE.md`.
 
 ## Run
 
@@ -11,6 +11,13 @@ python3 -m http.server 8080
 ```
 
 Then visit `/` for the game and `/progress.html` for the live sheet.
+
+```bash
+npm install
+npm test
+npm run pack      # www/ for Capacitor + Electron
+npm run electron  # desktop window (Steam candidate)
+```
 
 ## What is here
 

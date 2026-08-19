@@ -23,6 +23,7 @@
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
+html[data-ship] .dev-only { display: none !important; }
 body {
   overflow: hidden;
   background:
@@ -64,6 +65,9 @@ button.locked, button:disabled { opacity: 0.45; cursor: not-allowed; }
   gap: 14px;
   align-items: stretch;
   padding: 8px 14px 10px;
+  padding-top: max(8px, env(safe-area-inset-top));
+  padding-left: max(14px, env(safe-area-inset-left));
+  padding-right: max(14px, env(safe-area-inset-right));
   background: linear-gradient(180deg, #1a1026f2, #120a1af0);
   border-bottom: 1px solid var(--line);
 }
@@ -360,11 +364,13 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 .links a { color: var(--gold); }
 .muted { color: var(--muted); font-size: 11px; }
 @media (max-width: 980px) {
+  html, body { height: auto; min-height: 100%; min-height: 100dvh; }
   body { overflow: auto; }
   #layout { grid-template-columns: 1fr; }
   #skill-nav { display: flex; overflow: auto; }
   #skill-nav .skill { min-width: 140px; }
   #top { grid-template-columns: 1fr; }
-  #app { height: auto; grid-template-rows: auto auto auto; }
+  #app { height: auto; min-height: 100dvh; grid-template-rows: auto auto auto auto auto; }
   .bank-grid { grid-template-columns: 1fr; }
+  #right { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
 }

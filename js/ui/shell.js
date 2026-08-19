@@ -381,7 +381,7 @@ function confirmBusy(ctx, nextId, kind, fn) {
 
 function hideFork() {
   const el = document.getElementById("fork-modal");
-  if (el) { el.hidden = true; el.innerHTML = ""; }
+  if (el) { el.hidden = true; el.classList.remove("open"); el.innerHTML = ""; }
 }
 
 function renderLevelModal(ctx) {

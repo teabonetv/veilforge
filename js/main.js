@@ -3,6 +3,9 @@ import { tick, applyOffline, stopAction } from "./engine/sim.js";
 import { bindUI, renderShell, renderTop, renderRight } from "./ui/shell.js";
 import { createWorld } from "./scene/world.js";
 import { skillSelect } from "./ui/shell.js";
+import { bootPlatform } from "./platform.js";
+
+bootPlatform();
 
 const canvas = document.getElementById("view");
 const world = createWorld(canvas);
@@ -42,6 +45,10 @@ function loop(now) {
   const dt = Math.min(250, now - last);
   last = now;
   try {
+    if (document.hidden) {
+      requestAnimationFrame(loop);
+      return;
+    }
     tick(state, dt);
     uiAcc += dt;
     renderTop(ctx);
@@ -63,6 +70,17 @@ requestAnimationFrame(loop);
 
 setInterval(() => save(state), 4000);
 window.addEventListener("beforeunload", () => save(state));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    save(state);
+    state._hiddenAt = Date.now();
+    return;
+  }
+  const gone = Date.now() - (state._hiddenAt || state.lastSave || Date.now());
+  if (gone > 8000) applyOffline(state, gone);
+  last = performance.now();
+  ctx.render();
+});
 
 document.getElementById("stop-all")?.addEventListener("click", () => {
   stopAction(state);

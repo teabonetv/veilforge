@@ -2,15 +2,22 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Veilforge — Idle RPG</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0c0714" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Veilforge — The Last Workshop</title>
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" href="branding/icon-192.png" />
+  <link rel="apple-touch-icon" href="branding/icon-180.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/app.css" />
+  <link rel="stylesheet" href="css/app.css" />
   <script type="importmap">
   {
     "imports": {
-      "three": "/js/vendor/three.module.js"
+      "three": "./js/vendor/three.module.js"
     }
   }
   </script>
@@ -21,7 +28,7 @@
       <div class="brand-col">
         <h1 class="brand">VEILFORGE <small>THE LAST WORKSHOP</small></h1>
         <div class="links">
-          <a href="/progress.html">Progress</a>
+          <a class="dev-only" href="progress.html">Progress</a>
           <button type="button" data-act="export">Export</button>
           <button type="button" data-act="import">Import</button>
           <button type="button" data-act="wipe">Reset</button>
@@ -98,6 +105,6 @@
   <div id="level-modal" hidden></div>
   <div id="fork-modal" hidden></div>
   <div id="toast"></div>
-  <script type="module" src="/js/main.js"></script>
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
