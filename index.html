@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Veilforge — Idle RPG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/js/vendor/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <header id="top">
+      <div class="brand-col">
+        <h1 class="brand">VEILFORGE <small>THE LAST WORKSHOP</small></h1>
+        <div class="links">
+          <a href="/progress.html">Progress</a>
+          <button type="button" data-act="export">Export</button>
+          <button type="button" data-act="import">Import</button>
+          <button type="button" data-act="wipe">Reset</button>
+        </div>
+      </div>
+      <div class="pulse-col">
+        <div id="action-wrap"><i id="action-fill"></i><span id="action-label">Idle</span></div>
+        <div id="duel" class="idle">
+          <div class="duelist you">
+            <div class="duel-meta"><b>You</b> <span id="hp-label">10/10</span></div>
+            <div class="bar hp"><i id="hp-fill"></i></div>
+            <div class="bar swing" title="Your next strike"><i id="you-swing"></i></div>
+          </div>
+          <div class="duel-vs" aria-hidden="true">✦</div>
+          <div class="duelist foe">
+            <div class="duel-meta"><b id="foe-tag">No foe</b> <span id="foe-hp-label">—</span></div>
+            <div class="bar hp foe"><i id="foe-fill"></i></div>
+            <div class="bar swing enemy" title="Incoming hit"><i id="foe-swing"></i></div>
+          </div>
+        </div>
+      </div>
+      <div class="status-col">
+        <div class="chip">
+          <span>Vow</span>
+          <div class="vow"><i id="vow-fill"></i></div>
+          <span id="vow-label">0</span>
+        </div>
+        <div class="chip" id="food-chip">Food —</div>
+        <button type="button" class="chip" id="spec-chip" data-act="spec">Special —</button>
+        <div class="chip marks">✦ <span id="coins">0</span></div>
+        <div class="tempo-row">
+          <button type="button" id="stop-all" data-act="stop">Halt</button>
+          <label class="links">Tempo
+            <select id="scale">
+              <option value="1">1×</option>
+              <option value="3">3× sundial</option>
+            </select>
+          </label>
+        </div>
+      </div>
+    </header>
+    <div id="codex"></div>
+    <div id="commit"></div>
+    <div id="layout">
+      <nav id="skill-nav"></nav>
+      <div id="mid">
+        <div id="view-wrap"><canvas id="view"></canvas><div id="arena-hits"></div></div>
+        <section id="center"></section>
+      </div>
+      <aside id="right">
+        <section class="pane">
+          <h3>Loadout</h3>
+          <div id="gear"></div>
+        </section>
+        <section class="pane">
+          <h3>Bank</h3>
+          <div id="bank"></div>
+        </section>
+        <section class="pane">
+          <h3>Ledger</h3>
+          <div id="quests"></div>
+        </section>
+        <section class="pane">
+          <h3>Stall</h3>
+          <div id="shop"></div>
+        </section>
+        <section class="pane">
+          <h3>Journal</h3>
+          <div id="journal"></div>
+        </section>
+      </aside>
+    </div>
+  </div>
+  <div id="level-modal" hidden></div>
+  <div id="fork-modal" hidden></div>
+  <div id="toast"></div>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "title": "Veilforge",
+  "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
+  "updatedAt": "2026-08-19T17:00:00Z",
+  "wave": 8,
+  "overall": "Halt-and-switch now plays in the running client. Latest critic was wowed by that fork vs Melvor's instant swap. Earlier critics still scored Melvor Idle 2 ahead on total ocean of content.",
+  "comparison": {
+    "melvorIdle": "latest live critic: Veilforge Halt fork > Melvor instant switch",
+    "melvorIdle2": "earlier critics: MI2 still the content-depth bar",
+    "oursBetter": "split — UX fork yes, encyclopedia no",
+    "biggestGap": "Taste/prose, and MI2-scale mastery/ranching/astro boards we did not fully match"
+  },
+  "pieces": [
+    {"id": "core-loop", "name": "Tick, save, offline, action bars", "status": "wow", "critic": "Halt overlay verified"},
+    {"id": "gathering", "name": "Timber, Trawl, Vein, Ember", "status": "wow", "critic": "cap keeps XP, live banner"},
+    {"id": "artisan", "name": "Hearth, Anvil, Fletch, Loom, Sigil, Vial", "status": "done", "critic": "Anvil lock toast verified"},
+    {"id": "unique-skills", "name": "Course, Whisper, Soil, Drove, Chart", "status": "done", "critic": "gated"},
+    {"id": "combat", "name": "Might, Guard, Vitality, Mark, Weave, Vow, Bounty", "status": "done", "critic": "not the last playtest's focus"},
+    {"id": "guilds", "name": "Mastery + Guild tasks (MI2-inspired)", "status": "done", "critic": "pool checkpoints exist"},
+    {"id": "quests", "name": "Story ledger and side contracts", "status": "done", "critic": "2-minute loop"},
+    {"id": "bank-shop", "name": "Bank, shop, tools, loadouts", "status": "done", "critic": "caps + XP-on-full"},
+    {"id": "threejs", "name": "Citadel scene, combat arena, skill dioramas", "status": "done", "critic": "dioramas"},
+    {"id": "ui-qol", "name": "Nav, toasts, stats, settings, identity", "status": "wow", "critic": "commitment + Halt"},
+    {"id": "pacing", "name": "Economy, drop tables, long-term goals", "status": "done", "critic": "scarcity"},
+    {"id": "coherence", "name": "Whole-game playthrough polish", "status": "done", "critic": "client finally presents the fork"}
+  ],
+  "log": [
+    "Latest live critic: Halt overlay + Keep/Switch both work; wowed vs Melvor instant swap.",
+    "Earlier critics: Melvor/MI2 win on breadth until the board was actually playable.",
+    "Fixes that unblocked play: app grid, lastFloater, XP-on-cap, body-level Halt."
+  ]
+}
