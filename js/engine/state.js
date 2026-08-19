@@ -13,7 +13,7 @@ export function emptySkills() {
 export function createState() {
   return {
     version: 1,
-    name: "Veilwright",
+    name: "Aelric",
     bornAt: Date.now(),
     lastSave: Date.now(),
     coins: 25,

@@ -1,5 +1,5 @@
 import { SKILLS, XP_TABLE, levelFromXp } from "../content/catalog.js";
-import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap } from "../engine/state.js";
+import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount } from "../engine/state.js";
 import { startAction, tick, actionDuration } from "../engine/sim.js";
 import { startFight, equipItem } from "../engine/combat.js";
 import { wandererRanks, gearSet } from "../engine/wanderer.js";
@@ -67,13 +67,14 @@ gearSet(s);
 if (!C.items["drift-saber"]?.model) throw new Error("starter saber has no model");
 
 const cap = createState();
+addItem(cap, "copper-saber", 1);
 for (const id of Object.keys(C.items)) {
   if (bankUsed(cap) >= bankCap(cap)) break;
-  if (id === "drift-saber" || id === "coins") continue;
+  if (id === "drift-saber" || id === "coins" || id === "copper-saber") continue;
   addItem(cap, id, 1);
 }
-const spareW = Object.keys(cap.bank).find((id) => C.items[id]?.slot === "weapon" && id !== "drift-saber");
-if (!spareW) throw new Error("no spare weapon to swap");
+const spareW = "copper-saber";
+if (!bankCount(cap, spareW) && cap.equipment.weapon !== spareW) throw new Error("no spare weapon to swap");
 const before = cap.equipment.weapon;
 const swap = equipItem(cap, spareW);
 if (swap) {
