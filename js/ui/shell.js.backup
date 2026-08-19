@@ -3,16 +3,13 @@ import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, 
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
 
-let forkFn = null;
-let shownLevelKey = "";
+let lastFloater = 0;
 let bankFilter = "";
 let bankTab = "All";
 let shopFilter = "";
 let shopCat = "tools";
 let shopTool = "all";
 let codexOpen = localStorage.getItem("veilforge-codex") !== "0";
-let selectedSkill = "timber";
-let openAreas = new Set();
 
 const CAT_ICON = {
   currency: "✦", material: "◇", log: "🌲", ore: "⛏", bar: "▬", fish: "🐟",
@@ -76,30 +73,11 @@ function handle(ctx, act, arg, el) {
       selectedSkill = arg; ctx.render(); break;
     }
     case "checkpoint": err(spendCheckpoint(state, arg)); ctx.render(); break;
-    case "dismiss-level":
-      state.levelUps = (state.levelUps || []).slice(1);
-      shownLevelKey = "";
-      renderLevelModal(ctx);
-      break;
-    case "start":
-      if (state.action?.id === arg) break;
-      if (!confirmBusy(ctx, `start ${CONTENT.actions[arg]?.name || arg}`, () => { err(startAction(state, arg)); ctx.render(); })) break;
-      err(startAction(state, arg)); ctx.render(); break;
+    case "dismiss-level": state.levelUps = []; ctx.render(); break;
+    case "start": err(startAction(state, arg)); ctx.render(); break;
     case "stop": stopAction(state); stopFight(state); ctx.render(); break;
-    case "fight":
-      if (state.combat.fighting && state.combat.monsterId === arg) break;
-      if (!confirmBusy(ctx, `fight ${CONTENT.monsters[arg]?.name || arg}`, () => { err(startFight(state, arg)); ctx.render(); })) break;
-      err(startFight(state, arg)); ctx.render(); break;
-    case "dungeon":
-      if (!confirmBusy(ctx, `enter ${arg}`, () => { err(startDungeon(state, arg)); ctx.render(); })) break;
-      err(startDungeon(state, arg)); ctx.render(); break;
-    case "fork-yes": {
-      const fn = forkFn; forkFn = null;
-      hideFork();
-      if (fn) fn();
-      break;
-    }
-    case "fork-no": forkFn = null; hideFork(); break;
+    case "fight": err(startFight(state, arg)); ctx.render(); break;
+    case "dungeon": err(startDungeon(state, arg)); ctx.render(); break;
     case "equip": err(equipItem(state, arg)); ctx.render(); break;
     case "unequip": unequip(state, arg); ctx.render(); break;
     case "drink": err(drinkPotion(state, arg)); ctx.render(); break;
@@ -245,7 +223,6 @@ export function renderShell(ctx) {
   renderCodex(ctx);
   renderCenter(ctx);
   renderRight(ctx);
-  renderLevelModal(ctx);
 }
 
 function duelSwing(now, nextAt, interval) {
@@ -333,6 +310,16 @@ function renderTop(ctx) {
       commit.className = "idle";
     }
   }
+  const modal = document.getElementById("level-modal");
+  if (modal) {
+    const ev = (state.levelUps || [])[0];
+    if (ev) {
+      modal.hidden = false;
+      modal.innerHTML = `<div class="sheet"><h3>${skillName(ev.skill)} ${ev.to}</h3>
+        <p>${(ev.unlocks || []).length ? "Unlocked: " + ev.unlocks.join(", ") : "The citadel noticed."}</p>
+        <button type="button" data-act="dismiss-level">Continue</button></div>`;
+    }     else modal.hidden = true;
+  }
   const hits = document.getElementById("arena-hits");
   const seq = state._floaterSeq || 0;
   if (hits && seq !== lastFloater) {
@@ -346,50 +333,6 @@ function renderTop(ctx) {
       setTimeout(() => el.remove(), 750);
     }
   }
-  renderLevelModal(ctx);
-}
-
-function confirmBusy(ctx, nextLabel, fn) {
-  const { state } = ctx;
-  if (state.action?.id && nextLabel.includes(CONTENT.actions[state.action.id]?.name || "___")) return true;
-  if (state.combat.fighting && nextLabel.includes(CONTENT.monsters[state.combat.monsterId]?.name || "___")) return true;
-  const cur = state.combat.fighting
-    ? `fighting ${CONTENT.monsters[state.combat.monsterId]?.name || "a foe"}`
-    : (state.action ? (CONTENT.actions[state.action.id]?.name || "a craft") : null);
-  if (!cur) return true;
-  forkFn = fn;
-  const el = document.getElementById("fork-modal");
-  if (!el) { fn(); return false; }
-  el.hidden = false;
-  el.innerHTML = `<div class="sheet"><h3>Halt?</h3>
-    <p>You are committed to <strong>${cur}</strong>. Switch to ${nextLabel}?</p>
-    <p class="blurb">Soil and Drove still tick. Everything else waits.</p>
-    <button type="button" data-act="fork-yes">Halt and switch</button>
-    <button type="button" data-act="fork-no">Keep this job</button></div>`;
-  return false;
-}
-
-function hideFork() {
-  const el = document.getElementById("fork-modal");
-  if (el) { el.hidden = true; el.innerHTML = ""; }
-}
-
-function renderLevelModal(ctx) {
-  const modal = document.getElementById("level-modal");
-  if (!modal) return;
-  const ev = (ctx.state.levelUps || [])[0];
-  if (!ev) {
-    shownLevelKey = "";
-    modal.hidden = true;
-    return;
-  }
-  const key = `${ev.skill}-${ev.to}-${ev.t}`;
-  if (shownLevelKey === key && !modal.hidden) return;
-  shownLevelKey = key;
-  modal.hidden = false;
-  modal.innerHTML = `<div class="sheet"><h3>${skillName(ev.skill)} ${ev.to}</h3>
-    <p>${(ev.unlocks || []).length ? "Unlocked: " + ev.unlocks.join(", ") : "The citadel noticed."}</p>
-    <button type="button" data-act="dismiss-level">Continue</button></div>`;
 }
 
 function renderCodex(ctx) {
@@ -939,11 +882,9 @@ function renderLog(ctx) {
 function toast(ctx, msg) {
   log(ctx.state, msg);
   const t = document.getElementById("toast");
-  if (!t) return;
   t.textContent = msg;
   t.classList.add("show");
-  clearTimeout(toast._h);
-  toast._h = setTimeout(() => t.classList.remove("show"), 3200);
+  setTimeout(() => t.classList.remove("show"), 2400);
 }
 
 export { renderTop, recalcHp };

@@ -157,6 +157,16 @@ export function addItem(state, id, qty) {
     state.bankFull = true;
     return false;
   }
+  const cat = CONTENT.items[id]?.category;
+  const stackMax = ({ log: 40, fish: 40, ore: 40, food: 48, bar: 24, herb: 40, seed: 24 })[cat];
+  if (stackMax) {
+    const have = state.bank[id] || 0;
+    if (have >= stackMax) {
+      state.stackFull = CONTENT.items[id]?.name || id;
+      return false;
+    }
+    qty = Math.min(qty, stackMax - have);
+  }
   state.bank[id] = (state.bank[id] || 0) + qty;
   if (!state.itemTabs[id]) {
     const cat = CONTENT.items[id]?.category;

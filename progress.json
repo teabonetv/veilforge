@@ -2,8 +2,8 @@
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
   "updatedAt": "2026-08-19T16:20:00Z",
-  "wave": 4,
-  "overall": "Wave 4 answers the live critic: one commitment, skill gates, bank cap, mastery pool spends, deadly docks, death tax, level-up sheet. Sim: fewer kills, lower HP — combat now bites.",
+  "wave": 5,
+  "overall": "Wave 5: Halt-and-switch fork modal, stack caps that actually stop timber at 40, level sheet no longer eats its own Continue click. Three live critics still pick Melvor; next playtest is on this layer.",
   "comparison": {
     "melvorIdle": "critic 1: Melvor Idle still ahead on compulsion",
     "melvorIdle2": "critic 1 winner",
@@ -26,6 +26,7 @@
   ],
   "log": [
     "Critic 1 (live play): Melvor Idle 2 > Melvor Idle > Veilforge. Gap: zero meaningful decisions.",
-    "Wave 4: skill gates, bank cap, mastery checkpoints, one-commitment banner, deadly Cinder Docks, death tax, citadel pulse on actions."
+    "Wave 4: skill gates, bank cap, mastery checkpoints, one-commitment banner, deadly Cinder Docks, death tax, citadel pulse on actions.",
+    "Critic 2 bugs: food/HP chrome, War tab routing, floating combat numbers, action bar labels the running skill."
   ]
 }

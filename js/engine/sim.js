@@ -151,7 +151,11 @@ function completeAction(state, act) {
       if (!addItem(state, o.item, n)) dumped = true;
     }
     if (dumped) {
-      log(state, `Bank full (${bankUsed(state)}/${bankCap(state)} stacks). Sell, cook, or buy slots — the grove waits.`);
+      const why = state.stackFull
+        ? `${state.stackFull} stack is capped. Burn, cook, fletch, or sell — that is the fork.`
+        : `Bank full (${bankUsed(state)}/${bankCap(state)} stacks). Sell, cook, or buy slots — the grove waits.`;
+      log(state, why);
+      state.stackFull = null;
       state.action = null;
     }
   }
