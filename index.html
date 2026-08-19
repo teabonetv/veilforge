@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Veilforge — Idle RPG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/app.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "/js/vendor/three.module.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="app">
+    <header id="top">
+      <div>
+        <h1 class="brand">VEILFORGE <small>THE LAST WORKSHOP</small></h1>
+        <div class="links"><a href="/progress.html">Progress</a> · <button data-act="export">Export</button> <button data-act="import">Import</button> <button data-act="wipe">Reset</button></div>
+      </div>
+      <div>
+        <div id="action-wrap"><i id="action-fill"></i><span id="action-label">Idle</span></div>
+        <div style="display:flex;gap:8px;margin-top:6px;align-items:center">
+          <button id="stop-all" data-act="stop">Halt</button>
+          <label class="links">Tempo
+            <select id="scale">
+              <option value="1">1×</option>
+              <option value="3">3×</option>
+              <option value="10">10×</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="meters">
+        <span>♥ <span id="hp-label">10/10</span></span>
+        <div class="hp"><i id="hp-fill"></i></div>
+        <span>Vow</span>
+        <div class="vow"><i id="vow-fill"></i></div>
+        <span>✦ <span id="coins">0</span></span>
+      </div>
+    </header>
+    <div id="layout">
+      <nav id="skill-nav"></nav>
+      <div id="mid">
+        <div id="view-wrap"><canvas id="view"></canvas></div>
+        <section id="center"></section>
+      </div>
+      <aside id="right">
+        <h3>Loadout</h3>
+        <div id="gear"></div>
+        <h3>Bank</h3>
+        <div id="bank"></div>
+        <h3>Ledger</h3>
+        <div id="quests"></div>
+        <h3>Stall</h3>
+        <div id="shop"></div>
+        <h3>Journal</h3>
+        <div id="journal"></div>
+      </aside>
+    </div>
+  </div>
+  <div id="toast"></div>
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>
