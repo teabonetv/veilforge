@@ -1,9 +1,9 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-19T16:20:00Z",
-  "wave": 5,
-  "overall": "Wave 5: Halt-and-switch fork modal, stack caps that actually stop timber at 40, level sheet no longer eats its own Continue click. Three live critics still pick Melvor; next playtest is on this layer.",
+  "updatedAt": "2026-08-19T16:40:00Z",
+  "wave": 6,
+  "overall": "Wave 6: lastFloater crash fixed so the board renders. Halt-and-switch and stack caps are in; a critic is replaying localhost.",
   "comparison": {
     "melvorIdle": "critic 1: Melvor Idle still ahead on compulsion",
     "melvorIdle2": "critic 1 winner",
