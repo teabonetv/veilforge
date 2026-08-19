@@ -44,6 +44,7 @@ export function createState() {
     soil: { plots: [null, null, null, null] },
     drove: { pens: [null, null] },
     chart: { active: ["the-hatchet"], slots: 2, studied: {} },
+    whisper: { heat: 0, streak: 0 },
     quests: { active: ["q-wake"], done: [], stats: { harvests: 0, laps: 0, bounties: 0, drove: {}, guildMax: 0 } },
     pets: {},
     shopBought: {},
@@ -103,6 +104,8 @@ export function bankCount(state, id) {
 export function addItem(state, id, qty) {
   if (!id || qty <= 0) return false;
   if (id === "coins") {
+    const gp = 1 + (courseBonuses(state).gpMul || 0);
+    qty = Math.max(1, Math.round(qty * gp));
     state.coins += qty;
     state.stats.gp += qty;
     return true;
@@ -168,10 +171,17 @@ export function courseBonuses(state) {
 
 export function chartBonuses(state) {
   const acc = { speed: 0, rare: 0, output: 0, gem: 0, burnReduce: 0, xp: 0, preserve: 0, acc: 0, str: 0, ranged: 0, magic: 0, preserveAmmo: 0, preserveRune: 0, allXp: 0 };
-  for (const id of state.chart.active) {
+  const slots = state.chart?.slots || 2;
+  const active = (state.chart?.active || []).slice(0, slots);
+  const studied = state.chart?.studied || {};
+  for (const id of active) {
+    if (!id) continue;
     const c = CONTENT.constellations.find((x) => x.id === id);
     if (!c) continue;
-    for (const [k, v] of Object.entries(c.bonus)) acc[k] += v;
+    const n = studied[id] || 0;
+    if (n <= 0) continue;
+    const power = Math.min(1, 0.5 + Math.log2(1 + n) * 0.14);
+    for (const [k, v] of Object.entries(c.bonus)) acc[k] += v * power;
   }
   return acc;
 }

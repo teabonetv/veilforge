@@ -10,13 +10,17 @@ export function startAction(state, actionId) {
   const act = CONTENT.actions[actionId];
   if (!act) return "Unknown action.";
   if (skillLevel(state, act.skill) < act.level) return `Requires ${act.skill} ${act.level}.`;
+  if (act.skill === "course" && act.id === "course-lap") {
+    const chosen = Object.keys(state.course?.chosen || {}).filter((k) => state.course.chosen[k]);
+    if (chosen.length < 1) return "Choose pillars before running the course.";
+  }
   if (act.inputs) {
     for (const inp of act.inputs) {
       if (bankCount(state, inp.item) < inp.qty) return `Need ${inp.qty} ${CONTENT.items[inp.item]?.name || inp.item}.`;
     }
   }
   if (state.combat.fighting && act.skill !== "course") stopFight(state);
-  state.action = { id: actionId, skill: act.skill, started: performance.now(), progress: 0, duration: actionDuration(state, act) };
+  state.action = { id: actionId, skill: act.skill, started: state.now || 0, progress: 0, duration: actionDuration(state, act) };
   return null;
 }
 
@@ -26,15 +30,29 @@ export function stopAction(state) {
 
 export function actionDuration(state, act) {
   let t = act.time;
-  if (act.skill === "course") t = 4000 * courseBonuses(state).time;
   const mb = masteryBonus(state, act.masteryId);
   const gb = guildBonuses(state, act.skill);
   const cb = courseBonuses(state);
   const ch = chartBonuses(state);
   const pot = potionStats(state);
   const tool = toolSpeed(state, act.skill);
+  if (act.skill === "course") {
+    t = (act.time || 4000) * (cb.time || 1);
+    const speed = 1 + mb.speed + gb.speed + ((pot.speedMul || 1) - 1);
+    return Math.max(480, t / speed);
+  }
+  if (act.skill === "chart" && act.id?.startsWith("chart-study-")) {
+    const starId = act.id.slice("chart-study-".length);
+    const slotted = isStarSlotted(state, starId);
+    t = (act.time || 8000) * (slotted ? 0.72 : 1.08);
+  }
   const speed = 1 + mb.speed + gb.speed + cb.skillSpeed + (ch.speed || 0) + tool + ((pot.speedMul || 1) - 1);
   return Math.max(280, t / speed);
+}
+
+function isStarSlotted(state, starId) {
+  const slots = state.chart?.slots || 2;
+  return (state.chart?.active || []).slice(0, slots).includes(starId);
 }
 
 function toolSpeed(state, skill) {
@@ -67,8 +85,11 @@ function tickOnce(state, ms) {
     state.action = null;
     return;
   }
+  const stunned = (state.now || 0) < (state.combat.stunUntil || 0);
+  if (stunned && act.skill === "whisper") return;
+  state.action.duration = actionDuration(state, act);
   state.action.progress += ms;
-  const dur = state.action.duration || actionDuration(state, act);
+  const dur = state.action.duration;
   if (state.action.progress >= dur) {
     completeAction(state, act);
     if (state.action && state.action.id === act.id) {
@@ -90,6 +111,7 @@ function tickOnce(state, ms) {
 function completeAction(state, act) {
   if (act.npc) return completeThieve(state, act);
   if (act.id === "course-lap") return completeLap(state, act);
+  if (act.id?.startsWith("chart-study-")) return completeChartStudy(state, act);
 
   if (act.inputs) {
     const ch = chartBonuses(state);
@@ -140,13 +162,15 @@ function completeAction(state, act) {
   consumePotionCharge(state);
 }
 
-function grantSkillBits(state, act, xpMul) {
+function grantSkillBits(state, act, xpMul, xpOverride) {
   const gb = guildBonuses(state, act.skill);
   const cb = courseBonuses(state);
   const ch = chartBonuses(state);
   const pet = petBonuses(state, act.skill);
-  const mul = 1 + (gb.xp || 0) + (cb.allXp || 0) + (cb.xpMul || 0) + (ch.allXp || 0) + (ch.xp || 0) + pet.xp;
-  const notes = addXp(state, act.skill, act.xp * mul * xpMul);
+  let mul = 1 + (gb.xp || 0) + (cb.allXp || 0) + (cb.xpMul || 0) + (ch.allXp || 0) + (ch.xp || 0) + pet.xp;
+  if (act.skill === "chart") mul += cb.chartXp || 0;
+  const baseXp = xpOverride != null ? xpOverride : act.xp;
+  const notes = addXp(state, act.skill, baseXp * mul * xpMul);
   const sk = state.skills[act.skill];
   sk.actions += 1;
   state.actionCounts = state.actionCounts || {};
@@ -167,31 +191,74 @@ function grantSkillBits(state, act, xpMul) {
 
 function completeThieve(state, act) {
   const npc = act.npc;
-  if (Math.random() < npc.stun) {
-    state.combat.stunUntil = (state.now || 0) + npc.stunMs;
-    state.action = null;
-    log(state, `${npc.name} caught you. Stunned.`);
-    grantSkillBits(state, act, 0.15);
+  const w = state.whisper || (state.whisper = { heat: 0, streak: 0 });
+  const lvl = skillLevel(state, "whisper");
+  const heat = w.heat || 0;
+  const stunChance = Math.min(0.72, npc.stun + heat * 0.035 - Math.max(0, lvl - npc.level) * 0.004);
+  if (Math.random() < stunChance) {
+    w.heat = Math.min(14, heat + 1);
+    w.streak = 0;
+    const lock = Math.round(npc.stunMs * (1 + w.heat * 0.1));
+    state.combat.stunUntil = (state.now || 0) + lock;
+    if (state.action) state.action.progress = 0;
+    const scraps = 1 + Math.floor(Math.random() * (2 + Math.min(6, npc.level / 20)));
+    addItem(state, "coins", scraps);
+    grantSkillBits(state, act, 0.22);
+    log(state, `${npc.name} caught you. Stunned ${Math.round(lock / 1000)}s · heat ${w.heat}. Scrap ${scraps} veilmarks.`);
     return;
   }
+  w.heat = Math.max(0, heat - 1);
+  w.streak = (w.streak || 0) + 1;
+  const luck = w.streak >= 8 && Math.random() < 0.12;
+  const spike = luck ? 3 + Math.floor(Math.random() * 4) : (w.streak >= 4 && Math.random() < 0.18 ? 2 : 1);
   for (const l of npc.loot) {
-    if (Math.random() < l.chance) addItem(state, l.item, l.min + Math.floor(Math.random() * (l.max - l.min + 1)));
+    if (Math.random() >= l.chance) continue;
+    let n = l.min + Math.floor(Math.random() * (l.max - l.min + 1));
+    if (l.item === "coins") n = Math.max(1, Math.round(n * spike * (1 + w.streak * 0.03)));
+    addItem(state, l.item, n);
+    if (l.item === "coins" && spike > 1) log(state, luck ? `Jackpot steal ×${spike} (${n} veilmarks).` : `Clean lift ×${spike}.`);
   }
   grantSkillBits(state, act, 1);
   rollPet(state, "whisper");
 }
 
 function completeLap(state, act) {
-  const chosen = Object.keys(state.course.chosen).filter((k) => state.course.chosen[k]);
+  const chosen = Object.keys(state.course.chosen || {}).filter((k) => state.course.chosen[k]);
   if (chosen.length < 1) {
     log(state, "Choose pillars before running the course.");
+    state.action = null;
     return;
   }
-  const xp = 16 + chosen.length * 8 + skillLevel(state, "course");
-  act.xp = xp;
-  grantSkillBits(state, act, 1);
+  const cb = courseBonuses(state);
+  const timeMul = cb.time || 1;
+  const lvl = skillLevel(state, "course");
+  const xp = (18 + chosen.length * 10 + lvl * 0.45) * timeMul;
+  grantSkillBits(state, act, 1, xp);
   state.quests.stats.laps += 1;
-  if (Math.random() < 0.04) addItem(state, "coins", 12 + chosen.length * 8);
+  const marks = Math.max(1, Math.round((3 + chosen.length * 4) * timeMul));
+  addItem(state, "coins", marks);
+  if (timeMul >= 1.2 && Math.random() < 0.12) {
+    addItem(state, "coins", 18 + chosen.length * 10);
+    log(state, "Greedy circuit paid a purse.");
+  }
+  rollPet(state, "course");
+}
+
+function completeChartStudy(state, act) {
+  const starId = act.id.slice("chart-study-".length);
+  const star = CONTENT.constellations.find((c) => c.id === starId);
+  state.chart.studied = state.chart.studied || {};
+  state.chart.studied[starId] = (state.chart.studied[starId] || 0) + 1;
+  const n = state.chart.studied[starId];
+  const slotted = isStarSlotted(state, starId);
+  const xpMul = slotted ? 1.4 : 1;
+  grantSkillBits(state, act, xpMul);
+  if (slotted) {
+    log(state, `Slotted study: ${star?.name || starId} insight ${n}. Live bonus armed.`);
+  } else {
+    log(state, `Filed ${star?.name || starId} (${n}). Slot it to spend the bonus.`);
+  }
+  rollPet(state, "chart");
 }
 
 function rollPet(state, skill) {
@@ -205,18 +272,44 @@ function rollPet(state, skill) {
 }
 
 function tickPlots(state, ms) {
-  state.soil.plots.forEach((p, i) => {
+  if (!state.soil?.plots) return;
+  const speed = 1 + (guildBonuses(state, "soil").speed || 0) + (courseBonuses(state).skillSpeed || 0);
+  state.soil.plots.forEach((p) => {
     if (!p) return;
-    p.left -= ms;
-    if (p.left <= 0) p.ready = true;
+    if (!p.ready) {
+      p.left -= ms * speed;
+      if (p.left <= 0) {
+        p.ready = true;
+        p.ripeMs = 0;
+      }
+    } else {
+      p.ripeMs = (p.ripeMs || 0) + ms;
+    }
   });
 }
 
 function tickDrove(state, ms) {
+  if (!state.drove?.pens) return;
+  const speed = 1 + (guildBonuses(state, "drove").speed || 0) + (courseBonuses(state).skillSpeed || 0);
   state.drove.pens.forEach((p) => {
     if (!p) return;
+    const a = CONTENT.animals.find((x) => x.id === p.animal);
+    if (!a) return;
+    const cycle = a.time / speed;
+    const maxCycles = Math.max(12, Math.floor((8 * 3600000) / a.time));
     p.left -= ms;
-    if (p.left <= 0) p.ready = true;
+    while (p.left <= 0) {
+      const have = p.cyclesReady || 0;
+      if (have >= maxCycles) {
+        p.left = cycle;
+        p.ready = true;
+        break;
+      }
+      p.cyclesReady = have + 1;
+      p.pending = (p.pending || 0) + a.qty;
+      p.ready = true;
+      p.left += cycle;
+    }
   });
 }
 
@@ -225,13 +318,22 @@ export function harvestPlot(state, i) {
   if (!p?.ready) return;
   const crop = CONTENT.crops.find((c) => c.seed === p.seed);
   if (!crop) return;
-  addItem(state, crop.herb, 1 + (Math.random() < 0.2 ? 1 : 0));
-  if (Math.random() < 0.15) addItem(state, crop.seed, 1);
+  const lvl = skillLevel(state, "soil");
+  const outMul = 1 + (guildBonuses(state, "soil").output || 0) + (courseBonuses(state).outputMul || 0) + (chartBonuses(state).output || 0);
+  const extra = Math.min(3, Math.floor((p.ripeMs || 0) / Math.max(8000, crop.growMs * 0.55)));
+  const qty = Math.max(1, Math.round((2 + Math.floor(crop.t / 3) + extra + (Math.random() < 0.35 ? 1 : 0)) * outMul));
+  addItem(state, crop.herb, qty);
+  const seedChance = Math.min(0.82, 0.38 + lvl * 0.004 + crop.t * 0.012);
+  let seeds = 0;
+  if (Math.random() < seedChance) seeds += 1;
+  if (Math.random() < seedChance * 0.35) seeds += 1;
+  if (seeds) addItem(state, crop.seed, seeds);
+  if (crop.log && Math.random() < 0.08 + crop.t * 0.006) addItem(state, crop.log, 1);
   state.soil.plots[i] = null;
   state.quests.stats.harvests += 1;
-  addXp(state, "soil", 10 + crop.t * 8);
-  state.skills.soil.actions += 1;
-  state.skills.soil.guildProgress += 1;
+  const act = { id: `soil-${crop.seed}`, skill: "soil", xp: 22 + crop.t * 16, masteryId: `soil-${crop.t}` };
+  grantSkillBits(state, act, 1, act.xp * (1 + qty * 0.12));
+  log(state, `Harvest ${CONTENT.items[crop.herb]?.name || crop.herb} ×${qty}${seeds ? ` · seeds ×${seeds}` : ""}${extra ? " · extra ripe" : ""}.`);
   checkQuests(state);
 }
 
@@ -241,7 +343,8 @@ export function plantPlot(state, i, seed) {
   if (!crop) return "Not a seed.";
   if (skillLevel(state, "soil") < crop.req) return `Soil ${crop.req} required.`;
   if (!takeItem(state, seed, 1)) return "No seed.";
-  state.soil.plots[i] = { seed, left: crop.growMs / (1 + guildBonuses(state, "soil").speed), ready: false };
+  const speed = 1 + (guildBonuses(state, "soil").speed || 0);
+  state.soil.plots[i] = { seed, left: crop.growMs / speed, ready: false, ripeMs: 0 };
   return null;
 }
 
@@ -249,15 +352,31 @@ export function collectPen(state, i) {
   const p = state.drove.pens[i];
   if (!p?.ready) return;
   const a = CONTENT.animals.find((x) => x.id === p.animal);
-  addItem(state, a.produce, a.qty);
-  if (a.rare && Math.random() < a.rare.chance) addItem(state, a.rare.item, 1);
-  p.left = a.time;
+  if (!a) return;
+  const cycles = Math.max(1, p.cyclesReady || 1);
+  const outMul = 1 + (guildBonuses(state, "drove").output || 0) + (courseBonuses(state).outputMul || 0) + (chartBonuses(state).output || 0);
+  const qty = Math.max(1, Math.round((p.pending || a.qty * cycles) * outMul));
+  addItem(state, a.produce, qty);
+  let rares = 0;
+  if (a.rare) {
+    const rolls = Math.min(cycles, 24);
+    for (let n = 0; n < rolls; n++) {
+      if (Math.random() < a.rare.chance) {
+        addItem(state, a.rare.item, 1);
+        rares += 1;
+      }
+    }
+  }
+  const speed = 1 + (guildBonuses(state, "drove").speed || 0);
+  p.left = a.time / speed;
   p.ready = false;
-  p.collected = (p.collected || 0) + 1;
-  state.quests.stats.drove[a.id] = (state.quests.stats.drove[a.id] || 0) + 1;
-  addXp(state, "drove", a.xp);
-  state.skills.drove.actions += 1;
-  state.skills.drove.guildProgress += 1;
+  p.pending = 0;
+  p.cyclesReady = 0;
+  p.collected = (p.collected || 0) + cycles;
+  state.quests.stats.drove[a.id] = (state.quests.stats.drove[a.id] || 0) + cycles;
+  const act = { id: `drove-${a.id}`, skill: "drove", xp: a.xp, masteryId: `drove-${a.id}` };
+  grantSkillBits(state, act, 1, a.xp * cycles);
+  log(state, `Collected ${CONTENT.items[a.produce]?.name || a.produce} ×${qty} (${cycles} cycle${cycles > 1 ? "s" : ""})${rares ? ` · rare ×${rares}` : ""}.`);
   checkQuests(state);
 }
 
@@ -267,7 +386,8 @@ export function stockPen(state, i, animalId) {
   if (skillLevel(state, "drove") < a.level) return `Drove ${a.level} required.`;
   const cost = 20 + a.level * 4;
   if (!takeItem(state, "coins", cost)) return `Need ${cost} veilmarks.`;
-  state.drove.pens[i] = { animal: animalId, left: a.time, ready: false, collected: 0 };
+  const speed = 1 + (guildBonuses(state, "drove").speed || 0);
+  state.drove.pens[i] = { animal: animalId, left: a.time / speed, ready: false, collected: 0, pending: 0, cyclesReady: 0 };
   return null;
 }
 
