@@ -50,6 +50,10 @@ function loop(now) {
       uiAcc = 0;
       renderRight(ctx);
     }
+    if (state._uiDirty) {
+      state._uiDirty = false;
+      renderShell(ctx);
+    }
   } catch (err) {
     console.error("Veilforge tick", err);
   }

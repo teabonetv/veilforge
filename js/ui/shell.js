@@ -328,8 +328,12 @@ function renderTop(ctx) {
       commit.className = "danger";
     } else if (act) {
       const a = CONTENT.actions[act.id];
-      commit.innerHTML = `<b>Committed:</b> ${a?.name || act.id} (${skillName(act.skill)}) · ${bankCount(state, "log-0")} Drift logs / 40 · Halt to switch.`;
-      commit.className = "";
+      const outId = a?.outputs?.[0]?.item;
+      const outN = outId ? bankCount(state, outId) : 0;
+      const outNm = outId ? (CONTENT.items[outId]?.name || outId) : "yield";
+      const capNote = state._yieldWarn ? ` · ${state._yieldWarn}` : ` · ${outN} ${outNm}`;
+      commit.innerHTML = `<b>Committed:</b> ${a?.name || act.id} (${skillName(act.skill)})${capNote}. Switching jobs asks Halt.`;
+      commit.className = state._yieldWarn ? "danger" : "";
     } else {
       commit.innerHTML = `<b>Uncommitted.</b> Pick one action. You cannot train 22 skills at once — that was never the game.`;
       commit.className = "idle";
@@ -366,6 +370,7 @@ function confirmBusy(ctx, nextId, kind, fn) {
   const el = document.getElementById("fork-modal");
   if (!el) { fn(); return false; }
   el.hidden = false;
+  el.classList.add("open");
   el.innerHTML = `<div class="sheet"><h3>Halt?</h3>
     <p>You are committed to <strong>${cur}</strong>. Switch to <strong>${nextName}</strong>?</p>
     <p class="blurb">Soil and Drove still tick. Everything else waits.</p>

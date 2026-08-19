@@ -348,10 +348,10 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
   background: var(--panel-solid); border: 1px solid var(--gold-dim); border-radius: 16px;
   padding: 22px 26px; max-width: 420px; box-shadow: var(--shadow);
 }
-#fork-modal, #level-modal {
-  position: fixed; inset: 0; background: #0c0714cc; display: grid; place-items: center; z-index: 80;
+#fork-modal {
+  position: fixed; inset: 0; background: #0c0714cc; z-index: 90; display: none; place-items: center;
 }
-#fork-modal[hidden], #level-modal[hidden] { display: none !important; }
+#fork-modal.open { display: grid !important; }
 #fork-modal .sheet {
   background: var(--panel-solid); border: 1px solid var(--gold-dim); border-radius: 16px;
   padding: 22px 26px; max-width: 440px; box-shadow: var(--shadow);

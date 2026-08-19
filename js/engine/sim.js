@@ -152,11 +152,14 @@ function completeAction(state, act) {
     }
     if (dumped) {
       const why = state.stackFull
-        ? `${state.stackFull} stack is capped. Burn, cook, fletch, or sell — that is the fork.`
-        : `Bank full (${bankUsed(state)}/${bankCap(state)} stacks). Sell, cook, or buy slots — the grove waits.`;
-      log(state, why);
+        ? `${state.stackFull} is capped. XP still rolls — sell, cook, or burn to stash more.`
+        : `Bank full (${bankUsed(state)}/${bankCap(state)} stacks). XP still rolls — sell or buy slots.`;
+      if (state._yieldWarn !== why) log(state, why);
+      state._yieldWarn = why;
       state.stackFull = null;
-      state.action = null;
+      state._uiDirty = true;
+    } else {
+      state._yieldWarn = null;
     }
   }
   if (act.rare) {
@@ -199,6 +202,7 @@ function grantSkillBits(state, act, xpMul, xpOverride) {
   }
   state.stats.actions += 1;
   notes.forEach((n) => log(state, `Level up: ${n}`));
+  state._uiDirty = true;
   checkQuests(state);
 }
 
