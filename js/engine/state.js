@@ -37,7 +37,8 @@ export function createState() {
       nextHitAt: 0, enemyNextAt: 0, fighting: false, dungeon: null, dungeonIndex: 0,
       kills: {}, style: "might", spell: "gust-bolt", prayers: [], vow: 100, maxVow: 100,
       foodId: "food-0", autoEat: 0.4, potionId: null, potionCharges: 0,
-      stunUntil: 0, poison: 0, ward: 0, dungeonDeaths: 0
+      stunUntil: 0, poison: 0, ward: 0, dungeonDeaths: 0,
+      spec: 0, useSpec: true
     },
     bounty: { monsterId: null, need: 0, have: 0, streak: 0 },
     course: { chosen: {} },

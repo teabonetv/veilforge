@@ -503,7 +503,26 @@ export function buildContent() {
     { id: "vow-leech", name: "Leech Oath", level: 70, drain: 7, stats: { leech: 0.08 }, desc: "Life leech. Hungry on vow." },
     { id: "vow-smite", name: "Smite Oath", level: 85, drain: 8, stats: { smite: 0.16 }, desc: "Bonus on every dungeon floor, not a stat stick." },
     { id: "vow-still", name: "Still Oath", level: 99, drain: 4, stats: { preserveRune: 0.18 }, desc: "Rune preserve. Still need stock when luck fails." },
-    { id: "vow-last", name: "Last Light", level: 110, drain: 10, stats: { accMul: 1.06, strMul: 1.06, defMul: 1.06, rangedMul: 1.06, magicMul: 1.06 }, desc: "All-style hymn. Drain is the tax — bones refill the well." }
+    { id: "vow-last", name: "Last Light", level: 110, drain: 10, stats: { accMul: 1.06, strMul: 1.06, defMul: 1.06, rangedMul: 1.06, magicMul: 1.06 }, desc: "All-style hymn. Drain is the tax — bones refill the well." },
+    { id: "vow-haste", name: "Haste Oath", level: 15, drain: 3, stats: { accMul: 1.04 }, desc: "A little accuracy. Pair with Heavy, not with Last Light." },
+    { id: "vow-ward", name: "Ward Oath", level: 25, drain: 3, stats: { defMul: 1.08 }, desc: "Softer iron. For docks, not Thornheart." },
+    { id: "vow-flint", name: "Flint Oath", level: 35, drain: 4, stats: { strMul: 1.06, accMul: 1.03 }, desc: "Melee hybrid. The two-slot tax is the game." },
+    { id: "vow-nock", name: "Nock Oath", level: 38, drain: 4, stats: { rangedMul: 1.08, accMul: 1.03 }, desc: "Mark hybrid." },
+    { id: "vow-glyph", name: "Glyph Oath", level: 42, drain: 4, stats: { magicMul: 1.08, preserveRune: 0.06 }, desc: "Weave hybrid." },
+    { id: "vow-thick", name: "Thick Oath", level: 50, drain: 5, stats: { defMul: 1.1, leech: 0.02 }, desc: "Survive plus a sip." },
+    { id: "vow-hunt", name: "Hunt Oath", level: 60, drain: 5, stats: { accMul: 1.08, smite: 0.06 }, desc: "Accuracy that wakes up in dungeons." },
+    { id: "vow-quiet", name: "Quiet Oath", level: 65, drain: 2, stats: { preserveRune: 0.1 }, desc: "Cheap preserve. Long fights." },
+    { id: "vow-red", name: "Red Oath", level: 75, drain: 6, stats: { leech: 0.05, strMul: 1.05 }, desc: "Blood-minded melee." },
+    { id: "vow-blue", name: "Blue Oath", level: 75, drain: 6, stats: { leech: 0.05, magicMul: 1.05 }, desc: "Blood-minded weave." },
+    { id: "vow-green", name: "Green Oath", level: 75, drain: 6, stats: { leech: 0.05, rangedMul: 1.05 }, desc: "Blood-minded mark." },
+    { id: "vow-boss", name: "Boss Oath", level: 92, drain: 9, stats: { smite: 0.2, defMul: 1.06 }, desc: "Dungeon closer. Vow melts." },
+    { id: "vow-thin", name: "Thin Oath", level: 5, drain: 1, stats: { accMul: 1.03 }, desc: "The first sip. Almost free." },
+    { id: "vow-mirror", name: "Mirror Oath", level: 80, drain: 6, stats: { defMul: 1.08, triangle: 0.08 }, desc: "Defence plus triangle. For style swapping." },
+    { id: "vow-star", name: "Star Oath", level: 105, drain: 8, stats: { magicMul: 1.1, preserveRune: 0.08 }, desc: "Late weave identity." },
+    { id: "vow-ash", name: "Ash Oath", level: 22, drain: 2, stats: { strMul: 1.04 }, desc: "Tiny strength. Tutorial vaults." },
+    { id: "vow-salt", name: "Salt Oath", level: 28, drain: 2, stats: { rangedMul: 1.04 }, desc: "Tiny mark." },
+    { id: "vow-ink", name: "Ink Oath", level: 33, drain: 2, stats: { magicMul: 1.04 }, desc: "Tiny weave." },
+    { id: "vow-final", name: "Final Oath", level: 120, drain: 12, stats: { accMul: 1.08, strMul: 1.08, defMul: 1.08, rangedMul: 1.08, magicMul: 1.08, smite: 0.1 }, desc: "Capstone. You will bury bones or you will go dark." }
   );
 
   npcs.push(

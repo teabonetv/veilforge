@@ -84,6 +84,7 @@ function handle(ctx, act, arg, el) {
     case "buy": err(buyShop(state, arg)); ctx.render(); break;
     case "sell": sellOne(state, arg); ctx.render(); break;
     case "pray": togglePrayer(state, arg); ctx.render(); break;
+    case "spec": state.combat.useSpec = !(state.combat.useSpec !== false); ctx.render(); break;
     case "spell-pick": state.combat.spell = arg; ctx.render(); break;
     case "tab": bankTab = arg; renderBank(ctx); break;
     case "set-tab": {
@@ -242,6 +243,13 @@ function renderTop(ctx) {
     const heal = CONTENT.items[foodId]?.heal;
     foodEl.textContent = foodId ? `🍽 ${foodN} ${nm}${heal ? ` +${heal}` : ""}` : "🍽 No food set";
     foodEl.style.color = foodN <= 3 ? "var(--rose)" : "";
+  }
+
+  const specEl = document.getElementById("spec-chip");
+  if (specEl) {
+    const sp = Math.floor(state.combat.spec || 0);
+    const on = state.combat.useSpec !== false;
+    specEl.textContent = `Special ${sp}% ${on ? "ON" : "OFF"}`;
   }
 
   const duel = document.getElementById("duel");

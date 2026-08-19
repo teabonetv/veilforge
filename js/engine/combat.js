@@ -328,6 +328,16 @@ function playerHit(state, echoFollow = false) {
   let dmg = 1 + Math.floor(Math.random() * Math.max(1, maxHit));
 
   const notes = [];
+  if (!echoFollow) {
+    state.combat.spec = state.combat.spec || 0;
+    if (state.combat.useSpec !== false && state.combat.spec >= 50) {
+      state.combat.spec -= 50;
+      dmg = Math.floor(dmg * 1.5);
+      notes.push("special");
+    } else {
+      state.combat.spec = Math.min(100, state.combat.spec + 14);
+    }
+  }
   if (w?.special === "pierce") {
     dmg = Math.floor(dmg * 1.12);
     notes.push("pierce");
