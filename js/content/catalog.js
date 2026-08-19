@@ -381,7 +381,7 @@ export function buildContent() {
       const t = Math.min(13, Math.floor(ai * 1.1 + mi * 0.3));
       const id = idify(`${area.name}-${nm}`);
       const hp = 12 + ai * 18 + mi * 8;
-      const maxHit = 2 + ai * 3 + mi;
+      const maxHit = 2 + ai * 3 + mi + (mi === 5 ? 5 : mi === 1 ? 2 : 0);
       const acc = 4 + ai * 7;
       const eva = 4 + ai * 6;
       const style = mi % 3 === 0 ? "might" : mi % 3 === 1 ? "mark" : "weave";
@@ -389,6 +389,7 @@ export function buildContent() {
         id, name: nm, area: area.name, hp, maxHit, acc, eva, style, interval: 2200 + (mi % 3) * 300,
         def: 2 + ai * 4, slayerReq: area.slayer, tier: t,
         special: mi === 5 ? "burst" : mi === 3 ? "poison" : mi === 1 ? "drain" : null,
+        burstMul: 2.4,
         xp: { might: 8 + ai * 5, guard: 8 + ai * 5, vitality: 6 + ai * 4, mark: 8 + ai * 5, weave: 8 + ai * 5 },
         drops: [
           { item: "coins", min: 4 + ai * 6, max: 14 + ai * 16, chance: 1 },
@@ -433,27 +434,27 @@ export function buildContent() {
   });
 
   spells.push(
-    { id: "gust-bolt", name: "Gust Bolt", level: 1, runes: { "rune-gust": 1, "rune-mind": 1 }, maxHit: 6, xp: 8, tag: "air", desc: "Cheap opener." },
-    { id: "ember-lash", name: "Ember Lash", level: 12, runes: { "rune-ember": 2, "rune-mind": 1 }, maxHit: 10, xp: 14, tag: "fire", desc: "Burn: 3 dmg over 3 hits." },
-    { id: "tide-ward", name: "Tide Ward", level: 24, runes: { "rune-tide": 2, "rune-stone": 1 }, maxHit: 8, xp: 16, tag: "water", desc: "Next hit against you -25%." },
-    { id: "stone-spike", name: "Stone Spike", level: 36, runes: { "rune-stone": 3 }, maxHit: 14, xp: 20, tag: "earth", desc: "High hit, slow soul." },
+    { id: "gust-bolt", name: "Gust Bolt", level: 1, runes: { "rune-gust": 1, "rune-mind": 1 }, maxHit: 6, xp: 8, tag: "air", desc: "Cheap opener. Check runes or Weave goes dry." },
+    { id: "ember-lash", name: "Ember Lash", level: 12, runes: { "rune-ember": 2, "rune-mind": 1 }, maxHit: 10, xp: 14, tag: "fire", desc: "Applies ember burn (bleed tick) on hit." },
+    { id: "tide-ward", name: "Tide Ward", level: 24, runes: { "rune-tide": 2, "rune-stone": 1 }, maxHit: 8, xp: 16, tag: "water", desc: "Stacks a ward: next hit against you is cut ~28%." },
+    { id: "stone-spike", name: "Stone Spike", level: 36, runes: { "rune-stone": 3 }, maxHit: 14, xp: 20, tag: "earth", desc: "High hit, slower interval. A real tempo choice." },
     { id: "blood-pact", name: "Blood Pact", level: 52, runes: { "rune-blood": 2, "rune-mind": 2 }, maxHit: 12, xp: 28, tag: "blood", desc: "Heal 15% of damage dealt." },
-    { id: "void-needle", name: "Void Needle", level: 70, runes: { "rune-void": 2, "rune-gust": 2 }, maxHit: 18, xp: 36, tag: "void", desc: "Ignores 20% of enemy defence." },
-    { id: "star-fall", name: "Starfall", level: 88, runes: { "rune-star": 3, "rune-ember": 2, "rune-mind": 2 }, maxHit: 24, xp: 48, tag: "star", desc: "Splash 40% to a virtual second hit." },
+    { id: "void-needle", name: "Void Needle", level: 70, runes: { "rune-void": 2, "rune-gust": 2 }, maxHit: 18, xp: 36, tag: "void", desc: "Ignores 20% of enemy defence (pairs with pierce)." },
+    { id: "star-fall", name: "Starfall", level: 88, runes: { "rune-star": 3, "rune-ember": 2, "rune-mind": 2 }, maxHit: 24, xp: 48, tag: "star", desc: "Splash +40% as a second hit on the same target." },
     { id: "veil-edict", name: "Veil Edict", level: 108, runes: { "rune-star": 4, "rune-void": 3, "rune-blood": 2 }, maxHit: 32, xp: 64, tag: "veil", desc: "Late-game identity spell. Expensive on purpose." }
   );
 
   prayers.push(
-    { id: "vow-sharp", name: "Sharp Oath", level: 1, drain: 1, stats: { accMul: 1.08 }, desc: "Accuracy." },
-    { id: "vow-heavy", name: "Heavy Oath", level: 10, drain: 2, stats: { strMul: 1.1 }, desc: "Melee strength." },
-    { id: "vow-iron", name: "Iron Oath", level: 20, drain: 2, stats: { defMul: 1.12 }, desc: "Defence." },
-    { id: "vow-sight", name: "Sight Oath", level: 30, drain: 2, stats: { rangedMul: 1.1 }, desc: "Ranged." },
-    { id: "vow-mind", name: "Mind Oath", level: 40, drain: 2, stats: { magicMul: 1.1 }, desc: "Magic." },
-    { id: "vow-triangle", name: "Triune Oath", level: 55, drain: 4, stats: { triangle: 0.1 }, desc: "Strengthen combat triangle." },
-    { id: "vow-leech", name: "Leech Oath", level: 70, drain: 5, stats: { leech: 0.08 }, desc: "Life leech." },
-    { id: "vow-smite", name: "Smite Oath", level: 85, drain: 6, stats: { smite: 0.12 }, desc: "Bonus vs dungeon bosses." },
-    { id: "vow-still", name: "Still Oath", level: 99, drain: 3, stats: { preserveRune: 0.15 }, desc: "Rune preserve." },
-    { id: "vow-last", name: "Last Light", level: 110, drain: 8, stats: { accMul: 1.06, strMul: 1.06, defMul: 1.06, rangedMul: 1.06, magicMul: 1.06 }, desc: "All-style hymn. Drain is the tax." }
+    { id: "vow-sharp", name: "Sharp Oath", level: 1, drain: 2, stats: { accMul: 1.1 }, desc: "Accuracy. Two-prayer cap — pick a partner." },
+    { id: "vow-heavy", name: "Heavy Oath", level: 10, drain: 3, stats: { strMul: 1.12 }, desc: "Melee strength. Drains vow; bury bones to last a dungeon." },
+    { id: "vow-iron", name: "Iron Oath", level: 20, drain: 3, stats: { defMul: 1.14 }, desc: "Defence. Surviving burst/poison is a vow job." },
+    { id: "vow-sight", name: "Sight Oath", level: 30, drain: 3, stats: { rangedMul: 1.12 }, desc: "Ranged. Mark still spends ammo." },
+    { id: "vow-mind", name: "Mind Oath", level: 40, drain: 3, stats: { magicMul: 1.12 }, desc: "Magic." },
+    { id: "vow-triangle", name: "Triune Oath", level: 55, drain: 6, stats: { triangle: 0.16 }, desc: "Widen the style triangle. Swap arts on purpose." },
+    { id: "vow-leech", name: "Leech Oath", level: 70, drain: 7, stats: { leech: 0.08 }, desc: "Life leech. Hungry on vow." },
+    { id: "vow-smite", name: "Smite Oath", level: 85, drain: 8, stats: { smite: 0.16 }, desc: "Bonus on every dungeon floor, not a stat stick." },
+    { id: "vow-still", name: "Still Oath", level: 99, drain: 4, stats: { preserveRune: 0.18 }, desc: "Rune preserve. Still need stock when luck fails." },
+    { id: "vow-last", name: "Last Light", level: 110, drain: 10, stats: { accMul: 1.06, strMul: 1.06, defMul: 1.06, rangedMul: 1.06, magicMul: 1.06 }, desc: "All-style hymn. Drain is the tax — bones refill the well." }
   );
 
   npcs.push(
