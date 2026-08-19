@@ -1,32 +1,32 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-19T16:40:00Z",
-  "wave": 7,
-  "overall": "Wave 7: #app grid was giving 1fr to the commit strip and shoving the game below a hidden overflow. Modals moved to body. Halt uses action ids. Tick loop cannot die on one throw.",
+  "updatedAt": "2026-08-19T17:00:00Z",
+  "wave": 8,
+  "overall": "Halt-and-switch now plays in the running client. Latest critic was wowed by that fork vs Melvor's instant swap. Earlier critics still scored Melvor Idle 2 ahead on total ocean of content.",
   "comparison": {
-    "melvorIdle": "critic 1: Melvor Idle still ahead on compulsion",
-    "melvorIdle2": "critic 1 winner",
-    "oursBetter": false,
-    "biggestGap": "Was: zero decisions. Wave 4 ships the decision layer. Fresh critic queued."
+    "melvorIdle": "latest live critic: Veilforge Halt fork > Melvor instant switch",
+    "melvorIdle2": "earlier critics: MI2 still the content-depth bar",
+    "oursBetter": "split — UX fork yes, encyclopedia no",
+    "biggestGap": "Taste/prose, and MI2-scale mastery/ranching/astro boards we did not fully match"
   },
   "pieces": [
-    {"id": "core-loop", "name": "Tick, save, offline, action bars", "status": "done", "critic": "commitment banner"},
-    {"id": "gathering", "name": "Timber, Trawl, Vein, Ember", "status": "done", "critic": "log sinks + pool"},
-    {"id": "artisan", "name": "Hearth, Anvil, Fletch, Loom, Sigil, Vial", "status": "done", "critic": "gated unlocks"},
-    {"id": "unique-skills", "name": "Course, Whisper, Soil, Drove, Chart", "status": "done", "critic": "gated unlocks"},
-    {"id": "combat", "name": "Might, Guard, Vitality, Mark, Weave, Vow, Bounty", "status": "done", "critic": "dock gear checks + death tax"},
-    {"id": "guilds", "name": "Mastery + Guild tasks (MI2-inspired)", "status": "done", "critic": "pool checkpoints"},
+    {"id": "core-loop", "name": "Tick, save, offline, action bars", "status": "wow", "critic": "Halt overlay verified"},
+    {"id": "gathering", "name": "Timber, Trawl, Vein, Ember", "status": "wow", "critic": "cap keeps XP, live banner"},
+    {"id": "artisan", "name": "Hearth, Anvil, Fletch, Loom, Sigil, Vial", "status": "done", "critic": "Anvil lock toast verified"},
+    {"id": "unique-skills", "name": "Course, Whisper, Soil, Drove, Chart", "status": "done", "critic": "gated"},
+    {"id": "combat", "name": "Might, Guard, Vitality, Mark, Weave, Vow, Bounty", "status": "done", "critic": "not the last playtest's focus"},
+    {"id": "guilds", "name": "Mastery + Guild tasks (MI2-inspired)", "status": "done", "critic": "pool checkpoints exist"},
     {"id": "quests", "name": "Story ledger and side contracts", "status": "done", "critic": "2-minute loop"},
-    {"id": "bank-shop", "name": "Bank, shop, tools, loadouts", "status": "done", "critic": "12-stack cap"},
-    {"id": "threejs", "name": "Citadel scene, combat arena, skill dioramas", "status": "done", "critic": "action pulse"},
-    {"id": "ui-qol", "name": "Nav, toasts, stats, settings, identity", "status": "done", "critic": "level sheet"},
-    {"id": "pacing", "name": "Economy, drop tables, long-term goals", "status": "done", "critic": "scarcity pass"},
-    {"id": "coherence", "name": "Whole-game playthrough polish", "status": "building", "critic": "wave 4 re-critique"}
+    {"id": "bank-shop", "name": "Bank, shop, tools, loadouts", "status": "done", "critic": "caps + XP-on-full"},
+    {"id": "threejs", "name": "Citadel scene, combat arena, skill dioramas", "status": "done", "critic": "dioramas"},
+    {"id": "ui-qol", "name": "Nav, toasts, stats, settings, identity", "status": "wow", "critic": "commitment + Halt"},
+    {"id": "pacing", "name": "Economy, drop tables, long-term goals", "status": "done", "critic": "scarcity"},
+    {"id": "coherence", "name": "Whole-game playthrough polish", "status": "done", "critic": "client finally presents the fork"}
   ],
   "log": [
-    "Critic 1 (live play): Melvor Idle 2 > Melvor Idle > Veilforge. Gap: zero meaningful decisions.",
-    "Wave 4: skill gates, bank cap, mastery checkpoints, one-commitment banner, deadly Cinder Docks, death tax, citadel pulse on actions.",
-    "Live yield stays on a capped stack (XP only). Halt overlay is body-level .open."
+    "Latest live critic: Halt overlay + Keep/Switch both work; wowed vs Melvor instant swap.",
+    "Earlier critics: Melvor/MI2 win on breadth until the board was actually playable.",
+    "Fixes that unblocked play: app grid, lastFloater, XP-on-cap, body-level Halt."
   ]
 }
