@@ -368,11 +368,27 @@ export function buildContent() {
     { id: "shop-chart-slot", item: null, effect: "chartSlot", cost: 20000, name: "Third Chart Slot", desc: "Aim one more constellation. Scarcity is the point of Chart." }
   );
 
-  const monsterNames = [
+  const monsterPacks = [
     ["Ash Mite", "Gutter Rat", "Dusk Imp", "Cinder Bat", "Moss Wolf", "Vault Crab"],
-    ["Iron Wight", "Lantern Cultist", "Bog Knight", "Hollow Stag", "Silt Naga", "Forge Wasp"],
-    ["Rune Scarab", "Choir Ghoul", "Bastion Boar", "Mirror Owl", "Salt Hydra", "Pyre Troll"],
-    ["Void Moth", "Oathbreaker", "Star Hyena", "Glass Drake", "Veil Seraph", "Thorn Colossus"]
+    ["Sewer Lamp", "Coin Leech", "Grate Spider", "Lantern Cultist", "Filth Knight", "Bell Wight"],
+    ["Fen Tick", "Bog Knight", "Reed Hag", "Hollow Stag", "Silt Naga", "Ashfen Widow"],
+    ["Yard Pikeman", "Bastion Boar", "Drill Sarge", "Forge Wasp", "Banner Ghoul", "Keep Mastiff"],
+    ["Psalm Moth", "Choir Ghoul", "Relic Thief", "Mirror Owl", "Censer Imp", "Vault Cantor"],
+    ["Glass Gull", "Salt Hydra", "Tide Monk", "Coral Wolf", "Drift Siren", "Coast Leviathan"],
+    ["Cinder Ant", "Pyre Troll", "Coal Wight", "Smoke Drake", "Kiln Knight", "Furnace Heart"],
+    ["Broken Squire", "Oathbreaker", "March Hound", "Rust Paladin", "Standard Wraith", "Vow Eater"],
+    ["Meteor Rat", "Star Hyena", "Cut Jackal", "Comet Archer", "Falling Nun", "Glass Drake"],
+    ["Orchard Mite", "Void Moth", "Ripe Spectre", "Black Bloom", "Root Seraph", "Orchard Titan"],
+    ["Step Wisp", "Stair Gargoyle", "Veil Seraph", "Choir Giant", "Halo Wight", "Spire Judge"],
+    ["Thorn Tick", "Heart Bramble", "Thorn Colossus", "Rose Wraith", "Crown Hydra", "Veil Tyrant"],
+    ["Dredge Crab", "Moon Eel", "Harbor Priest", "Chain Diver", "Fog Captain", "Abyss Bell"],
+    ["Quarry Tick", "Slag Golem", "Pick Wraith", "Ore Hydra", "Deep Autarch", "Vein Sovereign"],
+    ["Archive Moth", "Ink Wight", "Index Demon", "Vellum Drake", "Silent Curator", "Codex Beast"],
+    ["Ranch Tick", "Drove Shade", "Sire Ghost", "Wool Wraith", "Pen Horror", "Herd King"],
+    ["Plot Beetle", "Compost Wight", "Seed Hag", "Vine Serpent", "Harvest Golem", "Grove Reaper"],
+    ["Chart Imp", "Astrolabe Eye", "Orbit Wraith", "Nova Hound", "Eclipse Monk", "Star Regent"],
+    ["Guild Duelist", "Taskmaster", "Rank Serpent", "Seal Knight", "Master Shade", "Guild Tyrant"],
+    ["Last Candle", "Dusk Judge", "Veilborn Lion", "Citadel Echo", "Workshop God", "The Ledger"]
   ];
   const areaNames = [
     { name: "Cinder Docks", slayer: 1 },
@@ -386,11 +402,19 @@ export function buildContent() {
     { name: "Starfall Cut", slayer: 90 },
     { name: "Void Orchard", slayer: 99 },
     { name: "Seraph Stair", slayer: 108 },
-    { name: "Thornheart", slayer: 115 }
+    { name: "Thornheart", slayer: 115 },
+    { name: "Drowned Harbor", slayer: 18 },
+    { name: "Slag Hollow", slayer: 42 },
+    { name: "Silent Archive", slayer: 58 },
+    { name: "Drove Graves", slayer: 66 },
+    { name: "Rotfield", slayer: 74 },
+    { name: "Orbit Cloister", slayer: 88 },
+    { name: "Guild Crucible", slayer: 102 },
+    { name: "The Last Page", slayer: 120 }
   ];
 
   areaNames.forEach((area, ai) => {
-    const pack = monsterNames[Math.min(3, Math.floor(ai / 3))];
+    const pack = monsterPacks[ai] || monsterPacks[monsterPacks.length - 1];
     const mids = [];
     pack.forEach((nm, mi) => {
       const t = Math.min(13, Math.floor(ai * 1.1 + mi * 0.3));
@@ -431,7 +455,9 @@ export function buildContent() {
     { name: "Pyre Cathedral", floors: 8, req: 70, boss: "Pyre Troll" },
     { name: "Oathkeep", floors: 8, req: 85, boss: "Oathbreaker" },
     { name: "Starwell", floors: 9, req: 96, boss: "Glass Drake" },
-    { name: "Veilheart", floors: 10, req: 110, boss: "Thorn Colossus" }
+    { name: "Veilheart", floors: 10, req: 110, boss: "Thorn Colossus" },
+    { name: "Silent Stacks", floors: 7, req: 62, boss: "Codex Beast" },
+    { name: "The Last Page", floors: 12, req: 118, boss: "The Ledger" }
   ];
   dungeonDefs.forEach((d, di) => {
     const seq = [];
@@ -456,7 +482,15 @@ export function buildContent() {
     { id: "blood-pact", name: "Blood Pact", level: 52, runes: { "rune-blood": 2, "rune-mind": 2 }, maxHit: 12, xp: 28, tag: "blood", desc: "Heal 15% of damage dealt." },
     { id: "void-needle", name: "Void Needle", level: 70, runes: { "rune-void": 2, "rune-gust": 2 }, maxHit: 18, xp: 36, tag: "void", desc: "Ignores 20% of enemy defence (pairs with pierce)." },
     { id: "star-fall", name: "Starfall", level: 88, runes: { "rune-star": 3, "rune-ember": 2, "rune-mind": 2 }, maxHit: 24, xp: 48, tag: "star", desc: "Splash +40% as a second hit on the same target." },
-    { id: "veil-edict", name: "Veil Edict", level: 108, runes: { "rune-star": 4, "rune-void": 3, "rune-blood": 2 }, maxHit: 32, xp: 64, tag: "veil", desc: "Late-game identity spell. Expensive on purpose." }
+    { id: "veil-edict", name: "Veil Edict", level: 108, runes: { "rune-star": 4, "rune-void": 3, "rune-blood": 2 }, maxHit: 32, xp: 64, tag: "veil", desc: "Late-game identity spell. Expensive on purpose." },
+    { id: "gust-fan", name: "Gust Fan", level: 8, runes: { "rune-gust": 2 }, maxHit: 7, xp: 10, tag: "air", desc: "Cheap and a little faster soul." },
+    { id: "ember-core", name: "Ember Core", level: 20, runes: { "rune-ember": 3, "rune-stone": 1 }, maxHit: 13, xp: 18, tag: "fire", desc: "Heavier burn. Eats ember runes." },
+    { id: "tide-lash", name: "Tide Lash", level: 32, runes: { "rune-tide": 3, "rune-mind": 1 }, maxHit: 11, xp: 18, tag: "water", desc: "Ward plus a respectable slap." },
+    { id: "stone-wall", name: "Stone Wall", level: 44, runes: { "rune-stone": 2, "rune-mind": 2 }, maxHit: 6, xp: 16, tag: "earth", desc: "Low hit, extra defence feeling via ward stacks." },
+    { id: "mind-spike", name: "Mind Spike", level: 48, runes: { "rune-mind": 4 }, maxHit: 15, xp: 22, tag: "void", desc: "Pure mind. Ignores a sliver of defence." },
+    { id: "blood-rain", name: "Blood Rain", level: 64, runes: { "rune-blood": 3, "rune-ember": 1 }, maxHit: 16, xp: 32, tag: "blood", desc: "Leech that costs you if you go dry." },
+    { id: "void-veil", name: "Void Veil", level: 78, runes: { "rune-void": 3, "rune-mind": 2 }, maxHit: 20, xp: 40, tag: "void", desc: "Defence ignore. The expensive cousin of Needle." },
+    { id: "star-needle", name: "Star Needle", level: 96, runes: { "rune-star": 2, "rune-gust": 2, "rune-mind": 1 }, maxHit: 22, xp: 44, tag: "star", desc: "Splash-lite. Mid-late book filler that still has a job." }
   );
 
   prayers.push(
