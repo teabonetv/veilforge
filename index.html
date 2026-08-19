@@ -72,6 +72,43 @@
     </header>
     <div id="codex"></div>
     <div id="commit"></div>
+    <nav id="desk-nav">
+      <button type="button" data-act="desk" data-arg="workshop">Workshop</button>
+      <button type="button" data-act="desk" data-arg="bank">Bank</button>
+      <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
+      <span class="desk-tag">Prepare. Idle. Grow. The dusk endures.</span>
+    </nav>
+    <div id="bank-desk" hidden>
+      <div class="desk-head">
+        <h2>Vault</h2>
+        <p>Every stack has a face. Click a tile to meet it.</p>
+        <span id="vault-meta"></span>
+      </div>
+      <input id="vault-search" placeholder="Search items, monsters, dungeons, jobs" />
+      <div id="vault-chips"></div>
+      <div class="vault-layout">
+        <div id="vault-grid"></div>
+        <aside class="vault-inspect">
+          <canvas id="vault-view"></canvas>
+          <div id="vault-copy"></div>
+        </aside>
+      </div>
+    </div>
+    <div id="wander-desk" hidden>
+      <div class="wander-grid">
+        <aside id="wander-profile"></aside>
+        <div class="wander-mid">
+          <div class="wander-stage">
+            <div id="wander-slots-l" class="wcol"></div>
+            <canvas id="wander-view"></canvas>
+            <div id="wander-slots-r" class="wcol"></div>
+          </div>
+          <div id="wander-kits" class="tabs"></div>
+          <div id="wander-stats"></div>
+        </div>
+        <aside id="wander-detail"></aside>
+      </div>
+    </div>
     <div id="layout">
       <nav id="skill-nav"></nav>
       <div id="mid">

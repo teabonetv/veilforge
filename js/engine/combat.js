@@ -642,8 +642,13 @@ export function equipItem(state, id) {
     return null;
   }
   const slot = it.slot;
+  if (state.equipment[slot] === id) return null;
+  if (!bankCount(state, id)) return "Not in bank.";
   const prev = state.equipment[slot];
-  if (prev) addItem(state, prev, 1);
+  if (prev) {
+    const parked = addItem(state, prev, 1);
+    if (!parked) return "Vault full — free a stack before swapping kit.";
+  }
   if (!takeItem(state, id, 1)) {
     if (prev) takeItem(state, prev, 1);
     return "Not in bank.";

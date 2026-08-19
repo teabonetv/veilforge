@@ -3,12 +3,18 @@ import { tick, applyOffline, stopAction } from "./engine/sim.js";
 import { bindUI, renderShell, renderTop, renderRight } from "./ui/shell.js";
 import { createWorld } from "./scene/world.js";
 import { skillSelect } from "./ui/shell.js";
+import { desk, inspectModelOf } from "./ui/desks.js";
+import { createPortrait } from "./scene/portrait.js";
 import { bootPlatform } from "./platform.js";
 
 bootPlatform();
 
 const canvas = document.getElementById("view");
 const world = createWorld(canvas);
+const vaultPort = createPortrait(document.getElementById("vault-view"));
+const wanderPort = createPortrait(document.getElementById("wander-view"));
+let inspectKey = "";
+let wanderKey = "";
 let state = load() || createState();
 if (load()) {
   const gone = Date.now() - (state.lastSave || Date.now());
@@ -33,7 +39,34 @@ const ctx = {
     recalcHp(state);
     renderShell(ctx);
   },
-  render: () => renderShell(ctx)
+  render: () => renderShell(ctx),
+  portraits: {
+    resize() {
+      vaultPort.resize();
+      wanderPort.resize();
+    },
+    sync() {
+      if (desk === "bank") {
+        const m = inspectModelOf();
+        const key = `${m?.kind}:${m?.seed}`;
+        if (key !== inspectKey) {
+          inspectKey = key;
+          vaultPort.showModel(m);
+        }
+        vaultPort.resize();
+        requestAnimationFrame(() => vaultPort.resize());
+      }
+      if (desk === "loadout") {
+        const key = JSON.stringify(state.equipment);
+        if (key !== wanderKey) {
+          wanderKey = key;
+          wanderPort.showWanderer(state.equipment, CONTENT.items);
+        }
+        wanderPort.resize();
+        requestAnimationFrame(() => wanderPort.resize());
+      }
+    }
+  }
 };
 
 bindUI(ctx);
@@ -53,6 +86,8 @@ function loop(now) {
     uiAcc += dt;
     renderTop(ctx);
     world.frame(state, skillSelect());
+    if (desk === "bank") vaultPort.frame();
+    if (desk === "loadout") wanderPort.frame();
     if (uiAcc > 500) {
       uiAcc = 0;
       renderRight(ctx);

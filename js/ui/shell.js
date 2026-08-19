@@ -2,6 +2,7 @@ import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCo
 import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
+import { desk, setDesk, setVaultPick, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -50,6 +51,10 @@ export function bindUI(ctx) {
     if (e.target.id === "shop-search") {
       shopFilter = e.target.value.toLowerCase();
       renderShop(ctx);
+    }
+    if (e.target.id === "vault-search") {
+      onVaultSearch(e.target.value);
+      renderDesks(ctx);
     }
   });
   host.addEventListener("change", (e) => {
@@ -132,6 +137,17 @@ function handle(ctx, act, arg, el) {
       break;
     case "loadout-save": saveLoadout(state); toast(ctx, "Loadout saved."); break;
     case "loadout-load": loadLoadout(state, +arg); ctx.render(); break;
+    case "desk": setDesk(arg); ctx.render(); ctx.portraits?.resize?.(); break;
+    case "vault-pick": setVaultPick(el.dataset.kind || "item", arg); renderDesks(ctx); break;
+    case "vault-cat": onVaultCat(arg); renderDesks(ctx); break;
+    case "vault-lens": onVaultLens(arg); renderDesks(ctx); break;
+    case "kit": applyKit(state, arg); ctx.render(); break;
+    case "slot-focus": {
+      const id = state.equipment[arg];
+      if (id) { setVaultPick("item", id); }
+      renderDesks(ctx);
+      break;
+    }
     case "export": navigator.clipboard.writeText(ctx.exportSave()); toast(ctx, "Save copied."); break;
     case "import": {
       const s = prompt("Paste save");
@@ -247,6 +263,7 @@ export function renderShell(ctx) {
   renderCodex(ctx);
   renderCenter(ctx);
   renderRight(ctx);
+  renderDesks(ctx);
   renderLevelModal(ctx);
 }
 
@@ -398,7 +415,8 @@ function renderLevelModal(ctx) {
   shownLevelKey = key;
   modal.hidden = false;
   modal.innerHTML = `<div class="sheet"><h3>${skillName(ev.skill)} ${ev.to}</h3>
-    <p>${(ev.unlocks || []).length ? "Unlocked: " + ev.unlocks.join(", ") : "The citadel noticed."}</p>
+    <p>That level cost real dusk. ${skillName(ev.skill)} ${ev.from} → ${ev.to} is a mark on the ledger.</p>
+    <p>${(ev.unlocks || []).length ? "Unlocked: " + ev.unlocks.join(", ") : "The citadel noticed — and it does not notice often."}</p>
     <button type="button" data-act="dismiss-level">Continue</button></div>`;
 }
 
@@ -432,7 +450,8 @@ function renderCodex(ctx) {
     <span class="muted">${idle}</span>
     <div class="codex-acts">
       ${jump}
-      <button type="button" data-act="panel" data-arg="right">Stall / Bank</button>
+      <button type="button" data-act="desk" data-arg="bank">Open vault</button>
+      <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
       <button type="button" data-act="codex-toggle">Hide</button>
     </div>`;
 }
@@ -756,6 +775,7 @@ function renderGear(ctx) {
     const it = CONTENT.items[id];
     return `<div class="slot"><b>${s}</b> ${it ? `<span>${it.name}</span> <button data-act="unequip" data-arg="${s}">x</button>` : "<em>empty</em>"}</div>`;
   }).join("") + `<div class="slot"><b>tools</b> <span>axe ${CONTENT.items[state.tools.axe]?.name || "–"} · pick ${CONTENT.items[state.tools.pick]?.name || "–"} · rod ${CONTENT.items[state.tools.rod]?.name || "–"}</span></div>
+    <button data-act="desk" data-arg="loadout">Open wanderer</button>
     <button data-act="loadout-save">Save loadout</button>
     ${state.loadouts.map((l, i) => `<button data-act="loadout-load" data-arg="${i}">${l.name}</button>`).join("")}`;
 }
@@ -792,6 +812,7 @@ function renderBank(ctx) {
   const html = `<div class="tabs">${tabBtns}</div>
     <input id="bank-search" placeholder="Search bank" value="${esc(bankFilter)}" />
     <div class="bank-meta"><span>${held.length}/${bankCap(state)} stacks${held.length >= bankCap(state) ? " · FULL" : ""}</span><span>${worth.toLocaleString()} ✦</span></div>
+    <button data-act="desk" data-arg="bank">Open dedicated vault</button>
     <div class="bank-grid">${rows || "<p class='blurb'>Empty tab.</p>"}</div>`;
   fillHtml(document.getElementById("bank"), html);
 }
@@ -956,4 +977,4 @@ function toast(ctx, msg) {
   toast._h = setTimeout(() => t.classList.remove("show"), 3200);
 }
 
-export { renderTop, recalcHp };
+export { renderTop, recalcHp, desk, inspectModelOf };

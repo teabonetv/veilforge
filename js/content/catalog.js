@@ -1,4 +1,5 @@
 /* Veilforge content — data-driven tiers, skills, items, monsters, quests, guilds. */
+import { imprintContent } from "./imprint.js";
 export const TIER_NAMES = [
   "Drift", "Copper", "Iron", "Steel", "Moonsteel", "Adamant", "Runebound",
   "Wyrm", "Ancient", "Celestial", "Voidglass", "Mythic", "Astral", "Veilborn"
@@ -116,7 +117,7 @@ export function buildContent() {
   TIER_NAMES.forEach((tier, t) => {
     const req = Math.min(1 + t * 8, 99);
     const val = Math.round(4 * Math.pow(1.55, t));
-    const time = 1400 + t * 280;
+    const time = 4800 + t * 720;
 
     const log = addItem({ id: `log-${t}`, name: `${tier} Log`, category: "log", tier: t, stack: true, value: val, desc: `Living timber, tier ${t + 1}.` });
     logs.push(log);
@@ -141,7 +142,7 @@ export function buildContent() {
     const bar = addItem({ id: `bar-${t}`, name: `${tier} Bar`, category: "bar", tier: t, stack: true, value: val * 3, desc: `Smelted ${tier} metal.` });
     bars.push(bar);
     actions[`smelt-${t}`] = {
-      id: `smelt-${t}`, skill: "anvil", name: `Smelt ${tier}`, level: req, time: 1200 + t * 80,
+      id: `smelt-${t}`, skill: "anvil", name: `Smelt ${tier}`, level: req, time: 4000 + t * 240,
       xp: 10 + t * 8, masteryId: `smelt-${t}`, category: "smelt",
       inputs: [{ item: ore, qty: t >= 10 ? 4 : t >= 6 ? 3 : 2 }],
       outputs: [{ item: bar, min: 1, max: 1 }],
@@ -151,7 +152,7 @@ export function buildContent() {
     const fishId = addItem({ id: `fish-${t}`, name: `${tier} Catch`, category: "fish", tier: t, stack: true, value: val, desc: `Raw catch.` });
     fish.push(fishId);
     actions[`trawl-${t}`] = {
-      id: `trawl-${t}`, skill: "trawl", name: `${tier} Shoal`, level: req, time: 1500 + t * 240,
+      id: `trawl-${t}`, skill: "trawl", name: `${tier} Shoal`, level: req, time: 5000 + t * 640,
       xp: 13 + t * 10, masteryId: `trawl-${t}`,
       outputs: [{ item: fishId, min: 1, max: 1 }],
       rare: [{ item: "feather", chance: 0.08 }],
@@ -165,7 +166,7 @@ export function buildContent() {
     });
     cooked.push(cookId);
     actions[`cook-${t}`] = {
-      id: `cook-${t}`, skill: "hearth", name: `Braise ${tier}`, level: req, time: 900 + t * 70,
+      id: `cook-${t}`, skill: "hearth", name: `Braise ${tier}`, level: req, time: 3200 + t * 220,
       xp: 11 + t * 9, masteryId: `cook-${t}`,
       inputs: [{ item: fishId, qty: 1 }],
       outputs: [{ item: cookId, min: 1, max: 1 }],
@@ -174,7 +175,7 @@ export function buildContent() {
     };
 
     actions[`ember-${t}`] = {
-      id: `ember-${t}`, skill: "ember", name: `Burn ${tier} Logs`, level: req, time: 1100 + t * 90,
+      id: `ember-${t}`, skill: "ember", name: `Burn ${tier} Logs`, level: req, time: 3800 + t * 280,
       xp: 16 + t * 13, masteryId: `ember-${t}`,
       inputs: [{ item: log, qty: 1 }],
       outputs: [{ item: "ashes", min: 1, max: 2 }],
@@ -190,7 +191,7 @@ export function buildContent() {
     const herb = addItem({ id: `herb-${t}`, name: `${tier} Wort`, category: "herb", tier: t, stack: true, value: val + 6, desc: "Vial reagent and soil crop." });
     herbs.push(herb);
     const seed = addItem({ id: `seed-${t}`, name: `${tier} Seed`, category: "seed", tier: t, stack: true, value: Math.round(val * 0.6), desc: "Plant on a soil plot." });
-    crops.push({ seed, herb, log, t, req, growMs: 25000 + t * 18000 });
+    crops.push({ seed, herb, log, t, req, growMs: 90000 + t * 48000 });
 
     const styles = [
       { slot: "weapon", style: "might", name: "Saber", special: "riposte", interval: 2400, acc: 12 + t * 8, str: 10 + t * 9 },
@@ -210,7 +211,7 @@ export function buildContent() {
       });
       actions[`smith-${id}`] = {
         id: `smith-${id}`, skill: "anvil", name: `Forge ${tier} ${w.name}`, level: req + (w.style === "might" ? 0 : 2),
-        time: 1800 + t * 100, xp: 22 + t * 14, masteryId: `smith-${id}`, category: "smith",
+        time: 6200 + t * 280, xp: 22 + t * 14, masteryId: `smith-${id}`, category: "smith",
         inputs: [{ item: bar, qty: 2 + Math.floor(t / 4) }],
         outputs: [{ item: id, min: 1, max: 1 }],
         desc: `Smith a ${tier} ${w.name}.`
@@ -227,7 +228,7 @@ export function buildContent() {
       });
       actions[`smith-${id}`] = {
         id: `smith-${id}`, skill: "anvil", name: `Forge ${tier} ${slot}`, level: req,
-        time: 1600 + t * 80, xp: 18 + t * 12, masteryId: `smith-${id}`, category: "smith",
+        time: 5400 + t * 220, xp: 18 + t * 12, masteryId: `smith-${id}`, category: "smith",
         inputs: [{ item: bar, qty: slot === "body" ? 5 : slot === "legs" ? 4 : 2 }],
         outputs: [{ item: id, min: 1, max: 1 }]
       };
@@ -244,7 +245,7 @@ export function buildContent() {
       });
       actions[`loom-${id}`] = {
         id: `loom-${id}`, skill: "loom", name: `Sew ${tier} Hide ${slot}`, level: req,
-        time: 1500 + t * 70, xp: 16 + t * 11, masteryId: `loom-${id}`,
+        time: 5000 + t * 200, xp: 16 + t * 11, masteryId: `loom-${id}`,
         inputs: [{ item: "hide", qty: slot === "body" ? 4 : 2 }, { item: "thread", qty: 1 }],
         outputs: [{ item: id, min: 1, max: 1 }]
       };
@@ -258,7 +259,7 @@ export function buildContent() {
     });
     actions[`loom-${robe}`] = {
       id: `loom-${robe}`, skill: "loom", name: `Weave ${tier} Veilrobe`, level: req,
-      time: 1700, xp: 20 + t * 12, masteryId: `loom-${robe}`,
+      time: 5600, xp: 20 + t * 12, masteryId: `loom-${robe}`,
       inputs: [{ item: "thread", qty: 3 + t }, { item: t < 8 ? `gem-${Math.min(t, 7)}` : "essence", qty: 1 }],
       outputs: [{ item: robe, min: 1, max: 1 }]
     };
@@ -271,7 +272,7 @@ export function buildContent() {
     });
     actions[`loom-${amulet}`] = {
       id: `loom-${amulet}`, skill: "loom", name: `Set ${tier} Amulet`, level: Math.min(99, req + 4),
-      time: 2000, xp: 24 + t * 12, masteryId: `loom-${amulet}`,
+      time: 6400, xp: 24 + t * 12, masteryId: `loom-${amulet}`,
       inputs: [{ item: t < 8 ? `gem-${Math.min(t, 7)}` : "essence", qty: 1 }, { item: "thread", qty: 2 }],
       outputs: [{ item: amulet, min: 1, max: 1 }]
     };
@@ -279,13 +280,13 @@ export function buildContent() {
     const arrow = addItem({ id: `arrow-${t}`, name: `${tier} Shafts`, category: "ammo", slot: "ammo", tier: t, stack: true, value: 1 + t, stats: { ranged: 1 + t }, desc: "Consumed on most mark shots." });
     actions[`fletch-arrow-${t}`] = {
       id: `fletch-arrow-${t}`, skill: "fletch", name: `Fletch ${tier} Shafts`, level: req,
-      time: 700, xp: 5 + t * 3, masteryId: `fletch-arrow-${t}`,
+      time: 2800, xp: 5 + t * 3, masteryId: `fletch-arrow-${t}`,
       inputs: [{ item: log, qty: 1 }, { item: "feather", qty: 1 }],
       outputs: [{ item: arrow, min: 12 + t * 2, max: 18 + t * 2 }]
     };
     actions[`fletch-bow-${t}`] = {
       id: `fletch-bow-${t}`, skill: "fletch", name: `Till ${tier} Longbow`, level: req + 1,
-      time: 1900, xp: 20 + t * 13, masteryId: `fletch-bow-${t}`,
+      time: 6200, xp: 20 + t * 13, masteryId: `fletch-bow-${t}`,
       inputs: [{ item: log, qty: 2 }, { item: "thread", qty: 1 }],
       outputs: [{ item: idify(`${tier}-longbow`), min: 1, max: 1 }]
     };
@@ -308,14 +309,14 @@ export function buildContent() {
     potions.push(pot);
     actions[`vial-${t}`] = {
       id: `vial-${t}`, skill: "vial", name: `Brew ${tier} ${pe.label}`, level: req,
-      time: 1600 + t * 60, xp: 18 + t * 12, masteryId: `vial-${t}`,
+      time: 5200 + t * 180, xp: 18 + t * 12, masteryId: `vial-${t}`,
       inputs: [{ item: herb, qty: 1 }, { item: "ashes", qty: 1 + Math.floor(t / 5) }],
       outputs: [{ item: pot, min: 1, max: 1 }]
     };
 
     actions[`sigil-${t}`] = {
       id: `sigil-${t}`, skill: "sigil", name: `Carve ${tier} Runes`, level: req,
-      time: 1300 + t * 70, xp: 14 + t * 10, masteryId: `sigil-${t}`,
+      time: 4400 + t * 200, xp: 14 + t * 10, masteryId: `sigil-${t}`,
       inputs: [{ item: "essence", qty: 1 }, ...(t >= 4 ? [{ item: "ashes", qty: 1 }] : [])],
       outputs: [{ item: runes[t % runes.length], min: 4 + t, max: 8 + t }],
       desc: `Turn essence into ${runes[t % runes.length]}.`
@@ -426,11 +427,11 @@ export function buildContent() {
       const eva = 4 + ai * 6;
       const style = mi % 3 === 0 ? "might" : mi % 3 === 1 ? "mark" : "weave";
       monsters[id] = {
-        id, name: nm, area: area.name, hp, maxHit, acc, eva, style, interval: 2200 + (mi % 3) * 300,
+        id, name: nm, area: area.name, hp, maxHit, acc, eva, style, interval: 2800 + (mi % 3) * 400,
         def: 2 + ai * 4, slayerReq: area.slayer, tier: t,
         special: mi === 5 ? "burst" : mi === 3 ? "poison" : mi === 1 ? "drain" : null,
         burstMul: 2.4,
-        xp: { might: 8 + ai * 5, guard: 8 + ai * 5, vitality: 6 + ai * 4, mark: 8 + ai * 5, weave: 8 + ai * 5 },
+        xp: { might: 7 + ai * 4, guard: 7 + ai * 4, vitality: 5 + ai * 3, mark: 7 + ai * 4, weave: 7 + ai * 4 },
         drops: [
           { item: "coins", min: 4 + ai * 6, max: 14 + ai * 16, chance: 1 },
           { item: "bones", min: 1, max: 1, chance: 0.7 },
@@ -527,14 +528,14 @@ export function buildContent() {
   );
 
   npcs.push(
-    { id: "dock-beggar", name: "Dock Beggar", level: 1, time: 1600, xp: 8, loot: [{ item: "coins", min: 1, max: 8, chance: 0.8 }], stun: 0.18, stunMs: 4000, desc: "Easy mark. Low coin." },
-    { id: "lantern-clerk", name: "Lantern Clerk", level: 15, time: 2000, xp: 22, loot: [{ item: "coins", min: 8, max: 28, chance: 0.75 }, { item: "thread", min: 1, max: 1, chance: 0.2 }], stun: 0.22, stunMs: 5000 },
-    { id: "ashfen-herbalist", name: "Ashfen Herbalist", level: 30, time: 2400, xp: 40, loot: [{ item: "herb-3", min: 1, max: 2, chance: 0.45 }, { item: "coins", min: 12, max: 40, chance: 0.7 }], stun: 0.26, stunMs: 6000 },
-    { id: "bastion-guard", name: "Bastion Guard", level: 45, time: 2800, xp: 62, loot: [{ item: "bar-4", min: 1, max: 1, chance: 0.12 }, { item: "coins", min: 20, max: 70, chance: 0.7 }], stun: 0.32, stunMs: 8000 },
-    { id: "choir-monk", name: "Choir Monk", level: 60, time: 3000, xp: 90, loot: [{ item: "essence", min: 1, max: 3, chance: 0.3 }, { item: "rune-mind", min: 2, max: 8, chance: 0.25 }], stun: 0.28, stunMs: 7000 },
-    { id: "star-merchant", name: "Star Merchant", level: 78, time: 3200, xp: 125, loot: [{ item: "gem-6", min: 1, max: 1, chance: 0.08 }, { item: "coins", min: 40, max: 160, chance: 0.75 }], stun: 0.35, stunMs: 9000 },
-    { id: "void-diplomat", name: "Void Diplomat", level: 95, time: 3600, xp: 180, loot: [{ item: "potion-10", min: 1, max: 1, chance: 0.06 }, { item: "coins", min: 80, max: 260, chance: 0.7 }], stun: 0.4, stunMs: 11000 },
-    { id: "veil-regent", name: "Veil Regent", level: 112, time: 4000, xp: 260, loot: [{ item: "dungeon-key", min: 1, max: 1, chance: 0.04 }, { item: "coins", min: 120, max: 400, chance: 0.65 }], stun: 0.45, stunMs: 13000, desc: "Endgame pickpocket. Stun hurts." }
+    { id: "dock-beggar", name: "Dock Beggar", level: 1, time: 5200, xp: 8, loot: [{ item: "coins", min: 1, max: 8, chance: 0.8 }], stun: 0.18, stunMs: 4000, desc: "Easy mark. Low coin." },
+    { id: "lantern-clerk", name: "Lantern Clerk", level: 15, time: 6400, xp: 22, loot: [{ item: "coins", min: 8, max: 28, chance: 0.75 }, { item: "thread", min: 1, max: 1, chance: 0.2 }], stun: 0.22, stunMs: 5000 },
+    { id: "ashfen-herbalist", name: "Ashfen Herbalist", level: 30, time: 7600, xp: 40, loot: [{ item: "herb-3", min: 1, max: 2, chance: 0.45 }, { item: "coins", min: 12, max: 40, chance: 0.7 }], stun: 0.26, stunMs: 6000 },
+    { id: "bastion-guard", name: "Bastion Guard", level: 45, time: 8800, xp: 62, loot: [{ item: "bar-4", min: 1, max: 1, chance: 0.12 }, { item: "coins", min: 20, max: 70, chance: 0.7 }], stun: 0.32, stunMs: 8000 },
+    { id: "choir-monk", name: "Choir Monk", level: 60, time: 9600, xp: 90, loot: [{ item: "essence", min: 1, max: 3, chance: 0.3 }, { item: "rune-mind", min: 2, max: 8, chance: 0.25 }], stun: 0.28, stunMs: 7000 },
+    { id: "star-merchant", name: "Star Merchant", level: 78, time: 10400, xp: 125, loot: [{ item: "gem-6", min: 1, max: 1, chance: 0.08 }, { item: "coins", min: 40, max: 160, chance: 0.75 }], stun: 0.35, stunMs: 9000 },
+    { id: "void-diplomat", name: "Void Diplomat", level: 95, time: 11600, xp: 180, loot: [{ item: "potion-10", min: 1, max: 1, chance: 0.06 }, { item: "coins", min: 80, max: 260, chance: 0.7 }], stun: 0.4, stunMs: 11000 },
+    { id: "veil-regent", name: "Veil Regent", level: 112, time: 12800, xp: 260, loot: [{ item: "dungeon-key", min: 1, max: 1, chance: 0.04 }, { item: "coins", min: 120, max: 400, chance: 0.65 }], stun: 0.45, stunMs: 13000, desc: "Endgame pickpocket. Stun hurts." }
   );
 
   const pillarCats = [
@@ -567,25 +568,25 @@ export function buildContent() {
   coursePillars.push(...pillarCats);
 
   animals.push(
-    { id: "gloom-ewe", name: "Gloom Ewe", level: 1, produce: "hide", qty: 1, time: 20000, xp: 12, rare: { item: "thread", chance: 0.1 } },
-    { id: "ash-hen", name: "Ash Hen", level: 12, produce: "feather", qty: 3, time: 16000, xp: 18, rare: { item: "food-1", chance: 0.08 } },
-    { id: "salt-goat", name: "Salt Goat", level: 28, produce: "herb-3", qty: 1, time: 24000, xp: 32, rare: { item: "seed-3", chance: 0.12 } },
-    { id: "choir-ox", name: "Choir Ox", level: 44, produce: "hide", qty: 3, time: 30000, xp: 50, rare: { item: "bones", chance: 0.2 } },
-    { id: "star-moth", name: "Star Moth", level: 62, produce: "essence", qty: 1, time: 28000, xp: 74, rare: { item: "rune-star", chance: 0.07 } },
-    { id: "void-ram", name: "Void Ram", level: 80, produce: "bar-8", qty: 1, time: 40000, xp: 110, rare: { item: "potion-8", chance: 0.04 } },
-    { id: "veil-stag", name: "Veil Stag", level: 100, produce: "gem-7", qty: 1, time: 48000, xp: 160, rare: { item: "dungeon-key", chance: 0.03 } }
+    { id: "gloom-ewe", name: "Gloom Ewe", level: 1, produce: "hide", qty: 1, time: 72000, xp: 12, rare: { item: "thread", chance: 0.1 } },
+    { id: "ash-hen", name: "Ash Hen", level: 12, produce: "feather", qty: 3, time: 56000, xp: 18, rare: { item: "food-1", chance: 0.08 } },
+    { id: "salt-goat", name: "Salt Goat", level: 28, produce: "herb-3", qty: 1, time: 84000, xp: 32, rare: { item: "seed-3", chance: 0.12 } },
+    { id: "choir-ox", name: "Choir Ox", level: 44, produce: "hide", qty: 3, time: 108000, xp: 50, rare: { item: "bones", chance: 0.2 } },
+    { id: "star-moth", name: "Star Moth", level: 62, produce: "essence", qty: 1, time: 98000, xp: 74, rare: { item: "rune-star", chance: 0.07 } },
+    { id: "void-ram", name: "Void Ram", level: 80, produce: "bar-8", qty: 1, time: 140000, xp: 110, rare: { item: "potion-8", chance: 0.04 } },
+    { id: "veil-stag", name: "Veil Stag", level: 100, produce: "gem-7", qty: 1, time: 168000, xp: 160, rare: { item: "dungeon-key", chance: 0.03 } }
   );
 
   constellations.push(
-    { id: "the-hatchet", name: "The Hatchet", skill: "timber", bonus: { speed: 0.05, rare: 0.04 }, studyTime: 8000, xp: 20, desc: "Grove luck and tempo." },
-    { id: "the-net", name: "The Net", skill: "trawl", bonus: { speed: 0.05, output: 0.03 }, studyTime: 8000, xp: 20 },
-    { id: "the-pick", name: "The Pick", skill: "vein", bonus: { speed: 0.05, gem: 0.05 }, studyTime: 8000, xp: 20 },
-    { id: "the-hearth", name: "The Hearth", skill: "hearth", bonus: { burnReduce: 0.15, xp: 0.04 }, studyTime: 9000, xp: 24 },
-    { id: "the-anvil", name: "The Anvil", skill: "anvil", bonus: { preserve: 0.04, xp: 0.04 }, studyTime: 9000, xp: 24 },
-    { id: "the-blade", name: "The Blade", skill: "might", bonus: { acc: 0.04, str: 0.04 }, studyTime: 10000, xp: 28 },
-    { id: "the-bow", name: "The Bow", skill: "mark", bonus: { ranged: 0.05, preserveAmmo: 0.06 }, studyTime: 10000, xp: 28 },
-    { id: "the-crozier", name: "The Crozier", skill: "weave", bonus: { magic: 0.05, preserveRune: 0.06 }, studyTime: 10000, xp: 28 },
-    { id: "the-veil", name: "The Veil", skill: "all", bonus: { allXp: 0.02, rare: 0.02 }, studyTime: 14000, xp: 40, desc: "Soft global. You cannot run every constellation at full power — slots are scarce." }
+    { id: "the-hatchet", name: "The Hatchet", skill: "timber", bonus: { speed: 0.05, rare: 0.04 }, studyTime: 24000, xp: 20, desc: "Grove luck and tempo." },
+    { id: "the-net", name: "The Net", skill: "trawl", bonus: { speed: 0.05, output: 0.03 }, studyTime: 24000, xp: 20 },
+    { id: "the-pick", name: "The Pick", skill: "vein", bonus: { speed: 0.05, gem: 0.05 }, studyTime: 24000, xp: 20 },
+    { id: "the-hearth", name: "The Hearth", skill: "hearth", bonus: { burnReduce: 0.15, xp: 0.04 }, studyTime: 27000, xp: 24 },
+    { id: "the-anvil", name: "The Anvil", skill: "anvil", bonus: { preserve: 0.04, xp: 0.04 }, studyTime: 27000, xp: 24 },
+    { id: "the-blade", name: "The Blade", skill: "might", bonus: { acc: 0.04, str: 0.04 }, studyTime: 30000, xp: 28 },
+    { id: "the-bow", name: "The Bow", skill: "mark", bonus: { ranged: 0.05, preserveAmmo: 0.06 }, studyTime: 30000, xp: 28 },
+    { id: "the-crozier", name: "The Crozier", skill: "weave", bonus: { magic: 0.05, preserveRune: 0.06 }, studyTime: 30000, xp: 28 },
+    { id: "the-veil", name: "The Veil", skill: "all", bonus: { allXp: 0.02, rare: 0.02 }, studyTime: 42000, xp: 40, desc: "Soft global. You cannot run every constellation at full power — slots are scarce." }
   );
 
   SKILLS.forEach((sk) => {
@@ -648,7 +649,7 @@ export function buildContent() {
 
   // Course lap action
   actions["course-lap"] = {
-    id: "course-lap", skill: "course", name: "Run the Circuit", level: 1, time: 4000,
+    id: "course-lap", skill: "course", name: "Run the Circuit", level: 1, time: 14000,
     xp: 20, masteryId: "course-lap", desc: "Time and bonuses depend on chosen pillars."
   };
 
@@ -660,11 +661,11 @@ export function buildContent() {
     };
   });
 
-  return {
+  return imprintContent({
     items, actions, monsters, areas, dungeons, shop, quests, guildTasks,
     npcs, spells, prayers, potions, pets, constellations, coursePillars, animals, crops,
     logs, ores, bars, fish, cooked, herbs, gems, runes
-  };
+  });
 }
 
 function guildBonus(kind, i) {
