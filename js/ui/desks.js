@@ -20,6 +20,7 @@ const SLOTS = [
 export let desk = "workshop";
 export let vaultPick = { kind: "item", id: "log-0" };
 export let kitMode = "custom";
+export let focusedSlot = "weapon";
 let vaultFilter = "";
 let vaultCat = "held";
 let vaultLens = "items";
@@ -30,6 +31,10 @@ export function setDesk(id) {
 
 export function setVaultPick(kind, id) {
   vaultPick = { kind, id };
+}
+
+export function setFocusedSlot(slot) {
+  focusedSlot = slot || "weapon";
 }
 
 export function applyKit(state, mode) {
@@ -167,6 +172,16 @@ function renderInspect(ctx) {
 
 export function renderWanderer(ctx) {
   const { state } = ctx;
+  try {
+    renderWandererBody(ctx, state);
+  } catch (err) {
+    console.error("Wanderer desk", err);
+    const detail = document.getElementById("wander-detail");
+    if (detail) detail.innerHTML = `<p class="blurb">The wanderer failed to dress. ${err.message}</p>`;
+  }
+}
+
+function renderWandererBody(ctx, state) {
   const r = wandererRanks(state);
   const st = playerStats(state);
   const set = gearSet(state);
@@ -178,9 +193,17 @@ export function renderWanderer(ctx) {
   const prev = XP_TABLE[vit];
   const xp = state.skills.vitality.xp;
   const xpPct = next === prev ? 100 : Math.min(100, 100 * (xp - prev) / (next - prev));
-  const wpn = CONTENT.items[state.equipment.weapon];
+  const focusId = state.equipment[focusedSlot] || state.equipment.weapon;
+  const wpn = CONTENT.items[focusId];
+  const slotLabel = focusedSlot || "weapon";
 
-  document.getElementById("wander-profile").innerHTML = `
+  const profile = document.getElementById("wander-profile");
+  const kits = document.getElementById("wander-kits");
+  const stats = document.getElementById("wander-stats");
+  const detail = document.getElementById("wander-detail");
+  if (!profile || !kits || !stats || !detail) return;
+
+  profile.innerHTML = `
     <div class="w-name">${state.name || "Aelric"}</div>
     <div class="w-title">${r.title}</div>
     <div class="w-stars">${stars}</div>
@@ -189,18 +212,16 @@ export function renderWanderer(ctx) {
     <blockquote>The dusk calls. We answer.</blockquote>
   `;
 
-  const left = SLOTS.filter((s) => s.side === "left").map((s) => slotBtn(state, s)).join("");
-  const right = SLOTS.filter((s) => s.side === "right").map((s) => slotBtn(state, s)).join("");
-  document.getElementById("wander-slots-l").innerHTML = left;
-  document.getElementById("wander-slots-r").innerHTML = right;
+  document.getElementById("wander-slots-l").innerHTML = SLOTS.filter((s) => s.side === "left").map((s) => slotBtn(state, s)).join("");
+  document.getElementById("wander-slots-r").innerHTML = SLOTS.filter((s) => s.side === "right").map((s) => slotBtn(state, s)).join("");
 
-  document.getElementById("wander-kits").innerHTML = ["melee", "ranged", "magic", "prayer", "custom"].map((k) =>
+  kits.innerHTML = ["melee", "ranged", "magic", "prayer", "custom"].map((k) =>
     `<button type="button" class="${kitMode === k ? "on" : ""}" data-act="kit" data-arg="${k}">${k}</button>`
-  ).join("") + state.loadouts.map((l, i) =>
+  ).join("") + (state.loadouts || []).map((l, i) =>
     `<button type="button" data-act="loadout-load" data-arg="${i}">${l.name}</button>`
   ).join("") + `<button type="button" data-act="loadout-save">Save</button>`;
 
-  document.getElementById("wander-stats").innerHTML = `
+  stats.innerHTML = `
     <div><span>Attack</span><b>${st.style === "might" ? st.acc.toFixed(0) : skillLevel(state, "might")}</b></div>
     <div><span>Strength</span><b>${st.style === "might" ? st.power.toFixed(0) : skillLevel(state, "might")}</b></div>
     <div><span>Ranged</span><b>${skillLevel(state, "mark")}</b></div>
@@ -209,12 +230,12 @@ export function renderWanderer(ctx) {
     <div><span>Constitution</span><b>${vit}</b></div>
   `;
 
-  document.getElementById("wander-detail").innerHTML = `
+  detail.innerHTML = `
     <section class="wd-card">
-      <h4>${wpn?.name || "Empty hands"}</h4>
-      <p class="muted">${wpn?.slot || "weapon"} · ${wpn?.special || "no special"}</p>
+      <h4>${wpn?.name || "Empty " + slotLabel}</h4>
+      <p class="muted">${slotLabel} · ${wpn?.special || wpn?.slot || "empty"} · ${wpn?.temper || ""}</p>
       <blockquote>${wpn?.voice || "A wanderer is still a person without a blade."}</blockquote>
-      <p>Attack bonus +${wpn?.stats?.acc || 0} · Strength +${wpn?.stats?.str || 0}</p>
+      <p>Attack +${wpn?.stats?.acc || 0} · Strength +${wpn?.stats?.str || 0} · Defence +${wpn?.stats?.def || 0}</p>
     </section>
     <section class="wd-card">
       <h4>Dusk set</h4>
@@ -234,7 +255,7 @@ function slotBtn(state, s) {
   const id = state.equipment[s.id];
   const it = CONTENT.items[id];
   const st = silhouetteStyle(it?.model || { hue: 260, seed: 1 });
-  return `<button type="button" class="wslot" data-act="slot-focus" data-arg="${s.id}" title="${s.label}" style="background:${st.background};border-color:${st.borderColor}">
+  return `<button type="button" class="wslot ${focusedSlot === s.id ? "on" : ""}" data-act="slot-focus" data-arg="${s.id}" title="${s.label}" style="background:${st.background};border-color:${st.borderColor}">
     <em>${s.label}</em><span>${it ? it.name : "empty"}</span>
   </button>`;
 }

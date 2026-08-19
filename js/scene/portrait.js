@@ -2,6 +2,9 @@ import * as THREE from "../vendor/three.module.js";
 import { makeEntityModel, makeWanderer } from "./models.js";
 
 export function createPortrait(canvas) {
+  if (!canvas) {
+    return { showModel() {}, showWanderer() {}, frame() {}, resize() {}, renderer: null };
+  }
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
   renderer.setClearColor(0x080610, 1);

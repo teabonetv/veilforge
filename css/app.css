@@ -381,7 +381,7 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 #desk-nav button.on { border-color: var(--gold); color: var(--gold); }
 .desk-tag { margin-left: auto; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--rose); }
 #layout.away { display: none !important; }
-#bank-desk, #wander-desk { overflow: auto; background: #100818; }
+#wander-desk:not([hidden]), #bank-desk:not([hidden]) { display: grid; height: 100%; min-height: 0; }
 #bank-desk[hidden], #wander-desk[hidden] { display: none !important; }
 .desk-head { display: flex; gap: 12px; align-items: baseline; padding: 12px 16px 4px; }
 .desk-head h2 { margin: 0; font-size: 28px; }
@@ -409,7 +409,7 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 .vtile .vnm { font-size: 11px; line-height: 1.25; }
 .vtile .vqty { font-size: 10px; color: var(--gold); }
 .vault-inspect { border-left: 1px solid var(--line); padding: 12px; background: #160e22; }
-#vault-view, #wander-view { width: 100%; height: 240px; display: block; background: #080610; border-radius: 12px; }
+#vault-view, #wander-view { width: 100%; height: 320px; display: block; background: #080610; border-radius: 12px; }
 #vault-copy h3 { margin: 10px 0 4px; }
 #vault-copy blockquote, #wander-profile blockquote, .wd-card blockquote {
   margin: 8px 0;
@@ -420,7 +420,7 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
   font-family: "Cormorant Garamond", serif;
 }
 .temper { color: var(--rose); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
-.wander-grid { display: grid; grid-template-columns: 220px 1fr 280px; min-height: 0; height: 100%; }
+.wander-grid { display: grid; grid-template-columns: 220px 1fr 280px; min-height: 0; height: 100%; min-height: 520px; }
 #wander-profile, #wander-detail { padding: 16px; overflow: auto; background: #140a1c; }
 .w-name { font-family: "Cormorant Garamond", serif; font-size: 32px; }
 .w-title { color: var(--gold); letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; }
@@ -434,7 +434,7 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 .wslot { text-align: left; min-height: 52px; }
 .wslot em { display: block; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); font-style: normal; }
 .wslot span { font-size: 11px; }
-#wander-view { height: 100%; min-height: 280px; }
+#wander-view { height: 320px; min-height: 320px; }
 #wander-kits { padding: 8px 12px; }
 #wander-stats {
   display: grid;

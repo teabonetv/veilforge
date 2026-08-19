@@ -117,7 +117,7 @@ export function buildContent() {
   TIER_NAMES.forEach((tier, t) => {
     const req = Math.min(1 + t * 8, 99);
     const val = Math.round(4 * Math.pow(1.55, t));
-    const time = 4800 + t * 720;
+    const time = 7200 + t * 960;
 
     const log = addItem({ id: `log-${t}`, name: `${tier} Log`, category: "log", tier: t, stack: true, value: val, desc: `Living timber, tier ${t + 1}.` });
     logs.push(log);

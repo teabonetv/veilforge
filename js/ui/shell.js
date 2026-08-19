@@ -2,7 +2,7 @@ import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCo
 import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
-import { desk, setDesk, setVaultPick, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
+import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -88,6 +88,11 @@ function handle(ctx, act, arg, el) {
       shownLevelKey = "";
       renderLevelModal(ctx);
       break;
+    case "dismiss-levels":
+      state.levelUps = [];
+      shownLevelKey = "";
+      renderLevelModal(ctx);
+      break;
     case "start":
       if (state.action?.id === arg) break;
       if (!confirmBusy(ctx, arg, "action", () => { err(startAction(state, arg)); ctx.render(); })) break;
@@ -144,7 +149,8 @@ function handle(ctx, act, arg, el) {
     case "kit": applyKit(state, arg); ctx.render(); break;
     case "slot-focus": {
       const id = state.equipment[arg];
-      if (id) { setVaultPick("item", id); }
+      if (id) setVaultPick("item", id);
+      setFocusedSlot(arg);
       renderDesks(ctx);
       break;
     }
@@ -401,23 +407,47 @@ function hideFork() {
   if (el) { el.hidden = true; el.classList.remove("open"); el.innerHTML = ""; }
 }
 
+function foldLevelUps(list) {
+  const m = new Map();
+  for (const ev of list || []) {
+    const p = m.get(ev.skill);
+    if (!p) m.set(ev.skill, { ...ev, unlocks: [...(ev.unlocks || [])] });
+    else {
+      p.from = Math.min(p.from, ev.from);
+      p.to = Math.max(p.to, ev.to);
+      p.unlocks = [...new Set([...(p.unlocks || []), ...(ev.unlocks || [])])];
+    }
+  }
+  return [...m.values()];
+}
+
 function renderLevelModal(ctx) {
   const modal = document.getElementById("level-modal");
   if (!modal) return;
-  const ev = (ctx.state.levelUps || [])[0];
+  const folded = foldLevelUps(ctx.state.levelUps);
+  ctx.state.levelUps = folded;
+  const ev = folded[0];
   if (!ev) {
     shownLevelKey = "";
     modal.hidden = true;
     return;
   }
-  const key = `${ev.skill}-${ev.to}-${ev.t}`;
+  const key = folded.map((e) => `${e.skill}-${e.from}-${e.to}`).join("|");
   if (shownLevelKey === key && !modal.hidden) return;
   shownLevelKey = key;
   modal.hidden = false;
-  modal.innerHTML = `<div class="sheet"><h3>${skillName(ev.skill)} ${ev.to}</h3>
-    <p>That level cost real dusk. ${skillName(ev.skill)} ${ev.from} → ${ev.to} is a mark on the ledger.</p>
-    <p>${(ev.unlocks || []).length ? "Unlocked: " + ev.unlocks.join(", ") : "The citadel noticed — and it does not notice often."}</p>
-    <button type="button" data-act="dismiss-level">Continue</button></div>`;
+  const more = folded.length - 1;
+  const lines = folded.slice(0, 8).map((e) =>
+    `<p><strong>${skillName(e.skill)}</strong> ${e.from} → ${e.to}${e.unlocks?.length ? ` · ${e.unlocks.slice(0, 4).join(", ")}` : ""}</p>`
+  ).join("");
+  modal.innerHTML = `<div class="sheet">
+    <h3>${skillName(ev.skill)} ${ev.to}</h3>
+    <p>That stretch cost real dusk. The citadel does not mark a ledger this often.</p>
+    ${lines}
+    ${more > 0 ? `<p class="muted">${more} more arts waiting.</p>` : ""}
+    <button type="button" data-act="dismiss-level">Continue</button>
+    ${folded.length > 1 ? `<button type="button" data-act="dismiss-levels">Dismiss all ${folded.length}</button>` : ""}
+  </div>`;
 }
 
 function renderCodex(ctx) {

@@ -15,6 +15,7 @@ const vaultPort = createPortrait(document.getElementById("vault-view"));
 const wanderPort = createPortrait(document.getElementById("wander-view"));
 let inspectKey = "";
 let wanderKey = "";
+let syncedDesk = "";
 let state = load() || createState();
 if (load()) {
   const gone = Date.now() - (state.lastSave || Date.now());
@@ -57,6 +58,7 @@ const ctx = {
         requestAnimationFrame(() => vaultPort.resize());
       }
       if (desk === "loadout") {
+        if (syncedDesk !== "loadout") wanderKey = "";
         const key = JSON.stringify(state.equipment);
         if (key !== wanderKey) {
           wanderKey = key;
@@ -65,6 +67,7 @@ const ctx = {
         wanderPort.resize();
         requestAnimationFrame(() => wanderPort.resize());
       }
+      syncedDesk = desk;
     }
   }
 };
