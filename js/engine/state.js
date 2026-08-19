@@ -158,6 +158,14 @@ export function addItem(state, id, qty) {
     return false;
   }
   state.bank[id] = (state.bank[id] || 0) + qty;
+  if (!state.itemTabs[id]) {
+    const cat = CONTENT.items[id]?.category;
+    const slot = CONTENT.items[id]?.slot;
+    if (cat === "equipment" || cat === "ammo" || slot) state.itemTabs[id] = "War";
+    else if (["log", "ore", "bar", "fish", "food", "herb", "seed", "gem", "rune", "potion", "material", "tool"].includes(cat)) {
+      state.itemTabs[id] = "Craft";
+    } else state.itemTabs[id] = "General";
+  }
   return true;
 }
 

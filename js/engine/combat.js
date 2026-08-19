@@ -604,10 +604,16 @@ function autoEat(state) {
 }
 
 function combatLog(state, msg) {
-  if (!state.settings.showCombatLog) return;
   state._clog = state._clog || [];
   state._clog.unshift(msg);
   if (state._clog.length > 14) state._clog.pop();
+  const m = /for (\d+)/.exec(msg);
+  if (m) {
+    state._floaters = state._floaters || [];
+    const foeHit = /hits you/.test(msg);
+    state._floaters.push({ n: m[1], foe: foeHit, id: (state._floaterSeq = (state._floaterSeq || 0) + 1) });
+    if (state._floaters.length > 8) state._floaters.shift();
+  }
 }
 
 export function consumePotionCharge(state) {

@@ -3,7 +3,7 @@ import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, 
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
 
-let openAreas = new Set();
+let lastFloater = 0;
 let bankFilter = "";
 let bankTab = "All";
 let shopFilter = "";
@@ -269,11 +269,11 @@ function renderTop(ctx) {
   if (m) {
     duel?.classList.remove("idle");
     document.getElementById("foe-tag").textContent = m.name;
-    document.getElementById("foe-hp-label").textContent = `${Math.max(0, Math.ceil(state.combat.monsterHp))}/${m.hp}`;
-    document.getElementById("foe-fill").style.width = `${Math.max(0, 100 * state.combat.monsterHp / m.hp)}%`;
+    document.getElementById("foe-hp-label").textContent = `${Math.max(0, Math.ceil(state.combat.monsterHp))}/${state.combat.monsterMaxHp || m.hp}`;
+    document.getElementById("foe-fill").style.width = `${Math.max(0, 100 * state.combat.monsterHp / (state.combat.monsterMaxHp || m.hp))}%`;
     document.getElementById("you-swing").style.width = `${duelSwing(now, state.combat.nextHitAt, playerInterval(state))}%`;
     document.getElementById("foe-swing").style.width = `${duelSwing(now, state.combat.enemyNextAt, m.interval)}%`;
-    lab.textContent = `Fighting ${m.name}`;
+    lab.textContent = `Fighting ${m.name} [${CONTENT.items[state.equipment.weapon]?.style || "might"}]`;
     bar.style.width = `${Math.max(0, 100 * state.combat.monsterHp / m.hp)}%`;
     bar.classList.add("combat");
   } else {
@@ -286,7 +286,7 @@ function renderTop(ctx) {
     if (act) {
       const a = CONTENT.actions[act.id];
       const pct = Math.min(100, 100 * act.progress / (act.duration || 1));
-      lab.textContent = `${a?.name || act.id}`;
+      lab.textContent = `${skillName(act.skill)} · ${a?.name || act.id}`;
       bar.style.width = pct + "%";
       bar.classList.remove("combat");
     } else {
@@ -318,7 +318,20 @@ function renderTop(ctx) {
       modal.innerHTML = `<div class="sheet"><h3>${skillName(ev.skill)} ${ev.to}</h3>
         <p>${(ev.unlocks || []).length ? "Unlocked: " + ev.unlocks.join(", ") : "The citadel noticed."}</p>
         <button type="button" data-act="dismiss-level">Continue</button></div>`;
-    } else modal.hidden = true;
+    }     else modal.hidden = true;
+  }
+  const hits = document.getElementById("arena-hits");
+  const seq = state._floaterSeq || 0;
+  if (hits && seq !== lastFloater) {
+    lastFloater = seq;
+    const f = (state._floaters || []).at(-1);
+    if (f) {
+      const el = document.createElement("span");
+      el.className = `floater ${f.foe ? "foe" : "you"}`;
+      el.textContent = `${f.foe ? "-" : "+"}${f.n}`;
+      hits.appendChild(el);
+      setTimeout(() => el.remove(), 750);
+    }
   }
 }
 

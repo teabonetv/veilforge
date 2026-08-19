@@ -101,8 +101,31 @@ button.locked, button:disabled { opacity: 0.45; cursor: not-allowed; }
 .duel-meta {
   display: flex; justify-content: space-between; gap: 8px;
   font-size: 11px; color: var(--muted); margin-bottom: 2px;
+  white-space: nowrap;
 }
-.duel-meta b { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.duel-meta b { color: var(--text); font-weight: 600; min-width: 2.5em; }
+#hp-label, #foe-hp-label { flex: 0 0 auto; color: var(--text); font-variant-numeric: tabular-nums; }
+select, option {
+  background: #140c1c;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+#food-chip { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+#arena-hits {
+  position: absolute; inset: 0; pointer-events: none; overflow: hidden;
+}
+#arena-hits .floater {
+  position: absolute; font-family: Cinzel, Cormorant Garamond, serif;
+  font-size: 22px; font-weight: 700; animation: pop 0.7s ease-out forwards;
+  text-shadow: 0 2px 8px #000;
+}
+#arena-hits .floater.you { left: 28%; top: 42%; color: var(--gold); }
+#arena-hits .floater.foe { left: 58%; top: 38%; color: var(--rose); }
+@keyframes pop {
+  0% { opacity: 1; transform: translateY(0) scale(1.1); }
+  100% { opacity: 0; transform: translateY(-36px) scale(1); }
+}
 .duel-vs { color: var(--lilac); font-size: 12px; opacity: 0.7; }
 .bar {
   height: 8px;
@@ -124,6 +147,7 @@ button.locked, button:disabled { opacity: 0.45; cursor: not-allowed; }
 .chip {
   display: flex; align-items: center; gap: 6px;
   background: #140c1c;
+  color: var(--text);
   border: 1px solid var(--line-soft);
   border-radius: 8px;
   padding: 3px 8px;
