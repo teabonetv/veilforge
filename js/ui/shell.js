@@ -27,21 +27,22 @@ export function skillSelect() { return selectedSkill; }
 
 export function bindUI(ctx) {
   const { state, root } = ctx;
-  root.addEventListener("toggle", (e) => {
+  const host = document.body;
+  host.addEventListener("toggle", (e) => {
     const d = e.target;
     if (d?.dataset?.area) {
       if (d.open) openAreas.add(d.dataset.area);
       else openAreas.delete(d.dataset.area);
     }
   }, true);
-  root.addEventListener("click", (e) => {
+  host.addEventListener("click", (e) => {
     const b = e.target.closest("[data-act]");
     if (!b) return;
     const act = b.dataset.act;
     const arg = b.dataset.arg;
     handle(ctx, act, arg, b);
   });
-  root.addEventListener("input", (e) => {
+  host.addEventListener("input", (e) => {
     if (e.target.id === "bank-search") {
       bankFilter = e.target.value.toLowerCase();
       renderBank(ctx);
@@ -51,7 +52,7 @@ export function bindUI(ctx) {
       renderShop(ctx);
     }
   });
-  root.addEventListener("change", (e) => {
+  host.addEventListener("change", (e) => {
     if (e.target.dataset.act === "pillar") {
       state.course.chosen[e.target.dataset.cat] = e.target.value || null;
     }
@@ -84,15 +85,15 @@ function handle(ctx, act, arg, el) {
       break;
     case "start":
       if (state.action?.id === arg) break;
-      if (!confirmBusy(ctx, `start ${CONTENT.actions[arg]?.name || arg}`, () => { err(startAction(state, arg)); ctx.render(); })) break;
+      if (!confirmBusy(ctx, arg, "action", () => { err(startAction(state, arg)); ctx.render(); })) break;
       err(startAction(state, arg)); ctx.render(); break;
     case "stop": stopAction(state); stopFight(state); ctx.render(); break;
     case "fight":
       if (state.combat.fighting && state.combat.monsterId === arg) break;
-      if (!confirmBusy(ctx, `fight ${CONTENT.monsters[arg]?.name || arg}`, () => { err(startFight(state, arg)); ctx.render(); })) break;
+      if (!confirmBusy(ctx, arg, "fight", () => { err(startFight(state, arg)); ctx.render(); })) break;
       err(startFight(state, arg)); ctx.render(); break;
     case "dungeon":
-      if (!confirmBusy(ctx, `enter ${arg}`, () => { err(startDungeon(state, arg)); ctx.render(); })) break;
+      if (!confirmBusy(ctx, arg, "dungeon", () => { err(startDungeon(state, arg)); ctx.render(); })) break;
       err(startDungeon(state, arg)); ctx.render(); break;
     case "fork-yes": {
       const fn = forkFn; forkFn = null;
@@ -327,7 +328,7 @@ function renderTop(ctx) {
       commit.className = "danger";
     } else if (act) {
       const a = CONTENT.actions[act.id];
-      commit.innerHTML = `<b>Committed:</b> ${a?.name || act.id} (${skillName(act.skill)}). Everything else waits. Halt to switch.`;
+      commit.innerHTML = `<b>Committed:</b> ${a?.name || act.id} (${skillName(act.skill)}) · ${bankCount(state, "log-0")} Drift logs / 40 · Halt to switch.`;
       commit.className = "";
     } else {
       commit.innerHTML = `<b>Uncommitted.</b> Pick one action. You cannot train 22 skills at once — that was never the game.`;
@@ -350,20 +351,23 @@ function renderTop(ctx) {
   renderLevelModal(ctx);
 }
 
-function confirmBusy(ctx, nextLabel, fn) {
+function confirmBusy(ctx, nextId, kind, fn) {
   const { state } = ctx;
-  if (state.action?.id && nextLabel.includes(CONTENT.actions[state.action.id]?.name || "___")) return true;
-  if (state.combat.fighting && nextLabel.includes(CONTENT.monsters[state.combat.monsterId]?.name || "___")) return true;
+  if (kind === "action" && state.action?.id === nextId) return true;
+  if (kind === "fight" && state.combat.fighting && state.combat.monsterId === nextId) return true;
   const cur = state.combat.fighting
     ? `fighting ${CONTENT.monsters[state.combat.monsterId]?.name || "a foe"}`
     : (state.action ? (CONTENT.actions[state.action.id]?.name || "a craft") : null);
   if (!cur) return true;
+  const nextName = kind === "fight"
+    ? (CONTENT.monsters[nextId]?.name || nextId)
+    : (CONTENT.actions[nextId]?.name || CONTENT.dungeons.find((d) => d.id === nextId)?.name || nextId);
   forkFn = fn;
   const el = document.getElementById("fork-modal");
   if (!el) { fn(); return false; }
   el.hidden = false;
   el.innerHTML = `<div class="sheet"><h3>Halt?</h3>
-    <p>You are committed to <strong>${cur}</strong>. Switch to ${nextLabel}?</p>
+    <p>You are committed to <strong>${cur}</strong>. Switch to <strong>${nextName}</strong>?</p>
     <p class="blurb">Soil and Drove still tick. Everything else waits.</p>
     <button type="button" data-act="fork-yes">Halt and switch</button>
     <button type="button" data-act="fork-no">Keep this job</button></div>`;
@@ -828,7 +832,7 @@ function reqView(state, r) {
     need = r.count;
     label = "Complete bounty contracts";
   } else if (r.type === "drove") {
-    have = state.quests.stats.drove[r.animal] || 0;
+    have = state.quests.stats?.drove?.[r.animal] || 0;
     need = r.count;
     const an = CONTENT.animals.find((x) => x.id === r.animal);
     label = `Collect ${an?.name || r.animal} produce`;

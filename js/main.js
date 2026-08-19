@@ -41,14 +41,17 @@ let uiAcc = 0;
 function loop(now) {
   const dt = Math.min(250, now - last);
   last = now;
-  tick(state, dt);
-  uiAcc += dt;
-  renderTop(ctx);
-  world.frame(state, skillSelect());
-  if (uiAcc > 400) {
-    uiAcc = 0;
-    renderRight(ctx);
-    if (state.combat.fighting || state.action) renderShell(ctx);
+  try {
+    tick(state, dt);
+    uiAcc += dt;
+    renderTop(ctx);
+    world.frame(state, skillSelect());
+    if (uiAcc > 500) {
+      uiAcc = 0;
+      renderRight(ctx);
+    }
+  } catch (err) {
+    console.error("Veilforge tick", err);
   }
   requestAnimationFrame(loop);
 }

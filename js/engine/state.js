@@ -227,8 +227,8 @@ export function guildBonuses(state, skill) {
 
 export function courseBonuses(state) {
   const acc = { skillSpeed: 0, hp: 0, xpMul: 0, gpMul: 0, rareMul: 0, preserve: 0, accMul: 0, defMul: 0, leech: 0, outputMul: 0, masteryMul: 0, burnReduce: 0, chartXp: 0, allXp: 0, offlineMul: 0, time: 1 };
-  for (const cat of CONTENT.coursePillars) {
-    const pick = state.course.chosen[cat.id];
+  for (const cat of CONTENT.coursePillars || []) {
+    const pick = state.course?.chosen?.[cat.id];
     const opt = cat.options.find((o) => o.id === pick);
     if (!opt) continue;
     for (const k of Object.keys(opt)) {

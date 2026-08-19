@@ -2,8 +2,8 @@
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
   "updatedAt": "2026-08-19T16:40:00Z",
-  "wave": 6,
-  "overall": "Wave 6: lastFloater crash fixed so the board renders. Halt-and-switch and stack caps are in; a critic is replaying localhost.",
+  "wave": 7,
+  "overall": "Wave 7: #app grid was giving 1fr to the commit strip and shoving the game below a hidden overflow. Modals moved to body. Halt uses action ids. Tick loop cannot die on one throw.",
   "comparison": {
     "melvorIdle": "critic 1: Melvor Idle still ahead on compulsion",
     "melvorIdle2": "critic 1 winner",
