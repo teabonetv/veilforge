@@ -1,5 +1,5 @@
 import { wandererRanks, gearSet, weightKg } from "../engine/wanderer.js";
-import { CONTENT, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, bankCap, bankUsed } from "../engine/state.js";
+import { CONTENT, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, bankCap, bankUsed, bankValue } from "../engine/state.js";
 import { playerStats, equipItem } from "../engine/combat.js";
 import { silhouetteStyle } from "../scene/models.js";
 import { escapeHtml } from "../util/text.js";
@@ -129,7 +129,7 @@ function renderVault(ctx) {
 
   document.getElementById("vault-chips").innerHTML = `<div class="tabs">${lens}</div><div class="tabs">${chips}</div>`;
   document.getElementById("vault-grid").innerHTML = tiles || "<p class='blurb'>Nothing in this drawer.</p>";
-  document.getElementById("vault-meta").textContent = `${held.length}/${bankCap(state)} unique stacks`;
+  document.getElementById("vault-meta").textContent = `${held.length}/${bankCap(state)} unique stacks · ${bankValue(state).toLocaleString()} ✦`;
   renderInspect(ctx);
 }
 
@@ -157,7 +157,9 @@ function renderInspect(ctx) {
       <p class="muted">${it.category}${it.slot ? " · " + it.slot : ""} · ${n.toLocaleString()} held · ${it.value || 0} ✦</p>
       ${it.stats ? `<p class="muted">Acc ${it.stats.acc || 0} · Str ${it.stats.str || 0} · Def ${it.stats.def || 0} · HP ${it.stats.hp || 0}</p>` : ""}
       <div class="acts">${(it.category === "equipment" || it.category === "tool" || it.category === "ammo") ? `<button type="button" data-act="equip" data-arg="${id}">Equip</button>` : ""}
-        ${n ? `<button type="button" data-act="sell" data-arg="${id}">Sell one</button>` : ""}</div>`;
+        ${id === "seed-pouch" && n ? `<button type="button" data-act="pouch">Open pouch</button>` : ""}
+        ${n ? `<button type="button" data-act="sell" data-arg="${id}">Sell one</button>
+        <button type="button" data-act="sell-all" data-arg="${id}">Sell all (${n})</button>` : ""}</div>`;
   } else if (kind === "monster") {
     const m = CONTENT.monsters[id];
     if (!m) return;
@@ -247,12 +249,27 @@ function renderWandererBody(ctx, state) {
     <div><span>Constitution</span><b>${vit}</b></div>
   `;
 
+  const candidates = Object.keys(state.bank)
+    .map((id) => CONTENT.items[id])
+    .filter((it) => it && it.slot === slotLabel)
+    .sort((a, b) => {
+      const sa = (a.stats?.acc || 0) + (a.stats?.str || 0) + (a.stats?.ranged || 0) + (a.stats?.magic || 0) + (a.stats?.def || 0);
+      const sb = (b.stats?.acc || 0) + (b.stats?.str || 0) + (b.stats?.ranged || 0) + (b.stats?.magic || 0) + (b.stats?.def || 0);
+      return sb - sa;
+    })
+    .slice(0, 8);
+
   detail.innerHTML = `
     <section class="wd-card">
       <h4>${wpn?.name || "Empty " + slotLabel}</h4>
       <p class="muted">${slotLabel} · ${wpn?.special || wpn?.slot || "empty"} · ${wpn?.temper || ""}</p>
       <blockquote>${wpn?.voice || "A wanderer is still a person without a blade."}</blockquote>
       <p>Attack +${wpn?.stats?.acc || 0} · Strength +${wpn?.stats?.str || 0} · Defence +${wpn?.stats?.def || 0}</p>
+      ${wpn ? `<button type="button" data-act="unequip" data-arg="${slotLabel}">Unequip</button>` : ""}
+    </section>
+    <section class="wd-card">
+      <h4>Candidates for ${slotLabel}</h4>
+      ${candidates.length ? candidates.map((it) => `<button type="button" data-act="equip" data-arg="${it.id}">${it.name} · a${it.stats?.acc || 0} s${it.stats?.str || 0} (${bankCount(state, it.id)})</button>`).join("") : "<p class='muted'>Nothing in the vault for this slot.</p>"}
     </section>
     <section class="wd-card">
       <h4>Dusk set</h4>

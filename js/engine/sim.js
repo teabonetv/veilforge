@@ -13,8 +13,8 @@ export function startAction(state, actionId) {
   if (lock) return `Locked until ${lock}.`;
   if (skillLevel(state, act.skill) < act.level) return `Requires ${act.skill} ${act.level}.`;
   if (act.skill === "course" && act.id === "course-lap") {
-    const chosen = Object.keys(state.course?.chosen || {}).filter((k) => state.course.chosen[k]);
-    if (chosen.length < 1) return "Choose pillars before running the course.";
+    const built = Object.keys(state.course?.built || {}).filter((k) => state.course.built[k]);
+    if (built.length < 1) return "Build at least one pillar (pay the cost) before running.";
   }
   if (act.inputs) {
     for (const inp of act.inputs) {
@@ -228,22 +228,22 @@ function completeThieve(state, act) {
 }
 
 function completeLap(state, act) {
-  const chosen = Object.keys(state.course.chosen || {}).filter((k) => state.course.chosen[k]);
-  if (chosen.length < 1) {
-    log(state, "Choose pillars before running the course.");
+  const built = Object.keys(state.course.built || {}).filter((k) => state.course.built[k]);
+  if (built.length < 1) {
+    log(state, "Build a pillar before running the course.");
     state.action = null;
     return;
   }
   const cb = courseBonuses(state);
   const timeMul = cb.time || 1;
   const lvl = skillLevel(state, "course");
-  const xp = (18 + chosen.length * 10 + lvl * 0.45) * timeMul;
+  const xp = (18 + built.length * 10 + lvl * 0.45) * timeMul;
   grantSkillBits(state, act, 1, xp);
   state.quests.stats.laps += 1;
-  const marks = Math.max(1, Math.round((3 + chosen.length * 4) * timeMul));
+  const marks = Math.max(1, Math.round((3 + built.length * 4) * timeMul));
   addItem(state, "coins", marks);
   if (timeMul >= 1.2 && Math.random() < 0.12) {
-    addItem(state, "coins", 18 + chosen.length * 10);
+    addItem(state, "coins", 18 + built.length * 10);
     log(state, "Greedy circuit paid a purse.");
   }
   rollPet(state, "course");
@@ -258,10 +258,12 @@ function completeChartStudy(state, act) {
   const slotted = isStarSlotted(state, starId);
   const xpMul = slotted ? 1.4 : 1;
   grantSkillBits(state, act, xpMul);
+  const dust = 1 + (slotted && Math.random() < 0.35 ? 1 : 0);
+  stashItem(state, "stardust", dust, "chart study");
   if (slotted) {
-    log(state, `Slotted study: ${star?.name || starId} insight ${n}. Live bonus armed.`);
+    log(state, `Slotted study: ${star?.name || starId} insight ${n}. Stardust +${dust}.`);
   } else {
-    log(state, `Filed ${star?.name || starId} (${n}). Slot it to spend the bonus.`);
+    log(state, `Filed ${star?.name || starId} (${n}). Slot it to spend the bonus. Stardust +${dust}.`);
   }
   rollPet(state, "chart");
 }
@@ -326,7 +328,8 @@ export function harvestPlot(state, i) {
   const lvl = skillLevel(state, "soil");
   const outMul = 1 + (guildBonuses(state, "soil").output || 0) + (courseBonuses(state).outputMul || 0) + (chartBonuses(state).output || 0);
   const extra = Math.min(3, Math.floor((p.ripeMs || 0) / Math.max(8000, crop.growMs * 0.55)));
-  const qty = Math.max(1, Math.round((2 + Math.floor(crop.t / 3) + extra + (Math.random() < 0.35 ? 1 : 0)) * outMul));
+  const compostMul = p.compost ? 1.4 : 1;
+  const qty = Math.max(1, Math.round((2 + Math.floor(crop.t / 3) + extra + (Math.random() < 0.35 ? 1 : 0)) * outMul * compostMul));
   stashItem(state, crop.herb, qty, "harvest");
   const seedChance = Math.min(0.82, 0.38 + lvl * 0.004 + crop.t * 0.012);
   let seeds = 0;
@@ -349,7 +352,10 @@ export function plantPlot(state, i, seed) {
   if (skillLevel(state, "soil") < crop.req) return `Soil ${crop.req} required.`;
   if (!takeItem(state, seed, 1)) return "No seed.";
   const speed = 1 + (guildBonuses(state, "soil").speed || 0);
-  state.soil.plots[i] = { seed, left: crop.growMs / speed, ready: false, ripeMs: 0 };
+  const compost = takeItem(state, "compost", 1);
+  const grow = crop.growMs / speed / (compost ? 1.35 : 1);
+  state.soil.plots[i] = { seed, left: grow, ready: false, ripeMs: 0, compost: !!compost };
+  if (compost) log(state, "Compost worked in — faster grow, fatter harvest.");
   return null;
 }
 
@@ -360,7 +366,7 @@ export function collectPen(state, i) {
   if (!a) return;
   const cycles = Math.max(1, p.cyclesReady || 1);
   const outMul = 1 + (guildBonuses(state, "drove").output || 0) + (courseBonuses(state).outputMul || 0) + (chartBonuses(state).output || 0);
-  const qty = Math.max(1, Math.round((p.pending || a.qty * cycles) * outMul));
+  const qty = Math.max(1, Math.round((p.pending || a.qty * cycles) * outMul * (p.fed ? 1.45 : 1)));
   stashItem(state, a.produce, qty, "drove collect");
   let rares = 0;
   if (a.rare) {
@@ -376,6 +382,7 @@ export function collectPen(state, i) {
   p.ready = false;
   p.pending = 0;
   p.cyclesReady = 0;
+  p.fed = false;
   p.collected = (p.collected || 0) + cycles;
   state.quests.stats.drove[a.id] = (state.quests.stats.drove[a.id] || 0) + cycles;
   const act = { id: `drove-${a.id}`, skill: "drove", xp: a.xp, masteryId: `drove-${a.id}` };
@@ -391,7 +398,72 @@ export function stockPen(state, i, animalId) {
   const cost = 20 + a.level * 4;
   if (!takeItem(state, "coins", cost)) return `Need ${cost} veilmarks.`;
   const speed = 1 + (guildBonuses(state, "drove").speed || 0);
-  state.drove.pens[i] = { animal: animalId, left: a.time / speed, ready: false, collected: 0, pending: 0, cyclesReady: 0 };
+  state.drove.pens[i] = { animal: animalId, left: a.time / speed, ready: false, collected: 0, pending: 0, cyclesReady: 0, fed: false };
+  return null;
+}
+
+export function feedPen(state, i) {
+  const p = state.drove.pens[i];
+  if (!p) return "Empty pen.";
+  if (p.fed) return "Already fed this cycle.";
+  if (!takeItem(state, "fodder", 1)) return "Need pen fodder (stall or shop).";
+  p.fed = true;
+  log(state, `Fed ${CONTENT.animals.find((x) => x.id === p.animal)?.name || "pen"}. Next collect pays more.`);
+  return null;
+}
+
+export function buyPillar(state, catId, optId) {
+  const cat = CONTENT.coursePillars.find((c) => c.id === catId);
+  const opt = cat?.options.find((o) => o.id === optId);
+  if (!opt) return "Unknown pillar.";
+  if (state.course.built?.[catId] === optId) {
+    state.course.chosen[catId] = optId;
+    return null;
+  }
+  const cost = opt.cost || 40;
+  if (!takeItem(state, "coins", cost)) return `Need ${cost} veilmarks to build ${opt.name}.`;
+  state.course.built = state.course.built || {};
+  state.course.built[catId] = optId;
+  state.course.chosen[catId] = optId;
+  log(state, `Built ${cat.name}: ${opt.name} (−${cost} veilmarks).`);
+  return null;
+}
+
+export function spendChartRank(state, rankId) {
+  const r = (CONTENT.chartRanks || []).find((x) => x.id === rankId);
+  if (!r) return "Unknown dust rank.";
+  const have = (state.chart.ranks?.[rankId] || 0);
+  if (have >= 8) return "That rank is capped.";
+  if (!takeItem(state, "stardust", r.cost)) return `Need ${r.cost} stardust.`;
+  state.chart.ranks = state.chart.ranks || {};
+  state.chart.ranks[rankId] = have + 1;
+  log(state, `Spent ${r.cost} stardust on ${r.name} (rank ${have + 1}).`);
+  return null;
+}
+
+export function openPouch(state) {
+  if (!takeItem(state, "seed-pouch", 1)) return "No seed pouch.";
+  const seeds = Object.values(CONTENT.items).filter((it) => it.category === "seed");
+  const lvl = skillLevel(state, "timber");
+  const capT = Math.max(0, Math.floor(lvl / 8));
+  let pool = seeds.filter((it) => (it.tier || 0) <= capT);
+  if (!pool.length) pool = seeds;
+  const pick = pool[Math.floor(Math.random() * pool.length)];
+  if (!pick) return "The pouch was empty.";
+  stashItem(state, pick.id, 1, "pouch");
+  log(state, `Opened a seed pouch: ${pick.name}.`);
+  return null;
+}
+
+export function sellItems(state, id, qty) {
+  const it = CONTENT.items[id];
+  const have = bankCount(state, id);
+  const n = qty === "all" ? have : Math.max(1, Math.min(have, qty | 0));
+  if (!it || n <= 0) return "Nothing to sell.";
+  takeItem(state, id, n);
+  const gp = Math.max(1, Math.floor((it.value || 1) * 0.4 * n));
+  addItem(state, "coins", gp);
+  log(state, `Sold ${it.name} ×${n} for ${gp} veilmarks.`);
   return null;
 }
 
@@ -450,6 +522,8 @@ export function applyOffline(state, ms) {
   const cb = courseBonuses(state);
   const sim = Math.min(Math.max(0, ms), cap) * (1 + (cb.offlineMul || 0));
   if (sim <= 0) return;
+  const beforeActs = state.stats.actions || 0;
+  const beforeCounts = { ...(state.actionCounts || {}) };
   state.stats.offlineMs += sim;
   const saved = state.settings.tickScale;
   state.settings.tickScale = 1;
@@ -492,8 +566,22 @@ export function applyOffline(state, ms) {
   if (left > 0) state.now = (state.now || 0) + left;
 
   state.settings.tickScale = saved;
+  const mins = Math.round(sim / 60000);
+  const topJob = Object.entries(state.actionCounts || {}).sort((a, b) => (b[1] - (beforeCounts[a[0]] || 0)) - (a[1] - (beforeCounts[b[0]] || 0)))[0];
+  const jobDelta = topJob ? (topJob[1] - (beforeCounts[topJob[0]] || 0)) : 0;
+  const harvestNow = (state.soil?.plots || []).filter((p) => p?.ready).length;
+  const droveNow = (state.drove?.pens || []).filter((p) => p?.ready).length;
+  state.lastOffline = {
+    minutes: mins,
+    actions: (state.stats.actions || 0) - beforeActs,
+    job: topJob && jobDelta > 0 ? `${CONTENT.actions[topJob[0]]?.name || topJob[0]} ×${jobDelta}` : "no committed job",
+    plotsReady: harvestNow,
+    pensReady: droveNow,
+    huntPaused: hunting,
+    t: Date.now()
+  };
   const huntNote = hunting ? " Hunt paused at the last blow." : "";
-  log(state, `Offline: ${Math.round(sim / 60000)} min resolved.${huntNote}`);
+  log(state, `Offline report: ${mins} min · ${state.lastOffline.actions} actions · ${state.lastOffline.job}.${huntNote}`);
 }
 
 export { startFight, stopFight, playerInterval, masteryLevel };

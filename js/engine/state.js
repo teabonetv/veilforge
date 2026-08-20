@@ -41,15 +41,16 @@ export function createState() {
       hp: 10, maxHp: 10, area: null, monsterId: null, monsterHp: 0,
       nextHitAt: 0, enemyNextAt: 0, fighting: false, dungeon: null, dungeonIndex: 0,
       kills: {}, style: "might", spell: "gust-bolt", prayers: [], vow: 100, maxVow: 100,
-      foodId: "food-0", autoEat: 0.5, potionId: null, potionCharges: 0,
+      foodId: "food-0", foodId2: null, autoEat: 0.5, potionId: null, potionCharges: 0,
       stunUntil: 0, poison: 0, ward: 0, dungeonDeaths: 0,
       spec: 0, useSpec: true
     },
-    bounty: { monsterId: null, need: 0, have: 0, streak: 0 },
-    course: { chosen: {} },
+    bounty: { monsterId: null, need: 0, have: 0, streak: 0, block: [] },
+    course: { chosen: {}, built: {} },
     soil: { plots: [null, null, null, null] },
     drove: { pens: [null, null] },
-    chart: { active: ["the-hatchet"], slots: 2, studied: {} },
+    chart: { active: ["the-hatchet"], slots: 2, studied: {}, ranks: {} },
+    lastOffline: null,
     whisper: { heat: 0, streak: 0 },
     quests: { active: ["q-wake"], done: [], stats: { harvests: 0, laps: 0, bounties: 0, drove: {}, guildMax: 0 } },
     pets: {},
@@ -219,7 +220,7 @@ export function log(state, msg) {
 }
 
 export function masteryLevel(xp) {
-  return Math.min(99, 1 + Math.floor(Math.sqrt(xp / 12)));
+  return Math.min(120, 1 + Math.floor(Math.sqrt(xp / 12)));
 }
 
 export function masteryBonus(state, masteryId, skillHint) {
@@ -259,12 +260,14 @@ export function guildBonuses(state, skill) {
 
 export function courseBonuses(state) {
   const acc = { skillSpeed: 0, hp: 0, xpMul: 0, gpMul: 0, rareMul: 0, preserve: 0, accMul: 0, defMul: 0, leech: 0, outputMul: 0, masteryMul: 0, burnReduce: 0, chartXp: 0, allXp: 0, offlineMul: 0, time: 1 };
+  const built = state.course?.built || {};
   for (const cat of CONTENT.coursePillars || []) {
     const pick = state.course?.chosen?.[cat.id];
+    if (!pick || built[cat.id] !== pick) continue;
     const opt = cat.options.find((o) => o.id === pick);
     if (!opt) continue;
     for (const k of Object.keys(opt)) {
-      if (k === "id" || k === "name") continue;
+      if (k === "id" || k === "name" || k === "cost") continue;
       if (k === "time") acc.time *= opt.time;
       else acc[k] = (acc[k] || 0) + opt[k];
     }
@@ -286,7 +289,21 @@ export function chartBonuses(state) {
     const power = Math.min(1, 0.5 + Math.log2(1 + n) * 0.14);
     for (const [k, v] of Object.entries(c.bonus)) acc[k] += v * power;
   }
+  const ranks = state.chart?.ranks || {};
+  for (const r of CONTENT.chartRanks || []) {
+    const n = ranks[r.id] || 0;
+    if (n <= 0) continue;
+    for (const [k, v] of Object.entries(r.bonus)) acc[k] = (acc[k] || 0) + v * n;
+  }
   return acc;
+}
+
+export function bankValue(state) {
+  let n = 0;
+  for (const [id, qty] of Object.entries(state.bank || {})) {
+    n += (CONTENT.items[id]?.value || 0) * (qty || 0);
+  }
+  return n;
 }
 
 export function potionStats(state) {
@@ -333,6 +350,15 @@ export function normalizeState(merged) {
   merged.name = clampName(merged.name);
   if (merged.shopBought?.["shop-offline"] && (merged.offlineHours || 18) < 24) merged.offlineHours = 24;
   if (!merged.offlineHours) merged.offlineHours = 18;
+  merged.course = merged.course || { chosen: {}, built: {} };
+  merged.course.built = merged.course.built || {};
+  for (const [cat, pick] of Object.entries(merged.course.chosen || {})) {
+    if (pick && !merged.course.built[cat]) merged.course.built[cat] = pick;
+  }
+  merged.chart = merged.chart || { active: [], slots: 2, studied: {}, ranks: {} };
+  merged.chart.ranks = merged.chart.ranks || {};
+  merged.bounty = merged.bounty || { monsterId: null, need: 0, have: 0, streak: 0, block: [] };
+  merged.bounty.block = merged.bounty.block || [];
   remapQuestId(merged, "whisper-dock-beggar", "q-whisper");
   for (const sk of Object.values(merged.skills || {})) {
     if (!sk) continue;
