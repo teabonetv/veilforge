@@ -98,10 +98,11 @@ export function createWorld(canvas) {
   scene.add(hpBars.root);
 
   function resize() {
-    const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 480;
-    const h = canvas.clientHeight || 280;
+    const box = canvas.getBoundingClientRect();
+    const w = Math.max(64, Math.floor(box.width || canvas.clientWidth || canvas.parentElement?.clientWidth || 480));
+    const h = Math.max(64, Math.floor(box.height || canvas.clientHeight || 160));
     renderer.setSize(w, h, false);
-    camera.aspect = w / Math.max(1, h);
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
   resize();

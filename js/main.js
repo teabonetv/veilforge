@@ -150,6 +150,14 @@ window.addEventListener("pagehide", () => save(state));
 window.addEventListener("veilforge-save", () => save(state));
 window.Capacitor?.Plugins?.App?.addListener?.("pause", () => save(state));
 
+const relayout = () => {
+  world.resize();
+  ctx.portraits?.resize?.();
+};
+window.addEventListener("resize", relayout);
+window.visualViewport?.addEventListener("resize", relayout);
+window.addEventListener("orientationchange", () => setTimeout(relayout, 120));
+
 const scaleEl = document.getElementById("scale");
 if (scaleEl) {
   scaleEl.value = String(state.settings.tickScale || 1);

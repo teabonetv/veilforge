@@ -28,6 +28,11 @@ export function bootPlatform() {
       (all || level.querySelector("[data-act='dismiss-level']"))?.click();
       return;
     }
+    const deskOn = document.querySelector("#desk-nav button.on");
+    if (deskOn && deskOn.dataset.arg !== "workshop") {
+      document.querySelector("#desk-nav [data-arg='workshop']")?.click();
+      return;
+    }
     if (canGoBack) window.history.back();
     else {
       window.dispatchEvent(new Event("veilforge-save"));

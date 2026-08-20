@@ -227,7 +227,15 @@ function handle(ctx, act, arg, el) {
       break;
     case "loadout-save": saveLoadout(state); toast(ctx, "Loadout saved."); break;
     case "loadout-load": err(loadLoadout(state, +arg)); ctx.render(); break;
-    case "desk": setDesk(arg); ctx.render(); ctx.portraits?.resize?.(); break;
+    case "desk":
+      setDesk(arg);
+      ctx.render();
+      ctx.portraits?.resize?.();
+      requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
+      ["layout", "bank-desk", "wander-desk", "stall-desk", "center"].forEach((id) => {
+        document.getElementById(id)?.scrollTo?.(0, 0);
+      });
+      break;
     case "vault-pick": setVaultPick(el.dataset.kind || "item", arg); renderDesks(ctx); break;
     case "vault-cat": onVaultCat(arg); renderDesks(ctx); break;
     case "vault-lens": onVaultLens(arg); renderDesks(ctx); break;
@@ -639,6 +647,10 @@ function showSettings(ctx) {
     <label><input type="checkbox" data-act="set-motion" ${state.settings?.reducedMotion ? "checked" : ""} /> Reduce motion</label>
     <label><input type="checkbox" data-act="set-clog" ${state.settings?.showCombatLog !== false ? "checked" : ""} /> Combat log</label>
     <p class="blurb">One job at a time. Halt to switch. Save is local to this browser (and the export file).</p>
+    <div class="acts">
+      <button type="button" data-act="export">Export save</button>
+      <button type="button" data-act="import">Import save</button>
+    </div>
     <button type="button" data-act="fork-no">Close</button></div>`;
   trapModal(el);
 }
