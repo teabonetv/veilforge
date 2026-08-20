@@ -5,6 +5,7 @@ import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, r
 import { questProgress } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
 import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
+import { iconUrl, SKILL_ICON_KIND } from "../scene/icons.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -17,12 +18,6 @@ let shopTool = "all";
 let codexOpen = localStorage.getItem("veilforge-codex") !== "0";
 let selectedSkill = "timber";
 let openAreas = new Set();
-
-const CAT_ICON = {
-  currency: "✦", material: "◇", log: "🌲", ore: "⛏", bar: "▬", fish: "🐟",
-  food: "🍽", seed: "🌱", herb: "🌿", gem: "◆", rune: "✧", potion: "⚗",
-  equipment: "⚔", ammo: "➳", tool: "⚒", token: "◎", key: "⚿", hide: "◇"
-};
 
 const TOOL_LABEL = { axe: "Hatchets", pick: "Picks", rod: "Rods" };
 
@@ -265,7 +260,7 @@ export function renderShell(ctx) {
     const lv = skillLevel(state, s.id);
     const on = selectedSkill === s.id ? "on" : "";
     const lock = skillLocked(state, s.id);
-    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}><span>${s.icon}</span><span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : lv}</span></button>`;
+    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}><span class="skico" style="background-image:${iconUrl({ kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3 })}"></span><span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : lv}</span></button>`;
   }).join("");
   root.querySelector("#skill-nav").innerHTML = left;
   renderTop(ctx);
@@ -848,6 +843,7 @@ function renderCombatTheater(ctx) {
     </div>
     <div>
       <h4>${m.name}</h4>
+      <span class="mico lg" style="background-image:${iconUrl(m.model)}"></span>
       <div class="bar hp foe"><i style="display:block;height:100%;width:${Math.max(0, 100 * state.combat.monsterHp / m.hp)}%;background:linear-gradient(90deg,#3a2a78,#8b7cff)"></i></div>
       <p class="hint">${Math.max(0, Math.ceil(state.combat.monsterHp))} / ${m.hp} · incoming ${foeSwing.toFixed(0)}%</p>
       <p class="hint">Hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</p>
@@ -905,6 +901,7 @@ function renderAreas(ctx) {
         const m = CONTENT.monsters[id];
         const on = state.combat.fighting && state.combat.monsterId === id;
         return `<button type="button" class="card ${on ? "on" : ""}" data-act="fight" data-arg="${id}">
+          <span class="mico" style="background-image:${iconUrl(m.model)}"></span>
           <strong>${m.name}</strong>
           <span>HP ${m.hp} · hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</span>
           <em>${m.desc}</em>
@@ -915,6 +912,7 @@ function renderAreas(ctx) {
     const n = (state.combat.dungeonClears || {})[d.id] || 0;
     const on = state.combat.dungeon === d.id;
     return `<button type="button" class="card ${on ? "on" : ""}" data-act="dungeon" data-arg="${d.id}">
+      <span class="mico" style="background-image:${iconUrl(d.model)}"></span>
       <strong>${d.name}</strong><span>Req ${d.req} · ${d.sequence.length} floors · clears ${n}</span><em>${d.desc}</em>
     </button>`;
   }).join("")}</div>`;
@@ -966,9 +964,8 @@ function renderBank(ctx) {
       const it = CONTENT.items[id];
       const eq = it.category === "equipment" || it.category === "ammo" || it.category === "tool";
       const stackVal = (it.value || 0) * n;
-      const icon = CAT_ICON[it.category] || "·";
       return `<div class="brow" title="${it.desc || ""}">
-        <span>${icon}</span>
+        <span class="bico" style="background-image:${iconUrl(it.model)}"></span>
         <span class="nm">${it.name}</span>
         <span class="qty">${n.toLocaleString()}</span>
         <span class="val">${stackVal.toLocaleString()} ✦ · ${it.category}</span>

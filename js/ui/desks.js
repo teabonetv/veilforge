@@ -2,6 +2,7 @@ import { wandererRanks, gearSet, weightKg } from "../engine/wanderer.js";
 import { CONTENT, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, bankCap, bankUsed, bankValue } from "../engine/state.js";
 import { playerStats, equipItem } from "../engine/combat.js";
 import { silhouetteStyle } from "../scene/models.js";
+import { iconUrl } from "../scene/icons.js";
 import { escapeHtml } from "../util/text.js";
 
 const SLOTS = [
@@ -136,7 +137,7 @@ function renderVault(ctx) {
 function tile(kind, id, name, qty, model) {
   const st = silhouetteStyle(model || {});
   const on = vaultPick.kind === kind && vaultPick.id === id ? "on" : "";
-  return `<button type="button" class="vtile ${on}" data-act="vault-pick" data-kind="${kind}" data-arg="${id}" style="background:${st.background};border-color:${st.borderColor};border-radius:${st.borderRadius};box-shadow:${st.boxShadow}">
+  return `<button type="button" class="vtile ${on}" data-act="vault-pick" data-kind="${kind}" data-arg="${id}" style="background-color:#12081a;background-image:${iconUrl(model || {})},${st.background};background-size:58% 58%,cover;background-position:center 10px,center;background-repeat:no-repeat;border-color:${st.borderColor}">
     <span class="vqty">${qty ? qty.toLocaleString() : ""}</span>
     <span class="vnm">${escapeHtml(name)}</span>
   </button>`;

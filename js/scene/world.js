@@ -1,5 +1,5 @@
 import * as THREE from "../vendor/three.module.js";
-import { makeEntityModel } from "./models.js";
+import { makeEntityModel, makeWanderer } from "./models.js";
 import { CONTENT } from "../engine/state.js";
 
 const SKILL_TINT = {
@@ -86,6 +86,7 @@ export function createWorld(canvas) {
 
   const player = makeFighter(0x8eb4ff, mats);
   player.group.position.set(-1.25, 0, 1.55);
+  player.group.userData.stub = player.group.children.slice();
   scene.add(player.group);
   let enemy = makeFighter(0xff8aa0, mats);
   enemy.group.position.set(1.55, 0, 1.55);
@@ -184,6 +185,20 @@ export function createWorld(canvas) {
     eFlash *= 0.82;
 
     const mid = state?.combat?.monsterId || "";
+    const eqKey = JSON.stringify(state?.equipment || {});
+    if (eqKey !== player.group.userData.eq) {
+      player.group.userData.eq = eqKey;
+      const oldW = player.group.userData.wander;
+      if (oldW) {
+        player.group.remove(oldW);
+        oldW.traverse((c) => { if (c.geometry) c.geometry.dispose(); });
+      }
+      const w = makeWanderer(state.equipment, CONTENT.items);
+      w.scale.setScalar(0.82);
+      player.group.add(w);
+      player.group.userData.wander = w;
+      (player.group.userData.stub || []).forEach((c) => { c.visible = false; });
+    }
     if (fighting && mid && mid !== enemyId) {
       enemyId = mid;
       const mdl = CONTENT.monsters[mid]?.model || { kind: "beast-might", seed: 1, hue: 0 };

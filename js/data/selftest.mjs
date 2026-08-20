@@ -4,6 +4,7 @@ import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouc
 import { startFight, startDungeon, equipItem, unequip, rollBounty } from "../engine/combat.js";
 import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
+import { iconMarkup } from "../scene/icons.js";
 
 let rng = 20260820;
 Math.random = () => {
@@ -47,6 +48,13 @@ for (const it of Object.values(C.items)) {
   seeds.add(it.model.seed);
 }
 if (seedClash > Object.keys(C.items).length * 0.02) throw new Error("too many model seed collisions " + seedClash);
+
+const mk = new Set(Object.values(C.monsters).map((m) => m.model.kind));
+if (mk.size < 12) throw new Error("monster silhouettes too few: " + [...mk].join(","));
+if (!iconMarkup(C.items["log-0"].model).includes("<svg")) throw new Error("icon markup broken");
+if (!iconMarkup(Object.values(C.monsters)[0].model).includes("rect")) throw new Error("monster icon empty");
+const gates = new Set(C.dungeons.map((d) => d.model.kind));
+if (gates.size < 6) throw new Error("dungeon gates not unique: " + [...gates].join(","));
 
 const s = createState();
 if (s.loadouts[0].equipment.weapon !== "drift-saber") throw new Error("default Wanderer loadout missing saber");

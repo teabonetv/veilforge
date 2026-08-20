@@ -14,10 +14,13 @@ export function createPortrait(canvas) {
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 40);
   camera.position.set(0, 1.15, 3.4);
   camera.lookAt(0, 0.85, 0);
-  scene.add(new THREE.HemisphereLight(0xb9a4e3, 0x1a1020, 0.85));
-  const key = new THREE.DirectionalLight(0xffe4c4, 0.9);
-  key.position.set(2.2, 4, 3);
+  scene.add(new THREE.HemisphereLight(0xb9a4e3, 0x1a1020, 0.7));
+  const key = new THREE.DirectionalLight(0xffe4c4, 1.35);
+  key.position.set(2.6, 4.4, 3.2);
   scene.add(key);
+  const fill = new THREE.PointLight(0x4a3060, 4, 10);
+  fill.position.set(1.2, 0.4, 2);
+  scene.add(fill);
   const rim = new THREE.PointLight(0x7b6cff, 5, 12);
   rim.position.set(-2, 1.4, 1.5);
   scene.add(rim);
@@ -27,6 +30,13 @@ export function createPortrait(canvas) {
   );
   floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.7, 16),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.45 })
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.02;
+  scene.add(shadow);
   let subject = new THREE.Group();
   scene.add(subject);
   let t = 0;
