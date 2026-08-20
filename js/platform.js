@@ -29,7 +29,10 @@ export function bootPlatform() {
       return;
     }
     if (canGoBack) window.history.back();
-    else cap.App.exitApp();
+    else {
+      window.dispatchEvent(new Event("veilforge-save"));
+      cap.App.exitApp();
+    }
   });
 
   if (canUseSW && !isNative) {

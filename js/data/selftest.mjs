@@ -1,7 +1,7 @@
 import { SKILLS, XP_TABLE, levelFromXp } from "../content/catalog.js";
 import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem } from "../engine/state.js";
-import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouch, plantPlot, buyPillar, spendChartRank } from "../engine/sim.js";
-import { startFight, startDungeon, equipItem, unequip, rollBounty } from "../engine/combat.js";
+import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouch, plantPlot, buyPillar, spendChartRank, setUseCompost } from "../engine/sim.js";
+import { startFight, startDungeon, equipItem, unequip, rollBounty, playerStats } from "../engine/combat.js";
 import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
 import { iconMarkup, iconUrl } from "../scene/icons.js";
@@ -52,19 +52,29 @@ if (seedClash > Object.keys(C.items).length * 0.02) throw new Error("too many mo
 
 for (const it of Object.values(C.items)) {
   if (!it.model.eid || !PIX_EID[it.model.eid]) throw new Error("item missing unique icon " + it.id);
-  if (!iconMarkup(it.model).includes("u-items-")) throw new Error("item not on unique sheet " + it.id);
+  const html = iconMarkup(it.model);
+  if (!html.includes("atlas-items.png") && !html.includes("atlas-skills.png") && !html.includes("u-items-")) {
+    throw new Error("item icon not on kind atlas " + it.id + " kind=" + it.model.kind);
+  }
+}
+if (C.items["log-0"].model.kind !== "log") throw new Error("log kind drifted: " + C.items["log-0"].model.kind);
+if (C.items["gem-0"].model.kind !== "gem") throw new Error("gem kind drifted");
+if (iconMarkup(C.items["log-0"].model) === iconMarkup(C.items["gem-0"].model)) {
+  throw new Error("log and gem share the same painted cell");
 }
 for (const m of Object.values(C.monsters)) {
   if (!PIX_EID[m.id]) throw new Error("monster missing unique icon " + m.id);
   const html = iconMarkup(m.model);
-  if (!html.includes("u-mon-") && !html.includes("u-misc.png")) throw new Error("monster not on unique sheet " + m.id);
+  if (!html.includes("u-mon-") && !html.includes("u-misc.png") && !html.includes("atlas-beasts.png")) throw new Error("monster not on unique sheet " + m.id);
 }
 for (const d of C.dungeons) {
-  if (!PIX_EID[d.id] || !iconMarkup(d.model).includes("u-misc.png")) throw new Error("dungeon missing unique icon " + d.id);
+  if (!PIX_EID[d.id]) throw new Error("dungeon missing unique icon " + d.id);
+  const html = iconMarkup(d.model);
+  if (!html.includes("u-misc.png") && !html.includes("atlas-gates.png")) throw new Error("dungeon missing gate icon " + d.id);
 }
 for (const a of Object.values(C.actions)) {
   const html = iconMarkup(a.model);
-  if (!html.includes("u-act-") && !html.includes("u-misc.png")) throw new Error("action missing unique icon " + a.id);
+  if (!html.includes("u-act-") && !html.includes("u-misc.png") && !html.includes("atlas-skills.png")) throw new Error("action missing icon " + a.id);
 }
 for (const p of C.pets) {
   if (!p.model?.eid || !PIX_EID[p.id]) throw new Error("pet missing unique icon " + p.id);
@@ -231,7 +241,14 @@ addItem(pouch, "compost", 1);
 addItem(pouch, seedId, 1);
 const plant = plantPlot(pouch, 0, seedId);
 if (plant) throw new Error(plant);
-if (!pouch.soil.plots[0].compost) throw new Error("compost not applied");
+if (pouch.soil.plots[0].compost) throw new Error("compost auto-applied without the toggle");
+if (!bankCount(pouch, "compost")) throw new Error("compost consumed while toggle off");
+pouch.soil.plots[0] = null;
+setUseCompost(pouch, true);
+addItem(pouch, seedId, 1);
+const plant2 = plantPlot(pouch, 0, seedId);
+if (plant2) throw new Error(plant2);
+if (!pouch.soil.plots[0].compost) throw new Error("compost not applied with toggle");
 if (bankCount(pouch, "compost")) throw new Error("compost not consumed");
 
 const course = createState();
@@ -262,6 +279,54 @@ if (!(bty.bounty.block || []).includes(first)) throw new Error("bounty block lis
 if (!off.lastOffline || off.lastOffline.actions < 900) throw new Error("offline report missing: " + JSON.stringify(off.lastOffline));
 
 if (C.actions["timber-13"] && C.actions["timber-13"].level < 105) throw new Error("late groves still capped at 99");
+if ((C.actions["fletch-bow-13"]?.level || 0) > 120) throw new Error("veilborn longbow above cap");
+if ((C.actions["smith-veilborn-crozier"]?.level || 0) > 120) throw new Error("veilborn crozier above cap");
+if (C.actions["loom-veilborn-amulet"]?.level !== C.actions["timber-13"]?.level) throw new Error("late amulet still clamped to 99");
+if (bankCap(createState()) < 36) throw new Error("starter vault too small");
+if (C.areas.some((a) => C.dungeons.some((d) => d.id === a.id))) throw new Error("area/dungeon id collision");
+const dock = C.dungeons.find((d) => d.id === "dock-vault");
+for (const id of dock.sequence.slice(0, -1)) {
+  if (C.monsters[id].area !== "Cinder Docks") throw new Error("Dock Vault floor left the docks: " + C.monsters[id].area);
+}
+const boss = Object.values(C.monsters).find((m) => m.dungeonOnly);
+const farm = startFight(createState(), boss.id);
+if (!farm) throw new Error("dungeon closer farmable from Hunt");
+const crab = Object.values(C.monsters).find((m) => m.catalogName === "Vault Crab");
+if (!crab || crab.maxHit > 8) throw new Error("Vault Crab still one-shots docks: " + crab?.maxHit);
+if (!C.shop.some((o) => o.item === "thread") || !C.shop.some((o) => o.item === "feather") || !C.shop.some((o) => o.item === "bounty-token")) {
+  throw new Error("missing thread/feather/bounty stall");
+}
+if (C.shop.find((o) => o.id === "shop-eat")?.desc?.includes("40%")) throw new Error("auto-eat copy still says 40%");
+
+const unpaidBuild = createState();
+unpaidBuild.course.chosen.tempo = "stride";
+normalizeState(unpaidBuild);
+if (unpaidBuild.course.built.tempo) throw new Error("unpaid pillar became built on load");
+
+const gear = createState();
+addItem(gear, "drift-helm", 1);
+addItem(gear, "drift-body", 1);
+addItem(gear, "drift-legs", 1);
+equipItem(gear, "drift-helm");
+equipItem(gear, "drift-body");
+equipItem(gear, "drift-legs");
+startFight(gear, Object.keys(C.monsters)[0]);
+if ((playerStats(gear).setBonus || 1) <= 1) throw new Error("dusk set bonus still 1");
+
+const offOnce = createState();
+startAction(offOnce, "timber-0");
+applyOffline(offOnce, 20 * 60000);
+const afterFirst = offOnce.actionCounts["timber-0"];
+const saveAt = offOnce.lastSave;
+applyOffline(offOnce, 50);
+if (offOnce.actionCounts["timber-0"] - afterFirst > 2) throw new Error("tiny second offline should not replay the hour");
+if (!saveAt) throw new Error("applyOffline did not stamp lastSave");
+
+const tok = createState();
+addItem(tok, "bounty-token", 3);
+rollBounty(tok, { free: true });
+rollBounty(tok, { free: true });
+if (bankCount(tok, "bounty-token") !== 3) throw new Error("free bounty roll spent a token");
 
 const tool = createState();
 addItem(tool, "drift-hatchet", 1);

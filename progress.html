@@ -76,21 +76,47 @@
   </main>
   <script>
     async function refresh() {
-      const res = await fetch("/progress.json?t=" + Date.now());
+      const res = await fetch("progress.json?t=" + Date.now());
       const d = await res.json();
-      document.getElementById("tagline").textContent = d.tagline;
-      document.getElementById("wave").textContent = d.wave;
-      document.getElementById("updated").textContent = d.updatedAt;
-      document.getElementById("overall").textContent = d.overall;
-      document.getElementById("m1").textContent = d.comparison.melvorIdle;
-      document.getElementById("m2").textContent = d.comparison.melvorIdle2;
-      document.getElementById("better").textContent = String(d.comparison.oursBetter);
-      document.getElementById("gap").textContent = d.comparison.biggestGap;
-      document.getElementById("pieces").innerHTML = d.pieces.map(p => {
-        const cls = p.status === "wow" || p.status === "done" ? "ok" : p.status === "fail" ? "fail" : p.status === "building" ? "building" : "queued";
-        return `<div class="piece"><div><strong>${p.name}</strong><div class="meta">${p.critic || ""}</div></div><div class="status ${cls}">${p.status}</div></div>`;
-      }).join("");
-      document.getElementById("log").innerHTML = (d.log || []).slice().reverse().map(x => `<li>${x}</li>`).join("");
+      const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v ?? ""; };
+      set("tagline", d.tagline);
+      set("wave", d.wave);
+      set("updated", d.updatedAt);
+      set("overall", d.overall);
+      set("m1", d.comparison.melvorIdle);
+      set("m2", d.comparison.melvorIdle2);
+      set("better", String(d.comparison.oursBetter));
+      set("gap", d.comparison.biggestGap);
+      const pieces = document.getElementById("pieces");
+      if (pieces) {
+        pieces.textContent = "";
+        for (const p of d.pieces || []) {
+          const row = document.createElement("div");
+          row.className = "piece";
+          const left = document.createElement("div");
+          const strong = document.createElement("strong");
+          strong.textContent = p.name;
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          meta.textContent = p.critic || "";
+          left.append(strong, meta);
+          const st = document.createElement("div");
+          const cls = p.status === "wow" || p.status === "done" ? "ok" : p.status === "fail" ? "fail" : p.status === "building" ? "building" : "queued";
+          st.className = "status " + cls;
+          st.textContent = p.status;
+          row.append(left, st);
+          pieces.append(row);
+        }
+      }
+      const log = document.getElementById("log");
+      if (log) {
+        log.textContent = "";
+        for (const x of (d.log || []).slice().reverse()) {
+          const li = document.createElement("li");
+          li.textContent = x;
+          log.append(li);
+        }
+      }
     }
     refresh();
     setInterval(refresh, 2500);

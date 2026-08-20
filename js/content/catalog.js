@@ -16,7 +16,7 @@ export const SKILLS = [
   { id: "vein", name: "Vein", kind: "gather", icon: "⛏️", blurb: "Open citadel stone. Ore is a dead weight until Anvil is unlocked." },
   { id: "ember", name: "Ember", kind: "gather", icon: "🔥", blurb: "Burn wood you could have fletched. Essence vs arrows is a real fork." },
   { id: "hearth", name: "Hearth", kind: "artisan", icon: "🍳", blurb: "Cook or starve. Combat without food is a dare, not a strategy." },
-  { id: "anvil", name: "Anvil", kind: "artisan", icon: "⚒️", blurb: "Smelt and hammer. Weapon jobs are different fights, not a ladder.", unlock: { skill: "vein", level: 5 } },
+  { id: "anvil", name: "Anvil", kind: "artisan", icon: "⚒️", blurb: "Smelt and hammer. Weapon jobs are different fights, not a ladder.", unlock: { skill: "vein", level: 2 } },
   { id: "fletch", name: "Fletch", kind: "artisan", icon: "🏹", blurb: "Bows eat the same logs Ember wants.", unlock: { skill: "timber", level: 8 } },
   { id: "loom", name: "Loom", kind: "artisan", icon: "🧵", blurb: "Hide armor for Mark. You will feel naked in plate against weavers.", unlock: { kills: 8 } },
   { id: "sigil", name: "Sigil", kind: "artisan", icon: "✦", blurb: "Runes from essence. No essence, no Weave.", unlock: { skill: "ember", level: 10 } },
@@ -118,7 +118,7 @@ export function buildContent() {
   });
 
   TIER_NAMES.forEach((tier, t) => {
-    const req = t >= 13 ? 120 : t >= 12 ? 112 : t >= 11 ? 105 : Math.min(1 + t * 8, 99);
+    const req = t <= 10 ? Math.min(1 + t * 8, 99) : t === 11 ? 93 : t === 12 ? 106 : 120;
     const val = Math.round(4 * Math.pow(1.55, t));
     const time = 7200 + t * 960;
 
@@ -214,7 +214,7 @@ export function buildContent() {
       });
       if (w.name !== "Longbow") {
         actions[`smith-${id}`] = {
-          id: `smith-${id}`, skill: "anvil", name: `Forge ${tier} ${w.name}`, level: req + (w.style === "might" ? 0 : 2),
+          id: `smith-${id}`, skill: "anvil", name: `Forge ${tier} ${w.name}`, level: Math.min(MAX_LEVEL, req + (w.style === "might" ? 0 : 2)),
           time: 6200 + t * 280, xp: 22 + t * 14, masteryId: `smith-${id}`, category: "smith",
           inputs: [{ item: bar, qty: 2 + Math.floor(t / 4) }],
           outputs: [{ item: id, min: 1, max: 1 }],
@@ -276,7 +276,7 @@ export function buildContent() {
       desc: "All-style jewelry. Small, always relevant."
     });
     actions[`loom-${amulet}`] = {
-      id: `loom-${amulet}`, skill: "loom", name: `Set ${tier} Amulet`, level: Math.min(99, req + 4),
+      id: `loom-${amulet}`, skill: "loom", name: `Set ${tier} Amulet`, level: req,
       time: 6400, xp: 24 + t * 12, masteryId: `loom-${amulet}`,
       inputs: [{ item: t < 8 ? `gem-${Math.min(t, 7)}` : "essence", qty: 1 }, { item: "thread", qty: 2 }],
       outputs: [{ item: amulet, min: 1, max: 1 }]
@@ -290,7 +290,7 @@ export function buildContent() {
       outputs: [{ item: arrow, min: 12 + t * 2, max: 18 + t * 2 }]
     };
     actions[`fletch-bow-${t}`] = {
-      id: `fletch-bow-${t}`, skill: "fletch", name: `Till ${tier} Longbow`, level: req + 1,
+      id: `fletch-bow-${t}`, skill: "fletch", name: `Fletch ${tier} Longbow`, level: Math.min(MAX_LEVEL, req + 1),
       time: 6200, xp: 20 + t * 13, masteryId: `fletch-bow-${t}`,
       inputs: [{ item: log, qty: 2 }, { item: "thread", qty: 1 }],
       outputs: [{ item: idify(`${tier}-longbow`), min: 1, max: 1 }]
@@ -353,14 +353,17 @@ export function buildContent() {
     { id: "shop-bank-tab", item: null, effect: "bankTab", cost: 2500, repeatable: true, max: 8, name: "Bank Tab", desc: "Another named bank tab." },
     { id: "shop-plot", item: null, effect: "plot", cost: 1200, repeatable: true, max: 12, name: "Soil Plot", desc: "Another farming plot." },
     { id: "shop-pen", item: null, effect: "pen", cost: 1800, repeatable: true, max: 8, name: "Ranch Pen", desc: "Another drove pen." },
-    { id: "shop-eat", item: null, effect: "autoEat", cost: 5000, name: "Auto-Eat Threshold", desc: "Raise auto-eat from 40% to 60% vitality." },
+    { id: "shop-eat", item: null, effect: "autoEat", cost: 5000, max: 1, name: "Auto-Eat Threshold", desc: "Raise auto-eat from 50% to 60% vitality." },
     { id: "shop-eat2", item: null, effect: "autoEat2", cost: 40000, name: "Auto-Eat Mastery", desc: "Auto-eat at 75% and 8% extra healing." },
     { id: "shop-loadout", item: null, effect: "loadout", cost: 8000, repeatable: true, max: 5, name: "Gear Loadout", desc: "Save another equipment set." },
     { id: "shop-offline", item: null, effect: "offlineHours", cost: 15000, name: "Deep Rest", desc: "Offline cap 18 → 24 hours." },
     { id: "shop-key", item: "dungeon-key", qty: 1, cost: 400, repeatable: true, name: "Citadel Key", desc: "Spend one to enter a dungeon." },
     { id: "shop-compost", item: "compost", qty: 8, cost: 60, repeatable: true, name: "Dusk Compost", desc: "Eight bags. Soil identity is compost, not another timer." },
     { id: "shop-fodder", item: "fodder", qty: 8, cost: 50, repeatable: true, name: "Pen Fodder", desc: "Feed the drove. Collect without feed is a thin faucet." },
-    { id: "shop-slots", item: null, effect: "slots", cost: 400, repeatable: true, max: 20, name: "Bank Slots", desc: "+6 unique stacks. Full banks halt crafts — this is the Melvor tax." }
+    { id: "shop-slots", item: null, effect: "slots", cost: 400, repeatable: true, max: 20, name: "Bank Slots", desc: "+6 unique stacks. Full banks halt crafts — this is the Melvor tax." },
+    { id: "shop-thread", item: "thread", qty: 12, cost: 80, repeatable: true, name: "Silver Thread Pack", desc: "Loom binder. Fletch and hidework starve without it." },
+    { id: "shop-feather", item: "feather", qty: 20, cost: 70, repeatable: true, name: "Gloam Feather Pack", desc: "Fletching shafts. Trawl snags a few; the stall is the faucet." },
+    { id: "shop-bounty-pack", item: "bounty-token", qty: 4, cost: 220, repeatable: true, name: "Bounty Token Pack", desc: "Spend tokens on rerolls and this stall — contracts are not a dead currency." }
   );
 
   addItem({
@@ -430,14 +433,14 @@ export function buildContent() {
       const t = Math.min(13, Math.floor(ai * 1.1 + mi * 0.3));
       const id = idify(`${area.name}-${nm}`);
       const hp = 12 + ai * 18 + mi * 8;
-      const maxHit = (ai === 0 ? 5 : 2) + ai * 3 + mi * 2 + (mi === 5 ? 6 : 0);
+      const maxHit = (ai === 0 && mi === 5) ? 6 : (ai === 0 ? 5 : 2) + ai * 3 + mi * 2 + (mi === 5 ? 6 : 0);
       const acc = 4 + ai * 7;
       const eva = 4 + ai * 6;
       const style = mi % 3 === 0 ? "might" : mi % 3 === 1 ? "mark" : "weave";
       monsters[id] = {
         id, name: nm, area: area.name, hp, maxHit, acc, eva, style, interval: 2800 + (mi % 3) * 400,
         def: 2 + ai * 4, slayerReq: area.slayer, tier: t,
-        special: mi === 5 ? "burst" : mi === 3 ? "poison" : mi === 1 ? "drain" : null,
+        special: (ai === 0 && mi === 5) ? "drain" : mi === 5 ? "burst" : mi === 3 ? "poison" : mi === 1 ? "drain" : null,
         burstMul: 2.4,
         xp: { might: 7 + ai * 4, guard: 7 + ai * 4, vitality: 5 + ai * 3, mark: 7 + ai * 4, weave: 7 + ai * 4 },
         drops: [
@@ -454,7 +457,7 @@ export function buildContent() {
       };
       mids.push(id);
     });
-    areas.push({ id: idify(area.name), name: area.name, slayer: area.slayer, monsters: mids, desc: `Combat fields. Slayer ${area.slayer}+ recommended.` });
+    areas.push({ id: area.name === "The Last Page" ? "last-page-fields" : idify(area.name), name: area.name, slayer: area.slayer, monsters: mids, desc: `Combat fields. Slayer ${area.slayer}+ recommended.` });
   });
 
   const dungeonDefs = [
@@ -472,14 +475,16 @@ export function buildContent() {
   dungeonDefs.forEach((d, di) => {
     const seq = [];
     const used = new Set();
+    const eligible = areas.filter((a) => a.slayer <= d.req);
+    const poolAreas = eligible.length ? eligible : areas.slice(0, 1);
     for (let f = 0; f < d.floors - 1; f++) {
-      const start = Math.min(areas.length - 1, Math.floor(di * 1.3 + f * 0.7));
+      const start = Math.min(poolAreas.length - 1, Math.floor(f * 0.55));
       let pick = null;
-      for (let ai = start; ai < areas.length && !pick; ai++) {
-        pick = areas[ai].monsters.find((id) => !used.has(id)) || null;
+      for (let ai = start; ai < poolAreas.length && !pick; ai++) {
+        pick = poolAreas[ai].monsters.find((id) => !used.has(id)) || null;
       }
-      if (!pick) pick = areas.flatMap((a) => a.monsters).find((id) => !used.has(id));
-      if (!pick) pick = areas[Math.min(areas.length - 1, di)].monsters[0];
+      if (!pick) pick = poolAreas.flatMap((a) => a.monsters).find((id) => !used.has(id));
+      if (!pick) pick = poolAreas[0].monsters[f % poolAreas[0].monsters.length];
       used.add(pick);
       seq.push(pick);
     }
@@ -522,7 +527,7 @@ export function buildContent() {
     { id: "gust-fan", name: "Gust Fan", level: 8, runes: { "rune-gust": 2 }, maxHit: 7, xp: 10, tag: "air", desc: "Cheap and a little faster soul." },
     { id: "ember-core", name: "Ember Core", level: 20, runes: { "rune-ember": 3, "rune-stone": 1 }, maxHit: 13, xp: 18, tag: "fire", desc: "Heavier burn. Eats ember runes." },
     { id: "tide-lash", name: "Tide Lash", level: 32, runes: { "rune-tide": 3, "rune-mind": 1 }, maxHit: 11, xp: 18, tag: "water", desc: "Ward plus a respectable slap." },
-    { id: "stone-wall", name: "Stone Wall", level: 44, runes: { "rune-stone": 2, "rune-mind": 2 }, maxHit: 6, xp: 16, tag: "earth", desc: "Low hit, extra defence feeling via ward stacks." },
+    { id: "stone-wall", name: "Stone Wall", level: 44, runes: { "rune-stone": 2, "rune-mind": 2 }, maxHit: 6, xp: 16, tag: "ward", desc: "Low hit. Stacks a tide-style ward (next blow against you is cut)." },
     { id: "mind-spike", name: "Mind Spike", level: 48, runes: { "rune-mind": 4 }, maxHit: 15, xp: 22, tag: "void", desc: "Pure mind. Ignores a sliver of defence." },
     { id: "blood-rain", name: "Blood Rain", level: 64, runes: { "rune-blood": 3, "rune-ember": 1 }, maxHit: 16, xp: 32, tag: "blood", desc: "Leech that costs you if you go dry." },
     { id: "void-veil", name: "Void Veil", level: 78, runes: { "rune-void": 3, "rune-mind": 2 }, maxHit: 20, xp: 40, tag: "void", desc: "Defence ignore. The expensive cousin of Needle." },
@@ -633,16 +638,16 @@ export function buildContent() {
         skill: sk.id,
         need,
         bonus: guildBonus(sk.kind, i),
-        desc: `Complete ${need.toLocaleString()} ${sk.name} actions (kills, for war-arts).`
+        desc: `Complete ${need.toLocaleString()} ${sk.name} ${sk.kind === "combat" ? "kills" : "actions"}.`
       });
     }
     guildTasks[sk.id] = tasks;
   });
 
   quests.push(
-    { id: "q-wake", name: "Chop three groves", how: "Open Timber. Click Warding Choir. Wait until 3/3.", desc: "Step 1: chop Drift groves on Timber.", req: [{ type: "action", id: "timber-0", count: 3 }], reward: { coins: 40, xp: { timber: 30 }, items: [{ id: "drift-hatchet", qty: 1 }] } },
-    { id: "q-fire", name: "Burn three piles", how: "Open Ember. Burn Drift logs you chopped. Wait until 3/3.", desc: "Step 2: Ember turns logs into ash for later runes.", req: [{ type: "action", id: "ember-0", count: 3 }], reward: { coins: 40, xp: { ember: 40 }, items: [{ id: "food-0", qty: 12 }] } },
-    { id: "q-fish", name: "Catch four fish", how: "Open Trawl. Click the first Drift net.", desc: "Step 3: raw fish must be cooked before it heals.", req: [{ type: "action", id: "trawl-0", count: 4 }], reward: { coins: 50, items: [{ id: "drift-rod", qty: 1 }] } },
+    { id: "q-wake", name: "Chop three groves", how: "Open Timber. Click the first Drift grove. Wait until 3/3.", desc: "Step 1: chop Drift groves on Timber.", req: [{ type: "action", id: "timber-0", count: 3 }], reward: { coins: 40, xp: { timber: 30 }, items: [{ id: "drift-hatchet", qty: 1 }, { id: "seed-0", qty: 3 }] } },
+    { id: "q-fire", name: "Burn three piles", how: "Open Ember. Burn Drift logs you chopped. Wait until 3/3.", desc: "Step 2: Ember turns logs into ash for later runes.", req: [{ type: "action", id: "ember-0", count: 3 }], reward: { coins: 40, xp: { ember: 40 }, items: [{ id: "ashes", qty: 8 }] } },
+    { id: "q-fish", name: "Catch four fish", how: "Open Trawl. Click the first Drift net.", desc: "Step 3: raw fish must be cooked before it heals.", req: [{ type: "action", id: "trawl-0", count: 4 }], reward: { coins: 50, items: [{ id: "drift-rod", qty: 1 }, { id: "feather", qty: 12 }] } },
     { id: "q-cook", name: "Cook four fish", how: "Open Hearth. Cook the Drift catch sitting in the vault.", desc: "Step 4: food is what keeps you alive in a fight.", req: [{ type: "action", id: "cook-0", count: 4 }], reward: { coins: 50, items: [{ id: "food-0", qty: 24 }] } },
     { id: "q-blood", name: "Kill four dock foes", how: "Open Might. Hunt Ash Mite in Cinder Docks. Food is already equipped.", desc: "Step 5: fight until 4 kills. Halt if you were chopping.", req: [{ type: "kills", area: "Cinder Docks", count: 4 }], reward: { coins: 80, xp: { might: 80, vitality: 80 }, items: [{ id: "dock-warden", qty: 1 }, { id: "potion-0", qty: 3 }, { id: "hide", qty: 4 }, { id: "dungeon-key", qty: 1 }] } },
     { id: "q-anvil", name: "Open the Vein", desc: "Mine Drift ore, smelt it, and hammer a saber. The anvil is the spine.", req: [{ type: "action", id: "vein-0", count: 6 }, { type: "action", id: "smelt-0", count: 3 }, { type: "action", id: "smith-drift-saber", count: 1 }], reward: { coins: 120, items: [{ id: "copper-pick", qty: 1 }, { id: "thread", qty: 6 }] } },

@@ -1,4 +1,4 @@
-import { CONTENT, skillLevel, addXp, addItem, takeItem, bankCount, log, sumGear, recalcHp, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses, stashItem } from "./state.js";
+import { CONTENT, skillLevel, addXp, addItem, takeItem, bankCount, log, sumGear, recalcHp, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses, stashItem, skillLocked } from "./state.js";
 import { checkQuests } from "./quests.js";
 
 const PRAYER_CAP = 2;
@@ -13,12 +13,17 @@ const STYLE_BEATS = { might: "mark", mark: "weave", weave: "might" };
 export function startFight(state, monsterId, opts = {}) {
   const m = CONTENT.monsters[monsterId];
   if (!m) return "No such foe.";
+  if (m.dungeonOnly && !opts.dungeon) return "That closer only exists inside its dungeon.";
   if (!state.equipment.weapon) return "Equip a weapon.";
-  if ((m.slayerReq || 0) > skillLevel(state, "bounty") && !opts.dungeon && !opts.respawn && !opts.chain) {
-    return `Bounty ${m.slayerReq} required.`;
+  const heldStyle = CONTENT.items[state.equipment.weapon]?.style;
+  if (heldStyle && skillLocked(state, heldStyle) && !opts.respawn && !opts.chain) {
+    return `${heldStyle} is still locked.`;
   }
-  const foodN = bankCount(state, state.combat.foodId);
-  const heal = CONTENT.items[state.combat.foodId]?.heal || 0;
+  if ((m.slayerReq || 0) > skillLevel(state, "bounty") && !opts.dungeon && !opts.respawn && !opts.chain) {
+    return `Slayer ${m.slayerReq} required (Bounty skill).`;
+  }
+  const foodN = bankCount(state, state.combat.foodId) + bankCount(state, state.combat.foodId2);
+  const heal = Math.max(CONTENT.items[state.combat.foodId]?.heal || 0, CONTENT.items[state.combat.foodId2]?.heal || 0);
   if (m.maxHit >= state.combat.maxHp * 0.6) {
     combatLog(state, `GEAR CHECK: ${m.name} can chunk ${m.maxHit} of your ${state.combat.maxHp} HP.`);
   }
@@ -33,10 +38,11 @@ export function startFight(state, monsterId, opts = {}) {
   state.combat.monsterHp = hp;
   state.combat.monsterMaxHp = hp;
   state.combat.area = m.area;
-  state.combat.shred = 0;
+  state.combat.shred = opts.chain ? (state.combat.shred || 0) : 0;
   state.combat.bleed = 0;
   state.combat.nextBleedAt = 0;
   state.combat.dryUntil = 0;
+  if (!opts.chain) state.combat.ward = 0;
   const now = state.now || 0;
   if (!opts.chain) {
     state.combat.nextHitAt = now + playerInterval(state);
@@ -102,6 +108,8 @@ export function stopFight(state, reason = "abandon") {
   state.combat.dungeonIndex = 0;
   state.combat.shred = 0;
   state.combat.bleed = 0;
+  state.combat.ward = 0;
+  state.combat.poison = 0;
 }
 
 export function playerInterval(state) {
@@ -124,6 +132,7 @@ export function combatTick(state, ms) {
   regenVow(state, ms);
   tickBleed(state, now);
   tickPoison(state, now);
+  autoEat(state, { after: true });
   if (!state.combat.fighting) return;
   if (now >= (state.combat.stunUntil || 0) && now >= state.combat.nextHitAt) {
     playerHit(state);
@@ -226,14 +235,29 @@ export function playerStats(state) {
   const defMul = (ps.defMul || 1) * (pot.defMul || 1) * (1 + (cb.defMul || 0));
   const m = CONTENT.monsters[state.combat.monsterId];
   const tri = (state.combat.fighting && m) ? triangleMods(style, m.style, ps.triangle || 0) : { acc: 1, dmg: 1, taken: 1, edge: "even" };
+  const setBonus = 1 + gearSetBonus(state);
   return {
     style,
     acc: acc * accMul * tri.acc,
-    power: Math.max(1, power) * pwrMul * tri.dmg,
+    power: Math.max(1, power) * pwrMul * tri.dmg * setBonus,
     def: def * defMul,
     takenMul: ps.takenMul || 1,
+    setBonus,
     ps, pot, cb, ch, tri
   };
+}
+
+function gearSetBonus(state) {
+  const counts = {};
+  for (const slot of Object.keys(state.equipment || {})) {
+    const it = CONTENT.items[state.equipment[slot]];
+    if (it?.tier == null) continue;
+    const key = `${it.tier}:${it.style || "plate"}`;
+    counts[key] = (counts[key] || 0) + 1;
+  }
+  let best = 0;
+  for (const n of Object.values(counts)) if (n > best) best = n;
+  return best >= 6 ? 0.2 : best >= 4 ? 0.15 : best >= 3 ? 0.08 : 0;
 }
 
 function hitChance(att, eva) {
@@ -321,7 +345,7 @@ function playerHit(state, echoFollow = false) {
     consumeRunes(state, sp, preserve);
   }
 
-  if (!echoFollow) consumePotionCharge(state);
+  if (!echoFollow) consumePotionCharge(state, "hit");
 
   let eva = m.eva * (1 - (state.combat.shred || 0) * 0.08);
   let ignoreDef = 0;
@@ -331,6 +355,22 @@ function playerHit(state, echoFollow = false) {
   }
   const sp = CONTENT.spells.find((s) => s.id === state.combat.spell);
   if (st.style === "weave" && sp?.tag === "void") ignoreDef = Math.max(ignoreDef, 0.2);
+
+  let specFired = false;
+  if (!echoFollow && state.combat.useSpec !== false && (state.combat.spec || 0) >= 50) {
+    state.combat.spec -= 50;
+    specFired = true;
+    const specName = w?.special || "surge";
+    if (specName === "pierce") ignoreDef = Math.max(ignoreDef, 0.7);
+    if (specName === "riposte") state.combat.riposteArmed = true;
+    if (specName === "shred") state.combat.shred = Math.min(SHRED_MAX, (state.combat.shred || 0) + 2);
+    if (specName === "bleed") {
+      state.combat.bleed = Math.min(8, (state.combat.bleed || 0) + 3);
+      state.combat.nextBleedAt = now + BLEED_TICK_MS;
+    }
+  } else if (!echoFollow) {
+    state.combat.spec = Math.min(100, (state.combat.spec || 0) + 14);
+  }
 
   const chance = hitChance(st.acc, Math.max(1, eva));
   if (Math.random() > chance) {
@@ -348,50 +388,23 @@ function playerHit(state, echoFollow = false) {
   let dmg = 1 + Math.floor(Math.random() * Math.max(1, maxHit));
 
   const notes = [];
-  if (!echoFollow) {
-    state.combat.spec = state.combat.spec || 0;
-    if (state.combat.useSpec !== false && state.combat.spec >= 50) {
-      state.combat.spec -= 50;
-      const specName = w?.special || "surge";
-      if (specName === "riposte") {
-        notes.push("special: riposte");
-        riposte(state, m, st, "special");
-        if (!state.combat.fighting) return;
-      } else if (specName === "shred") {
-        state.combat.shred = Math.min(SHRED_MAX, (state.combat.shred || 0) + 2);
-        notes.push("special: shred");
-      } else if (specName === "bleed") {
-        state.combat.bleed = (state.combat.bleed || 0) + 3;
-        notes.push("special: bleed");
-      } else if (specName === "pierce") {
-        dmg = Math.floor(dmg * 1.25);
-        ignoreDef = Math.max(ignoreDef, 0.7);
-        notes.push("special: pierce");
-      } else if (specName === "echo") {
-        notes.push("special: echo");
-        combatLog(state, "Special — echo.");
-        playerHit(state, true);
-        if (!state.combat.fighting) return;
-      } else {
-        dmg = Math.floor(dmg * 1.35);
-        notes.push("special");
-      }
-    } else {
-      state.combat.spec = Math.min(100, state.combat.spec + 14);
-    }
-  }
-  if (w?.special === "pierce") {
-    dmg = Math.floor(dmg * 1.12);
-    notes.push("pierce");
-  }
-  if (w?.special === "shred") {
+  const specName = w?.special;
+  if (specFired) notes.push(`special: ${specName || "surge"}`);
+  if (specName === "pierce" && specFired) dmg = Math.floor(dmg * 1.25);
+  if (specName === "shred" && !specFired) {
     state.combat.shred = Math.min(SHRED_MAX, (state.combat.shred || 0) + 1);
     notes.push(`shred ${state.combat.shred}`);
   }
-  if (w?.special === "bleed" && Math.random() < 0.42) {
+  if (specName === "bleed" && !specFired && Math.random() < 0.42) {
     state.combat.bleed = Math.min(8, (state.combat.bleed || 0) + 2);
-    if (!state.combat.nextBleedAt) state.combat.nextBleedAt = now + BLEED_TICK_MS;
+    state.combat.nextBleedAt = now + BLEED_TICK_MS;
     notes.push(`bleed ${state.combat.bleed}`);
+  }
+  if (specName === "echo" && specFired) {
+    notes.push("echo");
+    combatLog(state, "Special — echo (spends ammo/runes).");
+    playerHit(state, false);
+    if (!state.combat.fighting) return;
   }
   if (st.style === "weave" && sp?.tag === "star") {
     const splash = Math.max(1, Math.floor(dmg * 0.4));
@@ -403,8 +416,8 @@ function playerHit(state, echoFollow = false) {
     if (!state.combat.nextBleedAt) state.combat.nextBleedAt = now + BLEED_TICK_MS;
     notes.push("ember burn");
   }
-  if (st.style === "weave" && sp?.tag === "water") {
-    state.combat.ward = (state.combat.ward || 0) + 1;
+  if (st.style === "weave" && (sp?.tag === "water" || sp?.tag === "ward")) {
+    state.combat.ward = Math.min(3, (state.combat.ward || 0) + 1);
     notes.push("tide ward");
   }
 
@@ -421,14 +434,7 @@ function playerHit(state, echoFollow = false) {
   const extra = notes.length ? ` (${notes.join(", ")})` : "";
   combatLog(state, `${echoFollow ? "Echo hits" : "Hit"} ${m.name} for ${dmg}${triTag(st.tri.edge)}${extra}.`);
 
-  if (state.combat.monsterHp <= 0) {
-    kill(state, m);
-    return;
-  }
-  if (!echoFollow && w?.special === "echo" && Math.random() < 0.28) {
-    combatLog(state, "Echo — the crozier speaks twice.");
-    playerHit(state, true);
-  }
+  if (state.combat.monsterHp <= 0) kill(state, m);
 }
 
 function tickBleed(state, now) {
@@ -477,7 +483,10 @@ function enemyHit(state) {
   const chance = hitChance(m.acc * (st.tri.taken > 1 ? 1.08 : st.tri.taken < 1 ? 0.92 : 1), st.def);
   if (Math.random() > chance) {
     combatLog(state, `${m.name} misses${triTag(st.tri.edge)}.`);
-    if (w?.special === "riposte" && Math.random() < 0.4) riposte(state, m, st, "whiff");
+    if (w?.special === "riposte" && (state.combat.riposteArmed || Math.random() < 0.4)) {
+      state.combat.riposteArmed = false;
+      riposte(state, m, st, "whiff");
+    }
     return;
   }
 
@@ -523,7 +532,7 @@ function enemyHit(state) {
     die(state);
     return;
   }
-  if (w?.special === "riposte" && Math.random() < 0.32) riposte(state, m, st, "afterblow");
+  autoEat(state, { after: true, force: state.combat.hp <= (m.maxHit + 1) });
 }
 
 function kill(state, m) {
@@ -551,7 +560,7 @@ function kill(state, m) {
       state.bounty.streak += 1;
       state.quests.stats.bounties += 1;
       log(state, `Bounty complete. +${tokens} tokens.`);
-      rollBounty(state);
+      rollBounty(state, { free: true });
     }
   }
   log(state, `${m.name} falls.`);
@@ -589,6 +598,7 @@ function kill(state, m) {
 
 function die(state) {
   state.stats.deaths += 1;
+  const foe = CONTENT.monsters[state.combat.monsterId];
   const tax = Math.max(3, Math.floor(state.coins * 0.12));
   if (state.coins >= tax) {
     state.coins -= tax;
@@ -601,20 +611,26 @@ function die(state) {
     log(state, `You fall on ${d.name} floor ${floor}/${d.sequence.length}. The run is dust.`);
     combatLog(state, `Death — ${d.name} reset.`);
     state.combat.dungeonDeaths = (state.combat.dungeonDeaths || 0) + 1;
+    state._deathSheet = { dungeon: d.name, floor, of: d.sequence.length, foe: foe?.name || "a closer", t: Date.now() };
   } else {
     log(state, "You fall. The citadel drags you back.");
     combatLog(state, "You fall.");
+    state._deathSheet = { dungeon: null, foe: foe?.name || "a foe", t: Date.now() };
   }
   state.combat.poison = 0;
   state.combat.bleed = 0;
   state.combat.shred = 0;
   state.combat.eatWound = 0;
+  state._uiDirty = true;
   stopFight(state, "death");
 }
 
-function autoEat(state) {
-  const th = state.combat.autoEat;
-  if (state.combat.hp > state.combat.maxHp * th) return;
+function autoEat(state, opts = {}) {
+  const m = CONTENT.monsters[state.combat.monsterId];
+  const lethal = m ? m.maxHit + 1 : 0;
+  const thHp = state.combat.maxHp * (state.combat.autoEat || 0.5);
+  const need = opts.force || state.combat.hp <= Math.max(thHp, lethal);
+  if (!need) return;
   const ids = [state.combat.foodId, state.combat.foodId2].filter(Boolean);
   let food = ids.find((id) => bankCount(state, id) > 0);
   if (!food) {
@@ -634,6 +650,7 @@ function autoEat(state) {
     combatLog(state, `Auto-eat ${it.name} +${heal} (drain-sick).`);
   }
   state.combat.hp = Math.min(state.combat.maxHp, state.combat.hp + heal);
+  if (opts.after && state.combat.hp <= lethal) autoEat(state, { force: true });
 }
 
 function combatLog(state, msg) {
@@ -649,11 +666,20 @@ function combatLog(state, msg) {
   }
 }
 
-export function consumePotionCharge(state) {
+export function consumePotionCharge(state, why = "any") {
   if (!state.combat.potionId || state.combat.potionCharges <= 0) return;
+  const it = CONTENT.items[state.combat.potionId];
+  const pot = it?.potion || {};
+  const combatKeys = ["accMul", "strMul", "rangedMul", "magicMul", "defMul", "eatBoost"];
+  const gatherKeys = ["speedMul", "rareMul"];
+  const keys = Object.keys(pot);
+  const isCombat = keys.some((k) => combatKeys.includes(k));
+  const isGather = keys.some((k) => gatherKeys.includes(k));
+  if (why === "hit" && !isCombat) return;
+  if (why === "action" && !isGather) return;
   state.combat.potionCharges -= 1;
   if (state.combat.potionCharges <= 0) {
-    log(state, `${CONTENT.items[state.combat.potionId].name} empty.`);
+    log(state, `${it?.name || "Draught"} empty.`);
     state.combat.potionId = null;
   }
 }
@@ -712,6 +738,7 @@ export function unequip(state, slot) {
     state.tools[slot] = null;
     return null;
   }
+  if (slot === "weapon" && state.combat.fighting) return "Cannot sheathe mid-fight. Halt first.";
   const id = state.equipment[slot];
   if (!id) return null;
   if (!addItem(state, id, 1)) return "Vault full — free a stack before unequipping.";
@@ -726,6 +753,8 @@ function grantKillXp(state, m) {
   const ups = addXp(state, skill, (m.xp[skill] || 8) * 3 * pet);
   addXp(state, "vitality", (m.xp.vitality || 4) * 2);
   addXp(state, "guard", Math.floor((m.xp.guard || 4) * 0.7));
+  bumpGuild(state, "vitality");
+  bumpGuild(state, "guard");
   state.skills[skill].actions += 1;
   bumpGuild(state, skill);
   const sp = CONTENT.spells.find((s) => s.id === state.combat.spell);
@@ -745,9 +774,9 @@ function bumpGuild(state, skill) {
   }
 }
 
-export function rollBounty(state) {
+export function rollBounty(state, opts = {}) {
   const had = state.bounty?.monsterId;
-  if (had) {
+  if (had && !opts.free) {
     if (!takeItem(state, "bounty-token", 1)) return "Rerolling a live contract costs 1 bounty token.";
   }
   const blocked = new Set(state.bounty?.block || []);
@@ -768,6 +797,7 @@ export function rollBounty(state) {
 }
 
 export function swapWeaponStyle(state, style) {
+  if (skillLocked(state, style)) return `${style} is still locked.`;
   const held = state.equipment.weapon;
   const pool = Object.keys(state.bank).concat(held ? [held] : []);
   const best = pool
@@ -802,15 +832,18 @@ export function buryBones(state) {
   state.combat.vow = Math.min(state.combat.maxVow, state.combat.vow);
   log(state, `Buried ${n} bones. Vow +${restore}, cap ${state.combat.maxVow}.`);
   notes.forEach((x) => log(state, `Level up: ${x}`));
+  checkQuests(state);
   return null;
 }
 
 function rollCombatPet(state) {
-  const style = styleOf(state);
-  const pet = CONTENT.pets.find((p) => p.skill === style);
-  if (!pet || state.pets[pet.id]) return;
-  if (Math.random() < pet.chance) {
-    state.pets[pet.id] = true;
-    log(state, `Pet found: ${pet.name}`);
+  const skills = [styleOf(state), "guard", "vitality", "vow", "bounty"];
+  for (const skill of skills) {
+    const pet = CONTENT.pets.find((p) => p.skill === skill);
+    if (!pet || state.pets[pet.id]) continue;
+    if (Math.random() < pet.chance) {
+      state.pets[pet.id] = true;
+      log(state, `Pet found: ${pet.name}`);
+    }
   }
 }

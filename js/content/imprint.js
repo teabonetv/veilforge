@@ -80,6 +80,8 @@ function roman(n) {
 }
 
 export function modelKindForItem(it) {
+  if (it.id === "thread") return "thread";
+  if (it.id === "feather") return "feather";
   if (it.id === "coins") return "coins";
   if (it.id === "bones") return "bones";
   if (it.id === "hide") return "hide";
@@ -194,6 +196,15 @@ export function imprintContent(content) {
       row.hue = h % 360;
       row.model = { kind: row.skill ? "mark" : "token", seed: h, hue: row.hue, eid: row.id };
     }
+  }
+
+  const actName = (id) => content.actions[id]?.name || id;
+  for (const q of content.quests || []) {
+    if (q.id === "q-wake") q.how = `Open Timber. Click ${actName("timber-0")}. Wait until 3/3.`;
+    if (q.id === "q-fire") q.how = `Open Ember. Click ${actName("ember-0")}. Wait until 3/3.`;
+    if (q.id === "q-fish") q.how = `Open Trawl. Click ${actName("trawl-0")}.`;
+    if (q.id === "q-cook") q.how = `Open Hearth. Click ${actName("cook-0")}.`;
+    if (q.id === "q-anvil") q.how = `Vein 2 unlocks Anvil. Mine ${actName("vein-0")}, smelt, then forge the Drift saber.`;
   }
 
   return content;

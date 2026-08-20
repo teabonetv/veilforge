@@ -1,6 +1,6 @@
 import { escapeHtml } from "../util/text.js";
 import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap, stashItem, upcomingUnlocks, bankValue, masteryBonus } from "../engine/state.js";
-import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems } from "../engine/sim.js";
+import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems, setUseCompost } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval, swapWeaponStyle } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
@@ -62,11 +62,18 @@ export function bindUI(ctx) {
     }
     if (e.target.dataset.act === "chart-slot") {
       const i = +e.target.dataset.i;
-      state.chart.active[i] = e.target.value;
+      state.chart.active[i] = e.target.value || null;
     }
     if (e.target.dataset.act === "food") state.combat.foodId = e.target.value;
     if (e.target.dataset.act === "food2") state.combat.foodId2 = e.target.value || null;
     if (e.target.dataset.act === "spell") state.combat.spell = e.target.value;
+    if (e.target.dataset.act === "char-name") {
+      state.name = e.target.value.slice(0, 24);
+    }
+    if (e.target.dataset.act === "set-toasts") state.settings.toasts = e.target.checked;
+    if (e.target.dataset.act === "set-motion") state.settings.reducedMotion = e.target.checked;
+    if (e.target.dataset.act === "set-clog") state.settings.showCombatLog = e.target.checked;
+    if (e.target.dataset.act === "compost") setUseCompost(state, e.target.checked);
     if (e.target.dataset.act === "tab-name") {
       state.bankTabs[+e.target.dataset.i] = e.target.value;
     }
@@ -79,6 +86,7 @@ function handle(ctx, act, arg, el) {
   switch (act) {
     case "skill":
       selectedSkill = arg;
+      setDesk("workshop");
       ctx.render();
       break;
     case "checkpoint": err(spendCheckpoint(state, arg)); ctx.render(); break;
@@ -93,15 +101,44 @@ function handle(ctx, act, arg, el) {
       renderLevelModal(ctx);
       break;
     case "start":
+      setDesk("workshop");
       if (state.action?.id === arg) break;
       if (!confirmBusy(ctx, arg, "action", () => { err(startAction(state, arg)); ctx.render(); })) break;
       err(startAction(state, arg)); ctx.render(); break;
-    case "stop": stopAction(state); stopFight(state); ctx.render(); break;
+    case "stop":
+      if (state.combat.fighting || state.action) {
+        confirmHalt(ctx);
+        break;
+      }
+      stopAction(state); stopFight(state); ctx.render(); break;
+    case "spec":
+      state.combat.useSpec = state.combat.useSpec === false;
+      ctx.render();
+      break;
+    case "food-chip":
+      setDesk("workshop");
+      selectedSkill = "might";
+      ctx.render();
+      document.getElementById("food-pick")?.focus();
+      break;
+    case "settings":
+      showSettings(ctx);
+      break;
+    case "death-ack":
+      state._deathSheet = null;
+      ctx.render();
+      break;
+    case "compost":
+      setUseCompost(state, !!el.checked);
+      ctx.render();
+      break;
     case "fight":
+      setDesk("workshop");
       if (state.combat.fighting && state.combat.monsterId === arg) break;
       if (!confirmBusy(ctx, arg, "fight", () => { err(startFight(state, arg)); ctx.render(); })) break;
       err(startFight(state, arg)); ctx.render(); break;
     case "dungeon":
+      setDesk("workshop");
       if (!confirmBusy(ctx, arg, "dungeon", () => { err(startDungeon(state, arg)); ctx.render(); })) break;
       err(startDungeon(state, arg)); ctx.render(); break;
     case "fork-yes": {
@@ -162,9 +199,15 @@ function handle(ctx, act, arg, el) {
     case "export": {
       try {
         const text = ctx.exportSave();
-        navigator.clipboard.writeText(text).then(
-          () => toast(ctx, "Save copied."),
-          () => toast(ctx, "Copy failed — allow clipboard permission, or copy from the prompt.")
+        const blob = new Blob([text], { type: "text/plain" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = "veilforge.veilforge.txt";
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+        navigator.clipboard?.writeText(text).then(
+          () => toast(ctx, "Save downloaded and copied."),
+          () => toast(ctx, "Save downloaded. Clipboard copy needs permission.")
         );
       } catch (e) {
         toast(ctx, e.message || "Export failed.");
@@ -184,7 +227,10 @@ function handle(ctx, act, arg, el) {
       break;
     }
     case "wipe": if (confirm("Reset Veilforge?")) ctx.wipe(); break;
-    case "panel": document.getElementById(arg)?.scrollIntoView({ behavior: "smooth", block: "start" }); break;
+    case "panel":
+      if (arg === "shop") setDesk("workshop");
+      document.getElementById(arg)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      break;
     default: break;
   }
 }
@@ -319,7 +365,7 @@ function renderTop(ctx) {
   if (specEl) {
     const sp = Math.floor(state.combat.spec || 0);
     const on = state.combat.useSpec !== false;
-    specEl.textContent = `Special ${sp}% ${on ? "ON" : "OFF"}`;
+    specEl.textContent = `Special ${sp}% ${on ? "ON" : "OFF"} · ${CONTENT.items[state.equipment.weapon]?.special || "none"}`;
   }
 
   const duel = document.getElementById("duel");
@@ -337,7 +383,7 @@ function renderTop(ctx) {
     document.getElementById("you-swing").style.width = `${duelSwing(now, state.combat.nextHitAt, playerInterval(state))}%`;
     document.getElementById("foe-swing").style.width = `${duelSwing(now, state.combat.enemyNextAt, m.interval)}%`;
     lab.textContent = `Fighting ${m.name} [${CONTENT.items[state.equipment.weapon]?.style || "might"}]`;
-    bar.style.width = `${Math.max(0, 100 * state.combat.monsterHp / m.hp)}%`;
+    bar.style.width = `${duelSwing(now, state.combat.nextHitAt, playerInterval(state))}%`;
     bar.classList.add("combat");
   } else {
     duel?.classList.add("idle");
@@ -364,7 +410,10 @@ function renderTop(ctx) {
   if (commit) {
     if (m) {
       const foodN = bankCount(state, state.combat.foodId);
-      commit.innerHTML = `<b>Committed:</b> fighting ${escapeHtml(m.name)} · ${foodN} food · Halt to leave. Soil/Drove still tick.`;
+      const death = state._deathSheet
+        ? ` <button type="button" data-act="death-ack">You fell${state._deathSheet.dungeon ? ` in ${state._deathSheet.dungeon} (${state._deathSheet.floor}/${state._deathSheet.of})` : ` to ${state._deathSheet.foe}`} — dismiss</button>`
+        : "";
+      commit.innerHTML = `<b>Committed:</b> fighting ${escapeHtml(m.name)} · ${foodN} food · Halt to leave. Soil/Drove still tick.${death}`;
       commit.className = "danger";
     } else if (act) {
       const a = CONTENT.actions[act.id];
@@ -378,7 +427,14 @@ function renderTop(ctx) {
       const xpBits = last?.xp ? `+${last.xp} ${skillName(last.skill)} xp` : "";
       const dripNote = lastBits || xpBits ? ` · Last ${[lastBits, xpBits].filter(Boolean).join(" · ")}` : "";
       const capNote = state._yieldWarn ? ` · ${state._yieldWarn}` : ` · ${outN} ${outNm}${dripNote}`;
-      commit.innerHTML = `<b>Committed:</b> ${escapeHtml(a?.name || act.id)} (${skillName(act.skill)})${capNote}. Switching jobs asks Halt.`;
+      const off = state.lastOffline;
+      const report = off
+        ? ` <button type="button" data-act="offline-ack">Offline: ${off.minutes}m · ${off.job} · ${off.actions} actions — dismiss</button>`
+        : "";
+      const death = state._deathSheet
+        ? ` <button type="button" data-act="death-ack">You fell${state._deathSheet.dungeon ? ` in ${state._deathSheet.dungeon}` : ""} — dismiss</button>`
+        : "";
+      commit.innerHTML = `<b>Committed:</b> ${escapeHtml(a?.name || act.id)} (${skillName(act.skill)})${capNote}. Switching jobs asks Halt.${report}${death}`;
       commit.className = state._yieldWarn ? "danger" : "";
     } else {
       const off = state.lastOffline;
@@ -502,7 +558,7 @@ function confirmBusy(ctx, nextId, kind, fn) {
   el.classList.add("open");
   el.innerHTML = `<div class="sheet"><h3>Halt?</h3>
     <p>You are committed to <strong>${escapeHtml(cur)}</strong>. Switch to <strong>${escapeHtml(nextName)}</strong>?</p>
-    <p class="blurb">Soil and Drove still tick. Everything else waits.</p>
+    <p class="blurb">${state.combat.dungeon ? "Leaving a dungeon abandons the run. The key is already spent." : "Soil and Drove still tick. Everything else waits. One job at a time."}</p>
     <button type="button" data-act="fork-yes">Halt and switch</button>
     <button type="button" data-act="fork-no">Keep this job</button></div>`;
   trapModal(el);
@@ -513,6 +569,41 @@ function hideFork() {
   const el = document.getElementById("fork-modal");
   releaseModal();
   if (el) { el.hidden = true; el.classList.remove("open"); el.innerHTML = ""; }
+}
+
+function confirmHalt(ctx) {
+  const { state } = ctx;
+  const cur = state.combat.fighting
+    ? `fighting ${CONTENT.monsters[state.combat.monsterId]?.name || "a foe"}`
+    : (CONTENT.actions[state.action?.id]?.name || "a craft");
+  forkFn = () => { stopAction(state); stopFight(state); ctx.render(); };
+  const el = document.getElementById("fork-modal");
+  if (!el) { forkFn(); forkFn = null; return; }
+  el.hidden = false;
+  el.classList.add("open");
+  el.innerHTML = `<div class="sheet"><h3>Halt?</h3>
+    <p>Stop <strong>${escapeHtml(cur)}</strong>?</p>
+    <p class="blurb">${state.combat.dungeon ? "Abandoning a dungeon resets every floor. The Citadel Key is gone." : "Soil and Drove still tick. One craft or one war."}</p>
+    <button type="button" data-act="fork-yes">${state.combat.dungeon ? "Abandon the dungeon" : "Halt"}</button>
+    <button type="button" data-act="fork-no">Keep going</button></div>`;
+  trapModal(el);
+}
+
+function showSettings(ctx) {
+  const { state } = ctx;
+  const el = document.getElementById("fork-modal");
+  if (!el) return;
+  forkFn = null;
+  el.hidden = false;
+  el.classList.add("open");
+  el.innerHTML = `<div class="sheet"><h3>Workshop settings</h3>
+    <label>Name <input data-act="char-name" maxlength="24" value="${escapeHtml(state.name || "Aelric")}" /></label>
+    <label><input type="checkbox" data-act="set-toasts" ${state.settings?.toasts !== false ? "checked" : ""} /> Yield toasts</label>
+    <label><input type="checkbox" data-act="set-motion" ${state.settings?.reducedMotion ? "checked" : ""} /> Reduce motion</label>
+    <label><input type="checkbox" data-act="set-clog" ${state.settings?.showCombatLog !== false ? "checked" : ""} /> Combat log</label>
+    <p class="blurb">One job at a time. Halt to switch. Save is local to this browser (and the export file).</p>
+    <button type="button" data-act="fork-no">Close</button></div>`;
+  trapModal(el);
 }
 
 let modalKeyHandler = null;
@@ -580,15 +671,14 @@ function renderLevelModal(ctx) {
   const lines = folded.slice(0, 8).map((e) =>
     `<p><strong>${skillName(e.skill)}</strong> ${e.from} → ${e.to}${e.unlocks?.length ? ` · ${e.unlocks.slice(0, 4).join(", ")}` : ""}</p>`
   ).join("");
-  modal.innerHTML = `<div class="sheet">
+  modal.innerHTML = `<div class="sheet toast-sheet">
     <h3>${skillName(ev.skill)} ${ev.to}</h3>
-    <p>That stretch cost real dusk. The citadel does not mark a ledger this often.</p>
+    <p>That stretch cost real dusk.</p>
     ${lines}
     ${more > 0 ? `<p class="muted">${more} more arts waiting.</p>` : ""}
     <button type="button" data-act="dismiss-level">Continue</button>
     ${folded.length > 1 ? `<button type="button" data-act="dismiss-levels">Dismiss all ${folded.length}</button>` : ""}
   </div>`;
-  trapModal(modal);
 }
 
 function renderCodex(ctx) {
@@ -805,7 +895,7 @@ function renderActions(ctx, skill) {
         <button type="button" class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
           ${glyph(a.model)}
           <strong>${a.name}</strong>
-          <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · ${mast} · CP${cp} · ×${n} done</span>
+          <span>Lv ${a.level} · ${(actionDuration(state, a) / 1000).toFixed(1)}s · ${a.xp} xp · ${mast} · CP${cp} · ×${n} done</span>
           <div class="io">
             ${ins ? `<span class="in">In ${ins}</span>` : `<span class="in">No inputs</span>`}
             ${outs ? `<span class="out">Out ${outs}</span>` : `<span class="out">${a.desc || "No listed outputs"}</span>`}
@@ -859,9 +949,9 @@ function renderSoil(ctx) {
       ${p.ready ? `<button type="button" data-act="harvest" data-arg="${i}">Harvest</button>` : ""}
     </div>`;
   }).join("");
-  return `<p class="blurb">Compost is the identity: plant with a bag in the vault and the plot grows faster and pays more. Pouches from groves open into seeds.</p>
+  return `<p class="blurb">Compost is optional. Tick the box to spend a bag when you plant — faster grow, fatter harvest. Pouches from groves open into seeds.</p>
     ${pouches ? `<button type="button" class="primary" data-act="pouch">Open seed pouch (${pouches})</button>` : ""}
-    <p class="muted">Compost in vault: ${bankCount(state, "compost")} · stall sells bags.</p>
+    <p class="muted"><label><input type="checkbox" data-act="compost" ${state.soil.useCompost ? "checked" : ""} /> Use compost on plant</label> · bags ${bankCount(state, "compost")}</p>
     <div class="plots">${plots}</div>`;
 }
 
@@ -892,7 +982,8 @@ function renderChart(ctx) {
   for (let i = 0; i < state.chart.slots; i++) {
     const cur = state.chart.active[i] || "";
     slots.push(`<select data-act="chart-slot" data-i="${i}">
-      ${CONTENT.constellations.map((c) => `<option value="${c.id}" ${cur === c.id ? "selected" : ""}>${c.name} — ${c.desc || c.skill}</option>`).join("")}
+      <option value="">— empty —</option>
+      ${CONTENT.constellations.map((c) => `<option value="${c.id}" ${cur === c.id ? "selected" : ""}>${c.name} — ${fmtBonus(c.bonus)}</option>`).join("")}
     </select>`);
   }
   const study = CONTENT.constellations.map((c) => {
@@ -911,7 +1002,7 @@ function renderChart(ctx) {
       const on = state.chart.active.includes(c.id);
       const n = state.chart.studied?.[c.id] || 0;
       return `<button type="button" class="card ${on ? "on" : ""}" data-act="start" data-arg="chart-study-${c.id}">
-        <strong>Study ${c.name}</strong><span>Chart xp · ${c.studyTime / 1000}s · insight ${n}${on && n <= 0 ? " · slotted, unarmed" : ""}</span><em>${JSON.stringify(c.bonus)}</em>
+        <strong>Study ${c.name}</strong><span>Chart xp · ${c.studyTime / 1000}s · insight ${n}${on && n <= 0 ? " · slotted, unarmed" : ""}</span><em>${fmtBonus(c.bonus)}</em>
       </button>`;
     }).join("")}</div>${study}`;
 }
@@ -952,8 +1043,8 @@ function renderCombatTheater(ctx) {
     <div>
       <h4>${m.name}</h4>
       ${glyph(m.model, "mico lg")}
-      <div class="bar hp foe"><i style="display:block;height:100%;width:${Math.max(0, 100 * state.combat.monsterHp / m.hp)}%;background:linear-gradient(90deg,#3a2a78,#8b7cff)"></i></div>
-      <p class="hint">${Math.max(0, Math.ceil(state.combat.monsterHp))} / ${m.hp} · incoming ${foeSwing.toFixed(0)}%</p>
+      <div class="bar hp foe"><i style="display:block;height:100%;width:${Math.max(0, 100 * state.combat.monsterHp / (state.combat.monsterMaxHp || m.hp))}%;background:linear-gradient(90deg,#3a2a78,#8b7cff)"></i></div>
+      <p class="hint">${Math.max(0, Math.ceil(state.combat.monsterHp))} / ${state.combat.monsterMaxHp || m.hp} · incoming ${foeSwing.toFixed(0)}%</p>
       <p class="hint">Hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</p>
       <p class="hint">${dun ? `${dun.name} floor ${(state.combat.dungeonIndex || 0) + 1}/${dun.sequence.length}` : m.area}</p>
     </div>
@@ -1000,6 +1091,21 @@ function renderCombatSkill(ctx, id) {
   return theater + renderAreas(ctx);
 }
 
+function fmtBonus(bonus) {
+  if (!bonus) return "";
+  return Object.entries(bonus).map(([k, v]) => {
+    if (typeof v !== "number") return `${k} ${v}`;
+    const pct = Math.abs(v) <= 2 ? `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%` : String(v);
+    return `${k} ${pct}`;
+  }).join(" · ");
+}
+
+function dropLine(m) {
+  const bits = (m.drops || []).slice(0, 6).map((d) => `${Math.round(d.chance * 100)}% ${itemName(d.item)}`);
+  if (m.unique) bits.push(`unique ${Math.round(m.unique.chance * 100)}% ${itemName(m.unique.item)}`);
+  return bits.join(" · ");
+}
+
 function renderAreas(ctx) {
   const { state } = ctx;
   const areas = CONTENT.areas.map((a) => `
@@ -1008,11 +1114,14 @@ function renderAreas(ctx) {
       <div class="grid">${a.monsters.map((id) => {
         const m = CONTENT.monsters[id];
         const on = state.combat.fighting && state.combat.monsterId === id;
-        return `<button type="button" class="card ${on ? "on" : ""}" data-act="fight" data-arg="${id}">
+        const locked = (m.slayerReq || 0) > skillLevel(state, "bounty");
+        return `<button type="button" class="card ${on ? "on" : ""} ${locked ? "locked" : ""}" data-act="fight" data-arg="${id}" ${locked ? "disabled" : ""}>
           ${glyph(m.model)}
           <strong>${m.name}</strong>
-          <span>HP ${m.hp} · hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</span>
+          <span>HP ${m.hp} · hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}${locked ? ` · Bounty ${m.slayerReq}` : ""}</span>
           <em>${m.desc}</em>
+          <em class="sink">${dropLine(m)}</em>
+          ${locked ? `<em class="lock-why">Need Bounty ${m.slayerReq}</em>` : ""}
         </button>`;
       }).join("")}</div>
     </details>`).join("");
@@ -1028,12 +1137,12 @@ function renderAreas(ctx) {
   const foodOpts = Object.keys(state.bank).filter((id) => CONTENT.items[id]?.heal).concat(state.combat.foodId ? [state.combat.foodId] : []);
   const uniqueFood = [...new Set(foodOpts)];
   return `<div class="stats-strip">Style <b>${st.style}</b> · Acc ${st.acc.toFixed(0)} · Power ${st.power.toFixed(0)} · Def ${st.def.toFixed(0)} · Auto-eat ${(state.combat.autoEat * 100).toFixed(0)}%</div>
-    <label>Food <select data-act="food">${uniqueFood.map((id) => `<option value="${id}" ${state.combat.foodId === id ? "selected" : ""}>${CONTENT.items[id]?.name} +${CONTENT.items[id]?.heal} (${bankCount(state, id)})</option>`).join("")}</select></label>
+    <label>Food <select id="food-pick" data-act="food">${uniqueFood.map((id) => `<option value="${id}" ${state.combat.foodId === id ? "selected" : ""}>${CONTENT.items[id]?.name} +${CONTENT.items[id]?.heal} (${bankCount(state, id)})</option>`).join("")}</select></label>
     <label>Backup food <select data-act="food2"><option value="">— none —</option>${uniqueFood.map((id) => `<option value="${id}" ${state.combat.foodId2 === id ? "selected" : ""}>${CONTENT.items[id]?.name} +${CONTENT.items[id]?.heal}</option>`).join("")}</select></label>
     <div class="potions">${Object.keys(state.bank).filter((id) => CONTENT.items[id]?.potion).slice(0, 12).map((id) => `<button type="button" data-act="drink" data-arg="${id}">Drink ${CONTENT.items[id].name} (${state.bank[id]})</button>`).join("")}</div>
     ${state.combat.potionId ? `<p class="blurb">Active: ${CONTENT.items[state.combat.potionId].name} · ${state.combat.potionCharges} charges</p>` : ""}
     ${areas}${duns}
-    <div class="clog">${(state._clog || []).map((l) => `<div>${escapeHtml(l)}</div>`).join("")}</div>
+    ${state.settings?.showCombatLog === false ? "" : `<div class="clog">${(state._clog || []).map((l) => `<div>${escapeHtml(l)}</div>`).join("")}</div>`}
   `;
 }
 

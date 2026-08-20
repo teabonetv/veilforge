@@ -22,6 +22,8 @@ let state = saved || createState();
 if (saved) {
   const gone = Date.now() - (state.lastSave || Date.now());
   if (gone > 8000) applyOffline(state, gone);
+  else state.lastSave = Date.now();
+  save(state);
 }
 recalcHp(state);
 if (state.combat.hp <= 0) state.combat.hp = state.combat.maxHp;
@@ -36,6 +38,10 @@ const ctx = {
   exportSave: () => exportSave(state),
   importSave: (s) => {
     state = importSave(s);
+    state.lastSave = Date.now();
+    recalcHp(state);
+    if (state.combat.hp <= 0) state.combat.hp = state.combat.maxHp;
+    save(state);
     ctx.state = state;
     renderShell(ctx);
   },
@@ -44,6 +50,7 @@ const ctx = {
     state = createState();
     ctx.state = state;
     recalcHp(state);
+    save(state);
     renderShell(ctx);
   },
   render: () => renderShell(ctx),
@@ -131,13 +138,24 @@ document.addEventListener("visibilitychange", () => {
     return;
   }
   const gone = Date.now() - (state._hiddenAt || state.lastSave || Date.now());
-  if (gone > 8000) applyOffline(state, gone);
+  if (gone > 8000) {
+    applyOffline(state, gone);
+    save(state);
+  }
   last = performance.now();
   ctx.render();
 });
 
-document.getElementById("scale")?.addEventListener("change", (e) => {
-  state.settings.tickScale = +e.target.value;
-});
+window.addEventListener("pagehide", () => save(state));
+window.addEventListener("veilforge-save", () => save(state));
+window.Capacitor?.Plugins?.App?.addListener?.("pause", () => save(state));
+
+const scaleEl = document.getElementById("scale");
+if (scaleEl) {
+  scaleEl.value = String(state.settings.tickScale || 1);
+  scaleEl.addEventListener("change", (e) => {
+    state.settings.tickScale = +e.target.value;
+  });
+}
 
 console.info("Veilforge", Object.keys(CONTENT.items).length, "items", Object.keys(CONTENT.monsters).length, "monsters");

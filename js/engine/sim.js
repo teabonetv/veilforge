@@ -55,7 +55,7 @@ export function startAction(state, actionId) {
       if (bankCount(state, inp.item) < inp.qty) return `Need ${inp.qty} ${CONTENT.items[inp.item]?.name || inp.item}.`;
     }
   }
-  if (state.combat.fighting && act.skill !== "course") stopFight(state);
+  if (state.combat.fighting) stopFight(state);
   state.action = { id: actionId, skill: act.skill, started: state.now || 0, progress: 0, duration: actionDuration(state, act) };
   return null;
 }
@@ -187,7 +187,7 @@ function completeAction(state, act) {
     }
   }
   if (act.rare) {
-    const rareMul = 1 + (masteryBonus(state, act.masteryId, act.skill).rare || 0) + (guildBonuses(state, act.skill).rare || 0) + (courseBonuses(state).rareMul || 0) + (chartBonuses(state).rare || 0) + (potionStats(state).rareMul ? potionStats(state).rareMul - 1 : 0) + petBonuses(state, act.skill).rare;
+    const rareMul = 1 + (masteryBonus(state, act.masteryId, act.skill).rare || 0) + (guildBonuses(state, act.skill).rare || 0) + (courseBonuses(state).rareMul || 0) + (chartBonuses(state).rare || 0) + (act.skill === "vein" ? (chartBonuses(state).gem || 0) : 0) + (potionStats(state).rareMul ? potionStats(state).rareMul - 1 : 0) + petBonuses(state, act.skill).rare;
     for (const r of act.rare) {
       if (Math.random() < r.chance * rareMul) {
         noteGive(state, r.item, r.min || 1, true, "rare drop");
@@ -198,7 +198,7 @@ function completeAction(state, act) {
   }
   grantSkillBits(state, act, 1);
   rollPet(state, act.skill);
-  consumePotionCharge(state);
+  consumePotionCharge(state, "action");
 }
 
 function grantSkillBits(state, act, xpMul, xpOverride) {
@@ -342,7 +342,7 @@ function tickDrove(state, ms) {
     const a = CONTENT.animals.find((x) => x.id === p.animal);
     if (!a) return;
     const cycle = a.time / speed;
-    const maxCycles = Math.max(12, Math.floor((8 * 3600000) / a.time));
+    const maxCycles = Math.max(12, Math.floor((offlineCapMs(state)) / a.time));
     p.left -= ms;
     while (p.left <= 0) {
       const have = p.cyclesReady || 0;
@@ -391,11 +391,20 @@ export function plantPlot(state, i, seed) {
   if (skillLevel(state, "soil") < crop.req) return `Soil ${crop.req} required.`;
   if (!takeItem(state, seed, 1)) return "No seed.";
   const speed = 1 + (guildBonuses(state, "soil").speed || 0);
-  const compost = takeItem(state, "compost", 1);
+  const compost = optsCompost(state);
   const grow = crop.growMs / speed / (compost ? 1.35 : 1);
   state.soil.plots[i] = { seed, left: grow, ready: false, ripeMs: 0, compost: !!compost };
   if (compost) log(state, "Compost worked in — faster grow, fatter harvest.");
   return null;
+}
+
+function optsCompost(state) {
+  if (!state.soil.useCompost) return false;
+  return takeItem(state, "compost", 1);
+}
+
+export function setUseCompost(state, on) {
+  state.soil.useCompost = !!on;
 }
 
 export function collectPen(state, i) {
@@ -561,6 +570,7 @@ export function applyOffline(state, ms) {
   const cb = courseBonuses(state);
   const sim = Math.min(Math.max(0, ms), cap) * (1 + (cb.offlineMul || 0));
   if (sim <= 0) return;
+  state.lastSave = Date.now();
   const beforeActs = state.stats.actions || 0;
   const beforeCounts = { ...(state.actionCounts || {}) };
   state._offlineSim = true;
