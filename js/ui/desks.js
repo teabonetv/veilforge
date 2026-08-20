@@ -418,6 +418,8 @@ export function onVaultSearch(v) {
 
 export function onVaultCat(v) { vaultCat = v; }
 export function onVaultLens(v) { vaultLens = v; }
+export function currentStallBooth() { return stallBooth; }
+export function currentStallFilter() { return stallFilter; }
 export function onStallSearch(v) { stallFilter = v.toLowerCase(); }
 export function onStallBooth(v) { stallBooth = v; stallPick = null; }
 export function onStallPick(v) { stallPick = v; }

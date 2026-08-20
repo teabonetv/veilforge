@@ -4,9 +4,9 @@ import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, 
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval, swapWeaponStyle } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
-import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf, onStallSearch, onStallBooth, onStallPick, onStallPacks, stallPackCount } from "./desks.js";
+import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf, onStallSearch, onStallBooth, onStallPick, onStallPacks, stallPackCount, currentStallBooth, currentStallFilter } from "./desks.js";
 import { iconMarkup, SKILL_ICON_KIND } from "../scene/icons.js";
-import { quayDeal, offerName as stallOfferName, offerPrice, pawnRate } from "../engine/market.js";
+import { QUAY_BOOTHS, inferBooth, offerModel, quayDeal, offerName as stallOfferName, offerPrice, pawnRate } from "../engine/market.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -51,6 +51,10 @@ export function bindUI(ctx) {
     if (e.target.id === "stall-search") {
       onStallSearch(e.target.value);
       renderDesks(ctx);
+    }
+    if (e.target.id === "shop-search") {
+      onStallSearch(e.target.value);
+      renderShop(ctx);
     }
     if (e.target.id === "vault-search") {
       onVaultSearch(e.target.value);
@@ -210,8 +214,8 @@ function handle(ctx, act, arg, el) {
     }
     case "shop-cat":
       onStallBooth(arg);
-      setDesk("stall");
-      ctx.render();
+      if (desk === "stall") ctx.render();
+      else renderShop(ctx);
       break;
     case "stall-booth": onStallBooth(arg); renderDesks(ctx); break;
     case "stall-pick": onStallPick(arg); renderDesks(ctx); break;
@@ -350,9 +354,10 @@ function glyph(model, cls = "mico") {
 
 export function renderShell(ctx) {
   const { state, root } = ctx;
-  const left = SKILLS.map((s) => {
+  const shopTab = `<button type="button" class="skill shop-rail ${desk === "stall" ? "on" : ""}" data-act="desk" data-arg="stall">${glyph({ kind: "coins", hue: 42, seed: 2, eid: "tab-stall" }, "skico")}<span class="sn">Shop</span><span class="lv">Quay</span></button>`;
+  const left = shopTab + SKILLS.map((s) => {
     const lv = skillLevel(state, s.id);
-    const on = selectedSkill === s.id ? "on" : "";
+    const on = desk === "workshop" && selectedSkill === s.id ? "on" : "";
     const lock = skillLocked(state, s.id);
     const pct = lock ? 0 : Math.floor(xpPct(state, s.id));
     const ico = { kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3, eid: s.id };
@@ -753,7 +758,7 @@ function renderCodex(ctx) {
       ${jump}
       <button type="button" data-act="desk" data-arg="bank">Open vault</button>
       <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
-      <button type="button" data-act="desk" data-arg="stall">Lantern Quay</button>
+      <button type="button" data-act="desk" data-arg="stall">Shop</button>
       <button type="button" data-act="codex-toggle">Hide</button>
     </div>`;
 }
@@ -1394,11 +1399,35 @@ function renderQuests(ctx) {
 }
 
 function renderShop(ctx) {
+  const { state } = ctx;
+  const booth = currentStallBooth();
   const deal = quayDeal();
-  const nm = deal.offer ? stallOfferName(deal.offer) : "nothing hung";
-  const html = `<p class="blurb">The stall left the workshop. It lives on the quay.</p>
-    <p class="muted">${escapeHtml(deal.watch)} · lantern: ${escapeHtml(nm)} · hunger: ${deal.hunger}</p>
-    <button type="button" class="primary" data-act="desk" data-arg="stall">Walk the Lantern Quay</button>`;
+  const chips = QUAY_BOOTHS.map((b) => `<button type="button" class="${b.id === booth ? "on" : ""}" data-act="shop-cat" data-arg="${b.id}">${escapeHtml(b.name)}</button>`).join("");
+  let list = CONTENT.shop.filter((o) => inferBooth(o) === booth);
+  const q = currentStallFilter();
+  if (q) list = CONTENT.shop.filter((o) => `${stallOfferName(o)} ${o.desc || ""}`.toLowerCase().includes(q));
+  const search = document.getElementById("shop-search");
+  const keepVal = search && document.activeElement === search ? search.value : (q || "");
+  const body = list.length
+    ? `<div class="wares">${list.map((o) => {
+      const { cost, bought, deal: onDeal } = offerPrice(state, o);
+      const sold = o.max && bought >= o.max;
+      const lvok = !o.reqLevel || skillLevel(state, o.reqSkill) >= o.reqLevel;
+      const why = sold ? "Sold out" : !lvok ? `Need ${skillName(o.reqSkill)} ${o.reqLevel}` : state.coins < cost ? "Short on marks" : "";
+      return `<button type="button" class="ware ${sold || !lvok ? "locked" : ""} ${onDeal ? "deal" : ""}" data-act="buy" data-arg="${o.id}" ${sold ? "disabled" : ""}>
+        <span class="bico">${iconMarkup(offerModel(o), 28)}</span>
+        <strong>${escapeHtml(stallOfferName(o))}</strong>
+        <span class="cost">${Math.floor(cost).toLocaleString()} ✦${onDeal ? " dusk" : ""}</span>
+        <span class="sub">${escapeHtml(o.desc || "")} · owned ${bought}${o.max ? "/" + o.max : ""}${why ? " · " + why : ""}</span>
+      </button>`;
+    }).join("")}</div>`
+    : `<p class="blurb">This keeper has nothing hung.</p>`;
+  const html = `<div class="shop-head">
+      <p class="muted">${escapeHtml(deal.watch)}${deal.offer ? ` · lantern: ${escapeHtml(stallOfferName(deal.offer))}` : ""}</p>
+      <div class="tabs">${chips}</div>
+      <input id="shop-search" placeholder="Filter shop" value="${escapeHtml(keepVal)}" />
+      <button type="button" class="primary" data-act="desk" data-arg="stall">Open full shop</button>
+    </div>${body}`;
   fillHtml(document.getElementById("shop"), html);
 }
 
