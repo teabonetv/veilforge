@@ -54,24 +54,18 @@ button.on {
 button.locked, button:disabled { opacity: 0.45; cursor: not-allowed; }
 #app {
   display: grid;
-  grid-template-areas:
-    "top top"
-    "nav nav"
-    "codex codex"
-    "commit commit"
-    "skills stage";
-  grid-template-columns: 196px 1fr;
+  grid-template-areas: "top" "codex" "commit" "nav" "stage";
   grid-template-rows: auto auto auto auto 1fr;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 #top { grid-area: top; }
 #codex { grid-area: codex; }
 #commit { grid-area: commit; }
 #desk-nav { grid-area: nav; }
-#skill-nav { grid-area: skills; min-height: 0; }
-#layout, #bank-desk, #wander-desk, #stall-desk { grid-area: stage; min-height: 0; }
-#layout { min-height: 0; }
+#layout, #bank-desk, #wander-desk, #stall-desk { grid-area: stage; min-height: 0; min-width: 0; }
+#layout { min-height: 0; overflow: hidden; }
 #top {
   display: grid;
   grid-template-columns: 200px 1fr 250px;
@@ -222,11 +216,11 @@ select, option {
 #codex strong { color: var(--moon); font-weight: 600; }
 #codex .codex-acts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
 #codex.closed { min-height: 26px; padding: 2px 14px; }
-#layout { display: grid; grid-template-columns: 1fr 372px; min-height: 0; }
-#skill-nav { overflow: auto; border-right: 1px solid var(--line); padding: 8px; background: #120a1acc; }
+#layout { display: grid; grid-template-columns: 196px minmax(0, 1fr) 372px; min-height: 0; min-width: 0; overflow: hidden; }
+#skill-nav { overflow: auto; min-width: 0; min-height: 0; border-right: 1px solid var(--line); padding: 8px; background: #120a1acc; }
 #skill-nav .skill.shop-rail { border-color: var(--gold-dim); margin-bottom: 10px; }
 #skill-nav .skill {
-  width: 100%; display: grid; grid-template-columns: 28px 1fr auto; grid-template-rows: auto 4px; gap: 4px 6px;
+  width: 100%; max-width: 100%; display: grid; grid-template-columns: 28px 1fr auto; grid-template-rows: auto 4px; gap: 4px 6px;
   text-align: left; margin-bottom: 3px; padding: 6px 8px;
   background: #1a1024;
   align-items: center;
@@ -245,6 +239,7 @@ select, option {
   grid-column: 2 / 4;
   display: block;
   height: 5px;
+  max-width: 100%;
   background: #0e0816;
   border-radius: 99px;
   overflow: hidden;
@@ -267,7 +262,7 @@ select, option {
 #skill-nav .xpmini b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3a8868, var(--ok)); }
 #skill-nav .lv { color: var(--gold); font-variant-numeric: tabular-nums; font-size: 12px; }
 #skill-nav .sn { font-size: 13px; }
-#mid { display: grid; grid-template-rows: 240px 1fr; min-width: 0; min-height: 0; }
+#mid { display: grid; grid-template-rows: 240px 1fr; min-width: 0; min-height: 0; overflow: hidden; }
 #view-wrap {
   position: relative;
   border-bottom: 1px solid var(--line);
@@ -285,9 +280,10 @@ select, option {
   box-shadow: inset 0 -22px 36px #05020c88;
 }
 #view { width: 100%; height: 240px; display: block; }
-#center { overflow: auto; padding: 14px 16px 48px; }
+#center { overflow: auto; padding: 14px 16px 48px; min-width: 0; }
 #right {
   overflow: auto;
+  min-width: 0;
   border-left: 1px solid var(--line);
   padding: 8px 10px 28px;
   background: #120a1ae8;
@@ -301,10 +297,10 @@ select, option {
   text-transform: uppercase;
 }
 .skill-head { display: grid; gap: 6px; }
-.skill-head h2 { margin: 0; font-size: 28px; }
+.skill-head h2 { margin: 0; font-size: 28px; line-height: 1.15; }
 .skill-head h2 em { color: var(--gold); font-style: normal; }
 .blurb { color: var(--muted); margin: 0 0 10px; font-size: 13px; }
-.xpbar { position: relative; height: 15px; background: #0e0816; border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
+.xpbar { position: relative; height: 15px; max-width: 100%; background: #0e0816; border-radius: 99px; overflow: hidden; border: 1px solid var(--line); }
 .xpbar i { display: block; height: 100%; background: linear-gradient(90deg, #3a2a68, var(--dusk)); }
 .xpbar span { position: absolute; inset: 0; font-size: 11px; display: flex; align-items: center; justify-content: center; }
 .guild { font-size: 12px; color: var(--gold-dim); margin: 8px 0 12px; }
@@ -524,7 +520,6 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
   padding: 6px 14px;
   border-bottom: 1px solid var(--line);
   background: #140a1cf0;
-  z-index: 8;
 }
 #desk-nav button { letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; display: inline-flex; align-items: center; gap: 8px; }
 #desk-nav .dico { width: 22px; height: 22px; display: inline-flex; overflow: hidden; border-radius: 5px; }
@@ -610,15 +605,11 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 @media (max-width: 980px) {
   html, body { height: auto; min-height: 100%; min-height: 100dvh; }
   body { overflow: auto; }
-  #app {
-    grid-template-areas: "top" "nav" "codex" "commit" "skills" "stage";
-    grid-template-columns: 1fr;
-    height: auto;
-    min-height: 100dvh;
-  }
-  #layout { grid-template-columns: 1fr; }
-  #skill-nav { display: flex; overflow: auto; max-height: none; border-right: 0; border-bottom: 1px solid var(--line); }
-  #skill-nav .skill { min-width: 140px; }
+  #app { height: auto; min-height: 100dvh; overflow: visible; }
+  #layout { grid-template-columns: 1fr; overflow: visible; }
+  #skill-nav { display: flex; overflow: auto; }
+  #skill-nav .skill { min-width: 140px; width: auto; flex: 0 0 auto; }
+  #skill-nav .xpmini { max-width: 140px; }
   #top { grid-template-columns: 1fr; }
   .desk-tag { display: none; }
   .bank-grid { grid-template-columns: 1fr; }
