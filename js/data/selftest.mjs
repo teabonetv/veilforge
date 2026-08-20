@@ -5,6 +5,7 @@ import { startFight, startDungeon, equipItem, unequip, rollBounty } from "../eng
 import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
 import { iconMarkup, iconUrl } from "../scene/icons.js";
+import { PIX_EID } from "../scene/pix-map.js";
 
 let rng = 20260820;
 Math.random = () => {
@@ -49,11 +50,34 @@ for (const it of Object.values(C.items)) {
 }
 if (seedClash > Object.keys(C.items).length * 0.02) throw new Error("too many model seed collisions " + seedClash);
 
+for (const it of Object.values(C.items)) {
+  if (!it.model.eid || !PIX_EID[it.model.eid]) throw new Error("item missing unique icon " + it.id);
+  if (!iconMarkup(it.model).includes("u-items-")) throw new Error("item not on unique sheet " + it.id);
+}
+for (const m of Object.values(C.monsters)) {
+  if (!PIX_EID[m.id]) throw new Error("monster missing unique icon " + m.id);
+  const html = iconMarkup(m.model);
+  if (!html.includes("u-mon-") && !html.includes("u-misc.png")) throw new Error("monster not on unique sheet " + m.id);
+}
+for (const d of C.dungeons) {
+  if (!PIX_EID[d.id] || !iconMarkup(d.model).includes("u-misc.png")) throw new Error("dungeon missing unique icon " + d.id);
+}
+for (const a of Object.values(C.actions)) {
+  const html = iconMarkup(a.model);
+  if (!html.includes("u-act-") && !html.includes("u-misc.png")) throw new Error("action missing unique icon " + a.id);
+}
+for (const p of C.pets) {
+  if (!p.model?.eid || !PIX_EID[p.id]) throw new Error("pet missing unique icon " + p.id);
+}
+const cells = new Set();
+for (const [id, cell] of Object.entries(PIX_EID)) {
+  const k = cell.join(":");
+  if (cells.has(k)) throw new Error("shared unique cell " + k + " at " + id);
+  cells.add(k);
+}
+if (cells.size < 600) throw new Error("too few unique icon cells: " + cells.size);
 const mk = new Set(Object.values(C.monsters).map((m) => m.model.kind));
 if (mk.size < 12) throw new Error("monster silhouettes too few: " + [...mk].join(","));
-if (!iconMarkup(C.items["log-0"].model).includes("atlas-items.png")) throw new Error("painted item atlas missing");
-if (!iconMarkup(Object.values(C.monsters)[0].model).includes("atlas-beasts.png")) throw new Error("painted monster atlas missing");
-if (!iconMarkup(C.dungeons[0].model).includes("atlas-gates.png")) throw new Error("painted gate atlas missing");
 const gates = new Set(C.dungeons.map((d) => d.model.kind));
 if (gates.size < 6) throw new Error("dungeon gates not unique: " + [...gates].join(","));
 

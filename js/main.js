@@ -57,7 +57,7 @@ const ctx = {
         if (wanderPort) { dropPort(wanderPort); wanderPort = null; wanderKey = ""; }
         if (!vaultPort) vaultPort = createPortrait(document.getElementById("vault-view"));
         const m = inspectModelOf();
-        const key = `${m?.kind}:${m?.seed}`;
+        const key = `${m?.eid || m?.kind}:${m?.seed}`;
         if (key !== inspectKey) {
           inspectKey = key;
           vaultPort.showModel(m);
@@ -68,10 +68,10 @@ const ctx = {
         if (vaultPort) { dropPort(vaultPort); vaultPort = null; inspectKey = ""; }
         if (!wanderPort) wanderPort = createPortrait(document.getElementById("wander-view"));
         if (syncedDesk !== "loadout") wanderKey = "";
-        const key = JSON.stringify(state.equipment);
+        const key = JSON.stringify(state.equipment) + JSON.stringify(state.pets || {});
         if (key !== wanderKey) {
           wanderKey = key;
-          wanderPort.showWanderer(state.equipment, CONTENT.items);
+          wanderPort.showWanderer(state.equipment, CONTENT.items, state.pets || {});
         }
         wanderPort.resize();
         requestAnimationFrame(() => wanderPort?.resize());

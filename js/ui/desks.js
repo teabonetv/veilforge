@@ -84,6 +84,9 @@ export function renderDesks(ctx) {
   }
   document.querySelectorAll("#desk-nav [data-arg]").forEach((b) => {
     b.classList.toggle("on", b.dataset.arg === desk);
+    if (!b.querySelector(".pix")) {
+      b.insertAdjacentHTML("afterbegin", `<span class="dico">${iconMarkup({ eid: "tab-" + b.dataset.arg, kind: "forge" }, 28)}</span>`);
+    }
   });
   ctx.portraits?.sync?.(ctx);
 }
@@ -103,7 +106,7 @@ function renderVault(ctx) {
   const held = Object.entries(state.bank).filter(([, n]) => n > 0);
   const chips = [["held", "In vault"], ["weapons", "Weapons"], ["armour", "Armour"], ["food", "Food"], ["log", "Timber"], ["all", "Compendium"]]
     .map(([id, lab]) => `<button type="button" class="${vaultCat === id ? "on" : ""}" data-act="vault-cat" data-arg="${id}">${lab}</button>`).join("");
-  const lens = [["items", "Items"], ["monsters", "Monsters"], ["dungeons", "Dungeons"], ["actions", "Actions"]]
+  const lens = [["items", "Items"], ["monsters", "Monsters"], ["dungeons", "Dungeons"], ["actions", "Actions"], ["pets", "Pets"]]
     .map(([id, lab]) => `<button type="button" class="${vaultLens === id ? "on" : ""}" data-act="vault-lens" data-arg="${id}">${lab}</button>`).join("");
 
   let tiles = "";
@@ -122,6 +125,10 @@ function renderVault(ctx) {
     tiles = CONTENT.dungeons
       .filter((d) => !vaultFilter || d.name.toLowerCase().includes(vaultFilter))
       .map((d) => tile("dungeon", d.id, d.name, (state.combat.dungeonClears || {})[d.id] || 0, d.model)).join("");
+  } else if (vaultLens === "pets") {
+    tiles = CONTENT.pets
+      .filter((p) => !vaultFilter || p.name.toLowerCase().includes(vaultFilter))
+      .map((p) => tile("pet", p.id, p.name, state.pets?.[p.id] ? 1 : 0, p.model)).join("");
   } else {
     let list = Object.values(CONTENT.actions);
     if (vaultFilter) list = list.filter((a) => a.name.toLowerCase().includes(vaultFilter));
@@ -179,6 +186,14 @@ function renderInspect(ctx) {
       <blockquote>${d.voice}</blockquote>
       <p class="blurb">${d.desc || ""}</p>
       <button type="button" data-act="dungeon" data-arg="${id}">Enter</button>`;
+  } else if (kind === "pet") {
+    const p = CONTENT.pets.find((x) => x.id === id);
+    if (!p) return;
+    const owned = !!ctx.state.pets?.[id];
+    el.innerHTML = `<h3>${p.name}</h3>
+      <p class="temper">${owned ? "perched" : "still wild"} · ${p.skill}</p>
+      <p class="blurb">${p.desc || ""}</p>
+      <p class="muted">A shoulder companion. Drops rarely from ${p.skill}.</p>`;
   } else {
     const a = CONTENT.actions[id];
     if (!a) return;
@@ -224,12 +239,18 @@ function renderWandererBody(ctx, state) {
   const detail = document.getElementById("wander-detail");
   if (!profile || !kits || !stats || !detail) return;
 
+  const petRow = CONTENT.pets.map((p) => {
+    const on = state.pets?.[p.id] ? "on" : "";
+    return `<span class="pet-chip ${on}" title="${p.name}">${iconMarkup(p.model || { eid: p.id }, 28)}</span>`;
+  }).join("");
+
   profile.innerHTML = `
     <div class="w-name">${escapeHtml(state.name || "Aelric")}</div>
     <div class="w-title">${r.title}</div>
     <div class="w-stars">${stars}</div>
     <div class="w-lvls"><div><em>${r.combat}</em><span>Combat</span></div><div><em>${r.idle}</em><span>Idle</span></div></div>
     <div class="xpbar"><i style="width:${xpPct}%"></i><span>${Math.floor(xp).toLocaleString()} / ${next.toLocaleString()} vitality xp</span></div>
+    <div class="pet-row">${petRow}</div>
     <blockquote>The dusk calls. We answer.</blockquote>
   `;
 
@@ -292,7 +313,7 @@ function slotBtn(state, s) {
   const it = CONTENT.items[id];
   const st = silhouetteStyle(it?.model || { hue: 260, seed: 1 });
   return `<button type="button" class="wslot ${focusedSlot === s.id ? "on" : ""}" data-act="slot-focus" data-arg="${s.id}" title="${s.label}" style="background:${st.background};border-color:${st.borderColor}">
-    <em>${s.label}</em><span>${it ? it.name : "empty"}</span>
+    <em>${s.label}</em>${it ? `<span class="dico">${iconMarkup(it.model, 28)}</span>` : ""}<span>${it ? it.name : "empty"}</span>
   </button>`;
 }
 
@@ -309,5 +330,6 @@ export function inspectModelOf() {
   if (kind === "monster") return CONTENT.monsters[id]?.model;
   if (kind === "dungeon") return CONTENT.dungeons.find((d) => d.id === id)?.model;
   if (kind === "action") return CONTENT.actions[id]?.model;
+  if (kind === "pet") return CONTENT.pets.find((p) => p.id === id)?.model;
   return null;
 }

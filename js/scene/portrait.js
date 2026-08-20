@@ -70,10 +70,10 @@ export function createPortrait(canvas) {
     camera.lookAt(0, 0.7, 0);
   }
 
-  function showWanderer(equipment, items) {
+  function showWanderer(equipment, items, pets = {}) {
     mode = "wanderer";
     clearSubject();
-    const w = makeWanderer(equipment, items);
+    const w = makeWanderer(equipment, items, pets);
     subject.add(w);
     camera.position.set(0.35, 1.45, 4.1);
     camera.lookAt(0, 1.05, 0);

@@ -140,7 +140,7 @@ export function imprintContent(content) {
     it.voice = pick(h, VOICE_ITEM, 4);
     it.temper = pick(h, TEMPER, 5);
     it.hue = (h % 360);
-    it.model = { kind: modelKindForItem(it), seed: h, hue: it.hue };
+    it.model = { kind: modelKindForItem(it), seed: h, hue: it.hue, eid: it.id };
   }
 
   for (const act of Object.values(content.actions)) {
@@ -158,7 +158,7 @@ export function imprintContent(content) {
       anvil: "forge", fletch: "rack", loom: "frame", sigil: "circle", vial: "alembic",
       whisper: "mark", course: "circuit", chart: "scope", soil: "plot", drove: "pen"
     }[act.skill] || "shrine";
-    act.model = { kind: skillKind, seed: h, hue: act.hue };
+    act.model = { kind: skillKind, seed: h, hue: act.hue, eid: act.id };
   }
 
   for (const m of Object.values(content.monsters)) {
@@ -169,7 +169,7 @@ export function imprintContent(content) {
     m.voice = pick(h, VOICE_MONSTER, 2);
     m.temper = pick(h, TEMPER, 9);
     m.hue = (h % 360);
-    m.model = { kind: monsterKindFor({ ...m, catalogName: m.catalogName }), seed: h, hue: m.hue };
+    m.model = { kind: monsterKindFor({ ...m, catalogName: m.catalogName }), seed: h, hue: m.hue, eid: m.id };
   }
 
   for (const d of content.dungeons) {
@@ -179,7 +179,21 @@ export function imprintContent(content) {
     d.voice = pick(h, VOICE_DUNGEON, 1);
     d.temper = pick(h, TEMPER, 4);
     d.hue = (h % 360);
-    d.model = { kind: dungeonKindFor({ ...d, catalogName: d.catalogName }), seed: h, hue: d.hue };
+    d.model = { kind: dungeonKindFor({ ...d, catalogName: d.catalogName }), seed: h, hue: d.hue, eid: d.id };
+  }
+
+  for (const p of content.pets || []) {
+    const h = hash32(p.id);
+    p.hue = h % 360;
+    p.model = { kind: `pet-${p.skill}`, seed: h, hue: p.hue, eid: p.id };
+  }
+  for (const list of [content.spells, content.prayers, content.quests, content.constellations, content.chartRanks, content.animals, content.crops]) {
+    for (const row of list || []) {
+      if (!row?.id) continue;
+      const h = hash32(row.id);
+      row.hue = h % 360;
+      row.model = { kind: row.skill ? "mark" : "token", seed: h, hue: row.hue, eid: row.id };
+    }
   }
 
   return content;

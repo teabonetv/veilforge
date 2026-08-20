@@ -13,6 +13,7 @@
     "web": "python3 -m http.server 8080",
     "pack": "node scripts/pack-web.mjs",
     "icons": "node scripts/icons.mjs",
+    "pix": "node scripts/pack-pix.mjs",
     "electron": "npm run pack && electron electron/main.cjs",
     "dist": "npm run pack && electron-builder --publish never",
     "dist:linux": "npm run pack && electron-builder --linux dir AppImage --publish never",

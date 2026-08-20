@@ -276,7 +276,7 @@ export function renderShell(ctx) {
     const on = selectedSkill === s.id ? "on" : "";
     const lock = skillLocked(state, s.id);
     const pct = lock ? 0 : Math.floor(xpPct(state, s.id));
-    const ico = { kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3 };
+    const ico = { kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3, eid: s.id };
     return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}>${glyph(ico, "skico")}<span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : `${lv} · ${pct}%`}</span>${lock ? "" : `<i class="xpmini"><b style="width:${pct}%"></b></i>`}</button>`;
   }).join("");
   root.querySelector("#skill-nav").innerHTML = left;

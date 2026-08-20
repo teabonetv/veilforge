@@ -1,4 +1,5 @@
-/** 2D glyphs for bank, skills, and combat cards. Melvor wins on readable icons; this is the catch-up. */
+/** 2D glyphs for bank, skills, and combat cards. Unique Imagine cells first, kind atlas as fallback. */
+import { PIX_EID, PIX_SHEETS } from "./pix-map.js";
 
 export const SKILL_ICON_KIND = {
   timber: "grove", trawl: "tide", vein: "seam", ember: "pyre", hearth: "oven",
@@ -50,14 +51,20 @@ function pixCell(kind) {
   return null;
 }
 
+function sheetOf(sheetId) {
+  return PIX_SHEETS[sheetId] || SHEETS[sheetId];
+}
+
 export function iconMarkup(model = {}, size = 64) {
   const kind = model.kind || "material";
-  const cell = pixCell(kind);
+  const unique = model.eid && PIX_EID[model.eid];
+  const cell = unique || pixCell(kind);
   if (cell) {
     const [sheetId, c, r] = cell;
-    const sh = SHEETS[sheetId];
+    const sh = sheetOf(sheetId);
+    if (!sh) return "";
     const hue = ((model.hue ?? 40) - 40);
-    const rot = kind.startsWith("beast") || kind.startsWith("boss") || kind.startsWith("gate") ? 0 : (hue * 0.35);
+    const rot = unique ? 0 : (kind.startsWith("beast") || kind.startsWith("boss") || kind.startsWith("gate") ? 0 : (hue * 0.35));
     return `<span class="pix" style="background-image:url('${sh.src}');background-size:${sh.cols * 100}% ${sh.rows * 100}%;background-position:${(c / Math.max(1, sh.cols - 1)) * 100}% ${(r / Math.max(1, sh.rows - 1)) * 100}%;filter:hue-rotate(${rot}deg)"></span>`;
   }
   const hue = ((model.hue ?? 270) % 360 + 360) % 360;

@@ -247,7 +247,7 @@ select, option {
   justify-content: center;
   overflow: hidden;
 }
-.mico .pix, .bico .pix, .skico .pix, .vico .pix { width: 100%; height: 100%; }
+.mico .pix, .bico .pix, .skico .pix, .vico .pix, .dico .pix, .pet-chip .pix { width: 100%; height: 100%; }
 .pix {
   display: inline-block;
   flex-shrink: 0;
@@ -461,7 +461,8 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
   border-bottom: 1px solid var(--line);
   background: #140a1cf0;
 }
-#desk-nav button { letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; }
+#desk-nav button { letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; display: inline-flex; align-items: center; gap: 8px; }
+#desk-nav .dico { width: 22px; height: 22px; display: inline-flex; overflow: hidden; border-radius: 5px; }
 #desk-nav button.on { border-color: var(--gold); color: var(--gold); }
 .desk-tag { margin-left: auto; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--rose); }
 #layout.away { display: none !important; }
@@ -508,14 +509,17 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 #wander-profile, #wander-detail { padding: 16px; overflow: auto; background: #140a1c; }
 .w-name { font-family: "Cormorant Garamond", serif; font-size: 32px; }
 .w-title { color: var(--gold); letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; }
-.w-stars { color: var(--gold); margin: 6px 0 12px; }
+.pet-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 4px; }
+.pet-chip { width: 26px; height: 26px; opacity: 0.28; overflow: hidden; border-radius: 6px; border: 1px solid var(--line-soft); }
+.pet-chip.on { opacity: 1; border-color: var(--gold); }
 .w-lvls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
 .w-lvls em { display: block; font-style: normal; font-size: 28px; color: var(--moon); }
 .w-lvls span { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .wander-mid { display: grid; grid-template-rows: 1fr auto auto; min-width: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 .wander-stage { display: grid; grid-template-columns: 150px 1fr 150px; gap: 8px; padding: 12px; min-height: 0; }
 .wcol { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
-.wslot { text-align: left; min-height: 52px; }
+.wslot { text-align: left; min-height: 52px; display: grid; grid-template-columns: 28px 1fr; gap: 4px 8px; align-items: center; }
+.wslot em { grid-column: 1 / -1; }
 .wslot em { display: block; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); font-style: normal; }
 .wslot span { font-size: 11px; }
 #wander-view { height: 320px; min-height: 320px; }
