@@ -1,8 +1,15 @@
 import { SKILLS, XP_TABLE, levelFromXp } from "../content/catalog.js";
-import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount } from "../engine/state.js";
-import { startAction, tick, actionDuration } from "../engine/sim.js";
-import { startFight, equipItem } from "../engine/combat.js";
-import { wandererRanks, gearSet } from "../engine/wanderer.js";
+import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem } from "../engine/state.js";
+import { startAction, tick, actionDuration, applyOffline, offlineCapMs } from "../engine/sim.js";
+import { startFight, startDungeon, equipItem, unequip } from "../engine/combat.js";
+import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
+import { escapeHtml, utf8ToB64 } from "../util/text.js";
+
+let rng = 20260820;
+Math.random = () => {
+  rng = (Math.imul(1664525, rng) + 1013904223) >>> 0;
+  return rng / 0x100000000;
+};
 
 function unique(list, label) {
   const seen = new Set();
@@ -17,6 +24,8 @@ unique(Object.values(C.items).map((i) => i.name), "item name");
 unique(Object.values(C.actions).map((a) => a.name), "action name");
 unique(Object.values(C.monsters).map((m) => m.name), "monster name");
 unique(C.dungeons.map((d) => d.name), "dungeon name");
+unique(C.quests.map((q) => q.id), "quest id");
+if (C.quests.some((q) => q.id === "whisper-dock-beggar")) throw new Error("quest id still collides with action id");
 
 for (const it of Object.values(C.items)) {
   if (!it.model?.kind || !it.voice) throw new Error("item missing persona " + it.id);
@@ -40,6 +49,7 @@ for (const it of Object.values(C.items)) {
 if (seedClash > Object.keys(C.items).length * 0.02) throw new Error("too many model seed collisions " + seedClash);
 
 const s = createState();
+if (s.loadouts[0].equipment.weapon !== "drift-saber") throw new Error("default Wanderer loadout missing saber");
 const err = startAction(s, "timber-0");
 if (err) throw new Error(err);
 const dur = actionDuration(s, C.actions["timber-0"]);
@@ -83,6 +93,86 @@ if (swap) {
   throw new Error("previous weapon deleted on kit swap");
 }
 
+const full = createState();
+for (const id of Object.keys(C.items)) {
+  if (bankUsed(full) >= bankCap(full)) break;
+  if (id === "drift-saber" || id === "coins") continue;
+  addItem(full, id, 1);
+}
+const worn = full.equipment.weapon;
+const uerr = unequip(full, "weapon");
+if (!uerr) throw new Error("unequip at cap should refuse");
+if (full.equipment.weapon !== worn) throw new Error("unequip at cap deleted the worn piece");
+
+const blank = createState();
+blank.loadouts.push({ name: "Blank", equipment: {} });
+const saber = blank.equipment.weapon;
+const lerr = loadLoadout(blank, blank.loadouts.length - 1);
+if (lerr) throw new Error(lerr);
+if (blank.equipment.weapon !== saber) throw new Error("empty loadout stripped the saber");
+
+if (addItem(createState(), "log-0", 0) !== true) throw new Error("qty 0 should be a no-op success");
+if (addItem(createState(), "log-0", -3) !== true) throw new Error("negative qty should be a no-op success");
+
+const off = createState();
+startAction(off, "timber-0");
+applyOffline(off, 3 * 3600000);
+if ((off.actionCounts["timber-0"] || 0) < 900) {
+  throw new Error("3h offline should resolve far more than a 50-minute cap: " + off.actionCounts["timber-0"]);
+}
+if (offlineCapMs(off) < 18 * 3600000 - 1) throw new Error("offline cap too small");
+
+const hunt = createState();
+startFight(hunt, Object.keys(C.monsters)[0]);
+const hp = hunt.combat.hp;
+const kills = hunt.stats.kills;
+applyOffline(hunt, 2 * 3600000);
+if (!hunt.combat.fighting) throw new Error("offline resolved a hunt");
+if (hunt.stats.deaths) throw new Error("offline death while hidden");
+if (hunt.stats.kills !== kills) throw new Error("offline combat kills");
+if (hunt.combat.hp !== hp) throw new Error("offline combat hp changed");
+
+const nokey = createState();
+const d0 = C.dungeons[0];
+const derr = startDungeon(nokey, d0.id);
+if (!derr) throw new Error("dungeon started without a Citadel Key");
+addItem(nokey, "dungeon-key", 1);
+const d2 = startDungeon(nokey, d0.id);
+if (d2) throw new Error("dungeon with a key failed: " + d2);
+if (bankCount(nokey, "dungeon-key")) throw new Error("key was not consumed");
+
+const xss = escapeHtml(`<img src=x onerror=alert(1)>`);
+if (xss.includes("<")) throw new Error("escapeHtml failed: " + xss);
+const poisoned = createState();
+poisoned.name = "<b>x</b>";
+const round = importSave(exportSave(poisoned));
+if (round.name.includes("<")) throw new Error("imported name not clamped: " + round.name);
+
+const protoIn = importSave(utf8ToB64('{"name":"Ok","__proto__":{"polluted":true}}'));
+if (protoIn.polluted) throw new Error("prototype pollution via import");
+if (Object.prototype.polluted) throw new Error("Object.prototype polluted");
+
+const dump = createState();
+for (const id of Object.keys(C.items)) {
+  if (bankUsed(dump) >= bankCap(dump)) break;
+  addItem(dump, id, 1);
+}
+const beforeLog = dump.log.length;
+stashItem(dump, "celestial-saber", 1, "test rare");
+if (dump.log.length <= beforeLog && bankCount(dump, "celestial-saber")) {
+  /* either stashed or logged; if bank was full it must log */
+}
+if (bankUsed(dump) >= bankCap(dump) && !bankCount(dump, "celestial-saber")) {
+  if (!dump.log.some((l) => /Could not stash/.test(l.msg))) throw new Error("full vault rare was silent");
+}
+
+const tool = createState();
+addItem(tool, "drift-hatchet", 1);
+const te = equipItem(tool, "drift-hatchet");
+if (te) throw new Error(te);
+if (bankCount(tool, "drift-hatchet")) throw new Error("equipped tool still in the vault");
+if (tool.tools.axe !== "drift-hatchet") throw new Error("tool slot empty");
+
 console.log(JSON.stringify({
   items: Object.keys(C.items).length,
   actions: Object.keys(C.actions).length,
@@ -97,5 +187,6 @@ console.log(JSON.stringify({
   hp: s.combat.hp,
   quests: s.quests.done,
   sampleItem: C.items["log-0"].name,
-  sampleMonster: Object.values(C.monsters)[0].name
+  sampleMonster: Object.values(C.monsters)[0].name,
+  offline3h: off.actionCounts["timber-0"]
 }, null, 2));

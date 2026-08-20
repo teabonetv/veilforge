@@ -19,7 +19,7 @@
   --ok: #7ddeb2;
   --warn: #e8b86d;
   --shadow: 0 16px 48px #05020ccc;
-  font-family: Outfit, "Segoe UI", sans-serif;
+  font-family: "Segoe UI", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); }
@@ -31,7 +31,7 @@ body {
     radial-gradient(900px 420px at 90% 0%, #1a2458aa, transparent 50%),
     linear-gradient(180deg, #14091c, #0c0714 40%, #0a0812);
 }
-h1, h2, h3, .brand { font-family: "Cormorant Garamond", serif; letter-spacing: 0.04em; }
+h1, h2, h3, .brand { font-family: Palatino, "Palatino Linotype", Georgia, serif; letter-spacing: 0.04em; }
 button, select, input { font: inherit; color: inherit; }
 button {
   background: linear-gradient(180deg, #2a1838, #1c1028);

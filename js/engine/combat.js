@@ -1,4 +1,4 @@
-import { CONTENT, skillLevel, addXp, addItem, takeItem, bankCount, log, sumGear, recalcHp, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses } from "./state.js";
+import { CONTENT, skillLevel, addXp, addItem, takeItem, bankCount, log, sumGear, recalcHp, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses, stashItem } from "./state.js";
 import { checkQuests } from "./quests.js";
 
 const PRAYER_CAP = 2;
@@ -14,9 +14,12 @@ export function startFight(state, monsterId, opts = {}) {
   const m = CONTENT.monsters[monsterId];
   if (!m) return "No such foe.";
   if (!state.equipment.weapon) return "Equip a weapon.";
+  if ((m.slayerReq || 0) > skillLevel(state, "bounty") && !opts.dungeon && !opts.respawn && !opts.chain) {
+    return `Bounty ${m.slayerReq} required.`;
+  }
   const foodN = bankCount(state, state.combat.foodId);
   const heal = CONTENT.items[state.combat.foodId]?.heal || 0;
-  if (m.maxHit >= state.combat.maxHp * 0.45) {
+  if (m.maxHit >= state.combat.maxHp * 0.6) {
     combatLog(state, `GEAR CHECK: ${m.name} can chunk ${m.maxHit} of your ${state.combat.maxHp} HP.`);
   }
   if (foodN * heal < m.maxHit * 3) {
@@ -70,6 +73,7 @@ export function startFight(state, monsterId, opts = {}) {
 export function startDungeon(state, dungeonId) {
   const d = CONTENT.dungeons.find((x) => x.id === dungeonId);
   if (!d) return "Unknown dungeon.";
+  if (bankCount(state, "dungeon-key") < 1) return "Need a Citadel Key.";
   if (Math.max(skillLevel(state, "might"), skillLevel(state, "mark"), skillLevel(state, "weave")) < d.req) {
     return `Need a combat art at ${d.req}.`;
   }
@@ -78,9 +82,16 @@ export function startDungeon(state, dungeonId) {
   state.combat.poison = 0;
   state.combat.nextPoisonAt = 0;
   state.combat.ward = 0;
-  log(state, `${d.name}: ${d.sequence.length} sequential kills. Death resets the run.`);
   const boss = d.sequence.length === 1;
-  return startFight(state, d.sequence[0], { dungeon: true, boss });
+  const err = startFight(state, d.sequence[0], { dungeon: true, boss });
+  if (err) {
+    state.combat.dungeon = null;
+    state.combat.dungeonIndex = 0;
+    return err;
+  }
+  takeItem(state, "dungeon-key", 1);
+  log(state, `${d.name}: ${d.sequence.length} sequential kills. Spent a Citadel Key. Death resets the run.`);
+  return null;
 }
 
 export function stopFight(state, reason = "abandon") {
@@ -387,15 +398,6 @@ function playerHit(state, echoFollow = false) {
   const extra = notes.length ? ` (${notes.join(", ")})` : "";
   combatLog(state, `${echoFollow ? "Echo hits" : "Hit"} ${m.name} for ${dmg}${triTag(st.tri.edge)}${extra}.`);
 
-  const skill = st.style;
-  const ups = addXp(state, skill, (m.xp[skill] || 8) * (1 + petBonuses(state, skill).xp));
-  addXp(state, "vitality", m.xp.vitality || 4);
-  addXp(state, "guard", Math.floor((m.xp.guard || 4) * 0.35));
-  state.skills[skill].actions += 1;
-  state.skills[skill].guildProgress += 1;
-  ups.forEach((n) => log(state, `Level up: ${n}`));
-  if (sp && st.style === "weave") addXp(state, "weave", sp.xp * 0.25);
-
   if (state.combat.monsterHp <= 0) {
     kill(state, m);
     return;
@@ -504,24 +506,25 @@ function enemyHit(state) {
 function kill(state, m) {
   state.stats.kills += 1;
   state.combat.kills[m.id] = (state.combat.kills[m.id] || 0) + 1;
+  grantKillXp(state, m);
   addXp(state, "bounty", 6 + m.slayerReq * 0.2);
   state.skills.bounty.actions += 1;
-  state.skills.bounty.guildProgress += 1;
+  bumpGuild(state, "bounty");
   for (const d of m.drops) {
     if (Math.random() < d.chance * (1 + (chartBonuses(state).rare || 0))) {
-      addItem(state, d.item, d.min + Math.floor(Math.random() * (d.max - d.min + 1)));
+      stashItem(state, d.item, d.min + Math.floor(Math.random() * (d.max - d.min + 1)), "kill drop");
     }
   }
   if (m.unique && Math.random() < m.unique.chance) {
-    addItem(state, m.unique.item, 1);
+    stashItem(state, m.unique.item, 1, "unique drop");
     log(state, `Unique: ${CONTENT.items[m.unique.item]?.name}`);
   }
   if (state.bounty.monsterId === m.id) {
     state.bounty.have += 1;
     if (state.bounty.have >= state.bounty.need) {
       const tokens = 2 + Math.floor(state.bounty.streak / 3);
-      addItem(state, "bounty-token", tokens);
-      addItem(state, "coins", 40 + m.slayerReq * 3);
+      stashItem(state, "bounty-token", tokens, "bounty");
+      stashItem(state, "coins", 40 + m.slayerReq * 3, "bounty");
       state.bounty.streak += 1;
       state.quests.stats.bounties += 1;
       log(state, `Bounty complete. +${tokens} tokens.`);
@@ -535,11 +538,16 @@ function kill(state, m) {
 
   if (state.combat.dungeon) {
     const d = CONTENT.dungeons.find((x) => x.id === state.combat.dungeon);
+    if (!d?.sequence) {
+      log(state, "The dungeon ledger is missing. The hunt ends.");
+      stopFight(state, "clear");
+      return;
+    }
     state.combat.dungeonIndex += 1;
     if (state.combat.dungeonIndex >= d.sequence.length) {
-      addItem(state, d.reward.item, d.reward.qty);
-      addItem(state, "bounty-token", d.tokens);
-      addItem(state, "dungeon-key", 1);
+      stashItem(state, d.reward.item, d.reward.qty, "dungeon reward");
+      stashItem(state, "bounty-token", d.tokens, "dungeon tokens");
+      stashItem(state, "dungeon-key", 1, "dungeon key");
       log(state, `${d.name} cleared. The line held.`);
       combatLog(state, `${d.name} cleared.`);
       state.combat.dungeonClears = state.combat.dungeonClears || {};
@@ -638,7 +646,20 @@ export function equipItem(state, id) {
   const it = CONTENT.items[id];
   if (!it || it.category !== "equipment" && it.category !== "ammo" && it.category !== "tool") return "Cannot equip.";
   if (it.category === "tool") {
-    state.tools[it.toolSlot] = id;
+    const slot = it.toolSlot;
+    if (!slot) return "Cannot equip.";
+    if (state.tools[slot] === id) return null;
+    if (!bankCount(state, id)) return "Not in bank.";
+    const prev = state.tools[slot];
+    if (prev) {
+      const parked = addItem(state, prev, 1);
+      if (!parked) return "Vault full — free a stack before swapping tools.";
+    }
+    if (!takeItem(state, id, 1)) {
+      if (prev) takeItem(state, prev, 1);
+      return "Not in bank.";
+    }
+    state.tools[slot] = id;
     return null;
   }
   const slot = it.slot;
@@ -659,11 +680,44 @@ export function equipItem(state, id) {
 }
 
 export function unequip(state, slot) {
+  if (state.tools && slot in state.tools) {
+    const id = state.tools[slot];
+    if (!id) return null;
+    if (!addItem(state, id, 1)) return "Vault full — free a stack before unequipping.";
+    state.tools[slot] = null;
+    return null;
+  }
   const id = state.equipment[slot];
-  if (!id) return;
-  addItem(state, id, 1);
+  if (!id) return null;
+  if (!addItem(state, id, 1)) return "Vault full — free a stack before unequipping.";
   state.equipment[slot] = null;
   recalcHp(state);
+  return null;
+}
+
+function grantKillXp(state, m) {
+  const skill = styleOf(state);
+  const pet = 1 + petBonuses(state, skill).xp;
+  const ups = addXp(state, skill, (m.xp[skill] || 8) * 3 * pet);
+  addXp(state, "vitality", (m.xp.vitality || 4) * 2);
+  addXp(state, "guard", Math.floor((m.xp.guard || 4) * 0.7));
+  state.skills[skill].actions += 1;
+  bumpGuild(state, skill);
+  const sp = CONTENT.spells.find((s) => s.id === state.combat.spell);
+  if (sp && skill === "weave") addXp(state, "weave", sp.xp);
+  ups.forEach((n) => log(state, `Level up: ${n}`));
+}
+
+function bumpGuild(state, skill) {
+  const sk = state.skills[skill];
+  if (!sk) return;
+  sk.guildProgress += 1;
+  const next = (CONTENT.guildTasks[skill] || [])[sk.guildRank];
+  if (next && sk.guildProgress >= next.need) {
+    sk.guildRank += 1;
+    log(state, `${next.name} complete.`);
+    state.quests.stats.guildMax = Math.max(state.quests.stats.guildMax, sk.guildRank);
+  }
 }
 
 export function rollBounty(state) {

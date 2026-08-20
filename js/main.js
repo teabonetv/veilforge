@@ -1,5 +1,5 @@
 import { createState, load, save, exportSave, importSave, CONTENT, recalcHp } from "./engine/state.js";
-import { tick, applyOffline, stopAction } from "./engine/sim.js";
+import { tick, applyOffline } from "./engine/sim.js";
 import { bindUI, renderShell, renderTop, renderRight } from "./ui/shell.js";
 import { createWorld } from "./scene/world.js";
 import { skillSelect } from "./ui/shell.js";
@@ -11,18 +11,24 @@ bootPlatform();
 
 const canvas = document.getElementById("view");
 const world = createWorld(canvas);
-const vaultPort = createPortrait(document.getElementById("vault-view"));
-const wanderPort = createPortrait(document.getElementById("wander-view"));
+let vaultPort = null;
+let wanderPort = null;
 let inspectKey = "";
 let wanderKey = "";
 let syncedDesk = "";
-let state = load() || createState();
-if (load()) {
+
+const saved = load();
+let state = saved || createState();
+if (saved) {
   const gone = Date.now() - (state.lastSave || Date.now());
   if (gone > 8000) applyOffline(state, gone);
 }
 recalcHp(state);
 if (state.combat.hp <= 0) state.combat.hp = state.combat.maxHp;
+
+function dropPort(port) {
+  try { port?.dispose?.(); } catch { /* renderer already gone */ }
+}
 
 const ctx = {
   state,
@@ -43,11 +49,13 @@ const ctx = {
   render: () => renderShell(ctx),
   portraits: {
     resize() {
-      vaultPort.resize();
-      wanderPort.resize();
+      vaultPort?.resize();
+      wanderPort?.resize();
     },
     sync() {
       if (desk === "bank") {
+        if (wanderPort) { dropPort(wanderPort); wanderPort = null; wanderKey = ""; }
+        if (!vaultPort) vaultPort = createPortrait(document.getElementById("vault-view"));
         const m = inspectModelOf();
         const key = `${m?.kind}:${m?.seed}`;
         if (key !== inspectKey) {
@@ -55,9 +63,10 @@ const ctx = {
           vaultPort.showModel(m);
         }
         vaultPort.resize();
-        requestAnimationFrame(() => vaultPort.resize());
-      }
-      if (desk === "loadout") {
+        requestAnimationFrame(() => vaultPort?.resize());
+      } else if (desk === "loadout") {
+        if (vaultPort) { dropPort(vaultPort); vaultPort = null; inspectKey = ""; }
+        if (!wanderPort) wanderPort = createPortrait(document.getElementById("wander-view"));
         if (syncedDesk !== "loadout") wanderKey = "";
         const key = JSON.stringify(state.equipment);
         if (key !== wanderKey) {
@@ -65,7 +74,10 @@ const ctx = {
           wanderPort.showWanderer(state.equipment, CONTENT.items);
         }
         wanderPort.resize();
-        requestAnimationFrame(() => wanderPort.resize());
+        requestAnimationFrame(() => wanderPort?.resize());
+      } else {
+        if (vaultPort) { dropPort(vaultPort); vaultPort = null; inspectKey = ""; }
+        if (wanderPort) { dropPort(wanderPort); wanderPort = null; wanderKey = ""; }
       }
       syncedDesk = desk;
     }
@@ -89,8 +101,8 @@ function loop(now) {
     uiAcc += dt;
     renderTop(ctx);
     world.frame(state, skillSelect());
-    if (desk === "bank") vaultPort.frame();
-    if (desk === "loadout") wanderPort.frame();
+    if (desk === "bank") vaultPort?.frame();
+    if (desk === "loadout") wanderPort?.frame();
     if (uiAcc > 500) {
       uiAcc = 0;
       renderRight(ctx);
@@ -117,11 +129,6 @@ document.addEventListener("visibilitychange", () => {
   const gone = Date.now() - (state._hiddenAt || state.lastSave || Date.now());
   if (gone > 8000) applyOffline(state, gone);
   last = performance.now();
-  ctx.render();
-});
-
-document.getElementById("stop-all")?.addEventListener("click", () => {
-  stopAction(state);
   ctx.render();
 });
 

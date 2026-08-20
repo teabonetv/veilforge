@@ -1,9 +1,9 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-19T17:00:00Z",
-  "wave": 8,
-  "overall": "Halt-and-switch now plays in the running client. Latest critic was wowed by that fork vs Melvor's instant swap. Earlier critics still scored Melvor Idle 2 ahead on total ocean of content.",
+  "updatedAt": "2026-08-20T14:00:00Z",
+  "wave": 9,
+  "overall": "Review-fix pass: honest offline (18/24h, combat frozen while hidden), vault/loadout item safety, PWA network-first scripts, save sanitization.",
   "comparison": {
     "melvorIdle": "latest live critic: Veilforge Halt fork > Melvor instant switch",
     "melvorIdle2": "earlier critics: MI2 still the content-depth bar",
@@ -25,6 +25,7 @@
     {"id": "coherence", "name": "Whole-game playthrough polish", "status": "done", "critic": "client finally presents the fork"}
   ],
   "log": [
+    "Review-fix pass: offline hours, frozen hunts, loadout/unequip safety, network-first SW, escaped journal.",
     "Latest live critic: Halt overlay + Keep/Switch both work; wowed vs Melvor instant swap.",
     "Earlier critics: Melvor/MI2 win on breadth until the board was actually playable.",
     "Fixes that unblocked play: app grid, lastFloater, XP-on-cap, body-level Halt."

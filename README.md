@@ -16,7 +16,7 @@ Then visit `/` for the game and `/progress.html` for the live sheet.
 npm install
 npm test
 npm run pack      # www/ for Capacitor + Electron
-npm run electron  # desktop window (Steam candidate)
+npm run electron  # packs www/ then opens a desktop window (falls back to repo index.html if www is missing)
 ```
 
 ## What is here

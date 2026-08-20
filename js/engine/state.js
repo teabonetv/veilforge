@@ -1,4 +1,5 @@
 import { SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, levelFromXp, buildContent } from "../content/catalog.js";
+import { utf8ToB64, b64ToUtf8, clampName, safeMergeKey } from "../util/text.js";
 
 export const CONTENT = buildContent();
 export const TICK_MS = 50;
@@ -28,7 +29,11 @@ export function createState() {
       helm: null, body: null, legs: null, boots: null, gloves: null,
       shield: null, cape: null, amulet: null, ammo: null, ring: null
     },
-    loadouts: [{ name: "Wanderer", equipment: {} }],
+    loadouts: [{ name: "Wanderer", equipment: {
+      weapon: "drift-saber",
+      helm: null, body: null, legs: null, boots: null, gloves: null,
+      shield: null, cape: null, amulet: null, ammo: null, ring: null
+    }, tools: { axe: null, pick: null, rod: null } }],
     activeLoadout: 0,
     tools: { axe: null, pick: null, rod: null },
     skills: emptySkills(),
@@ -49,6 +54,7 @@ export function createState() {
     quests: { active: ["q-wake"], done: [], stats: { harvests: 0, laps: 0, bounties: 0, drove: {}, guildMax: 0 } },
     pets: {},
     shopBought: {},
+    offlineHours: 18,
     stats: { actions: 0, kills: 0, deaths: 0, gp: 0, offlineMs: 0 },
     log: [],
     settings: { toasts: true, reducedMotion: false, showCombatLog: true, tickScale: 1 },
@@ -144,7 +150,9 @@ function collectUnlocks(state, skill, from, to) {
 }
 
 export function addItem(state, id, qty) {
-  if (!id || qty <= 0) return false;
+  if (!id) return false;
+  qty = Math.floor(Number(qty) || 0);
+  if (qty <= 0) return true;
   if (id === "coins") {
     const gp = 1 + (courseBonuses(state).gpMul || 0);
     qty = Math.max(1, Math.round(qty * gp));
@@ -179,6 +187,15 @@ export function addItem(state, id, qty) {
   return true;
 }
 
+/** Like addItem, but logs a vault-full loss instead of failing silently. */
+export function stashItem(state, id, qty, why = "vault full") {
+  if (!id || qty <= 0) return true;
+  if (addItem(state, id, qty)) return true;
+  const nm = CONTENT.items[id]?.name || id;
+  log(state, `Could not stash ${nm} ×${qty} (${why}).`);
+  return false;
+}
+
 export function takeItem(state, id, qty) {
   if (id === "coins") {
     if (state.coins < qty) return false;
@@ -201,7 +218,7 @@ export function masteryLevel(xp) {
 }
 
 export function masteryBonus(state, masteryId, skillHint) {
-  const skill = skillHint || state.action?.skill;
+  const skill = skillHint || skillFromMasteryId(masteryId) || state.action?.skill;
   if (!skill || !state.skills[skill]) return { speed: 0, preserve: 0, output: 0, rare: 0 };
   const xp = state.skills[skill].mastery[masteryId] || 0;
   const ml = masteryLevel(xp);
@@ -212,6 +229,16 @@ export function masteryBonus(state, masteryId, skillHint) {
     output: ml * 0.001 + cp * 0.02,
     rare: ml * 0.002 + cp * 0.015
   };
+}
+
+function skillFromMasteryId(masteryId) {
+  if (!masteryId || typeof masteryId !== "string") return null;
+  const prefix = masteryId.split("-")[0];
+  return stateHasSkill(prefix) ? prefix : null;
+}
+
+function stateHasSkill(id) {
+  return SKILLS.some((s) => s.id === id);
 }
 
 export function guildBonuses(state, skill) {
@@ -290,13 +317,33 @@ export function load() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    const base = createState();
-    const merged = deepMerge(base, s);
-    if ((merged.settings?.tickScale || 1) > 1.5) merged.settings.tickScale = 1.5;
-    return merged;
+    return normalizeState(deepMerge(createState(), s));
   } catch {
     return null;
   }
+}
+
+export function normalizeState(merged) {
+  if ((merged.settings?.tickScale || 1) > 1.5) merged.settings.tickScale = 1.5;
+  merged.name = clampName(merged.name);
+  if (merged.shopBought?.["shop-offline"] && (merged.offlineHours || 18) < 24) merged.offlineHours = 24;
+  if (!merged.offlineHours) merged.offlineHours = 18;
+  remapQuestId(merged, "whisper-dock-beggar", "q-whisper");
+  for (const sk of Object.values(merged.skills || {})) {
+    if (!sk) continue;
+    sk.level = levelFromXp(sk.xp || 0);
+  }
+  const lo0 = merged.loadouts?.[0];
+  if (lo0 && lo0.name === "Wanderer" && lo0.equipment && !Object.values(lo0.equipment).some(Boolean)) {
+    lo0.equipment = { ...createState().loadouts[0].equipment };
+  }
+  return merged;
+}
+
+function remapQuestId(state, from, to) {
+  if (!state.quests) return;
+  state.quests.active = (state.quests.active || []).map((id) => (id === from ? to : id));
+  state.quests.done = (state.quests.done || []).map((id) => (id === from ? to : id));
 }
 
 function deepMerge(a, b) {
@@ -304,6 +351,7 @@ function deepMerge(a, b) {
   if (a && typeof a === "object") {
     const out = { ...a };
     for (const k of Object.keys(b || {})) {
+      if (!safeMergeKey(k)) continue;
       if (k in a && a[k] && typeof a[k] === "object" && !Array.isArray(a[k])) out[k] = deepMerge(a[k], b[k]);
       else out[k] = b[k];
     }
@@ -313,12 +361,26 @@ function deepMerge(a, b) {
 }
 
 export function exportSave(state) {
-  return btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+  const json = JSON.stringify(state);
+  return utf8ToB64(json);
 }
 
 export function importSave(str) {
-  const s = JSON.parse(decodeURIComponent(escape(atob(str.trim()))));
-  return deepMerge(createState(), s);
+  if (!str || !String(str).trim()) throw new Error("Empty save.");
+  let json;
+  try {
+    json = b64ToUtf8(str);
+  } catch {
+    throw new Error("That save could not be decoded.");
+  }
+  let s;
+  try {
+    s = JSON.parse(json);
+  } catch {
+    throw new Error("That save is not valid JSON.");
+  }
+  if (!s || typeof s !== "object") throw new Error("That save has no data.");
+  return normalizeState(deepMerge(createState(), s));
 }
 
 export { SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, levelFromXp };

@@ -1,4 +1,4 @@
-import { CONTENT, skillLevel, addItem, addXp, log } from "./state.js";
+import { CONTENT, skillLevel, addXp, log, stashItem } from "./state.js";
 
 export function checkQuests(state) {
   for (const qid of [...state.quests.active]) {
@@ -50,8 +50,8 @@ function reqMet(state, r) {
 function completeQuest(state, q) {
   state.quests.active = state.quests.active.filter((id) => id !== q.id);
   state.quests.done.push(q.id);
-  if (q.reward.coins) addItem(state, "coins", q.reward.coins);
-  if (q.reward.items) q.reward.items.forEach((it) => addItem(state, it.id, it.qty));
+  if (q.reward.coins) stashItem(state, "coins", q.reward.coins, "ledger");
+  if (q.reward.items) q.reward.items.forEach((it) => stashItem(state, it.id, it.qty, "ledger"));
   if (q.reward.xp) {
     for (const [sk, amt] of Object.entries(q.reward.xp)) addXp(state, sk, amt);
   }
