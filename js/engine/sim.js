@@ -40,7 +40,7 @@ function flushYield(state, act, xp) {
   state._uiDirty = true;
 }
 
-export function startAction(state, actionId) {
+export function startAction(state, actionId, opts = {}) {
   const act = CONTENT.actions[actionId];
   if (!act) return "Unknown action.";
   const lock = skillLocked(state, act.skill);
@@ -56,8 +56,24 @@ export function startAction(state, actionId) {
     }
   }
   if (state.combat.fighting) stopFight(state);
-  state.action = { id: actionId, skill: act.skill, started: state.now || 0, progress: 0, duration: actionDuration(state, act) };
+  let remaining = null;
+  if (opts.count != null && Number.isFinite(+opts.count)) {
+    const n = Math.floor(+opts.count);
+    if (n < 1) return "Nothing to craft with the vault as it stands.";
+    remaining = n;
+  }
+  state.action = { id: actionId, skill: act.skill, started: state.now || 0, progress: 0, duration: actionDuration(state, act), remaining };
   return null;
+}
+
+export function maxAffordable(state, act) {
+  if (!act?.inputs?.length) return Infinity;
+  let n = Infinity;
+  for (const inp of act.inputs) {
+    const need = Math.max(1, inp.qty || 1);
+    n = Math.min(n, Math.floor(bankCount(state, inp.item) / need));
+  }
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
 }
 
 export function stopAction(state) {
@@ -127,8 +143,18 @@ function tickOnce(state, ms) {
   state.action.progress += ms;
   const dur = state.action.duration;
   if (state.action.progress >= dur) {
+    const id = act.id;
     completeAction(state, act);
-    if (state.action && state.action.id === act.id) restartAction(state, act);
+    if (!state.action || state.action.id !== id) return;
+    if (state.action.remaining != null) {
+      state.action.remaining -= 1;
+      if (state.action.remaining <= 0) {
+        log(state, `Batch finished: ${act.name}.`);
+        state.action = null;
+        return;
+      }
+    }
+    restartAction(state, act);
   }
 }
 

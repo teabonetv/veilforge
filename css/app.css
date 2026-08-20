@@ -326,6 +326,32 @@ select, option {
 }
 .mico.lg { width: 48px; height: 48px; margin: 4px 0; }
 .card .mico { margin-bottom: 4px; }
+.card.compact { min-height: 0; gap: 2px; padding: 8px 9px; }
+.card.compact strong { font-size: 13px; line-height: 1.25; }
+.card.compact .io-short { color: var(--lilac); font-size: 11px; }
+.card.sel { outline: 1px solid var(--gold); }
+.job-tabs { margin: 8px 0 10px; }
+.job-tabs button.on { border-color: var(--gold); color: var(--gold); }
+.job-dock {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0 0 12px;
+  background: #161022;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.job-dock.idle { padding: 10px 12px; }
+.job-dock-head { display: flex; gap: 10px; align-items: center; }
+.job-dock-head h3 { margin: 0; font-size: 18px; }
+.job-dock .io { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.qty-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
+.qty-row > span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-right: 4px; }
+.qty-row button { padding: 4px 9px; font-size: 12px; }
+.qty-row button.on { border-color: var(--gold); color: var(--gold); }
+.job-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+.compact-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .heat { margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #181022; }
 .heat .xpbar { margin: 6px 0; }
 #commit.warn { color: var(--warn); }

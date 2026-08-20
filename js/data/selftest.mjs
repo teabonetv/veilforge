@@ -110,6 +110,15 @@ if (skillLevel(s, "timber") < 2) throw new Error("100s of chopping should ding a
 if (skillLevel(s, "timber") >= 8) throw new Error("timber still rocket-levels: " + s.skills.timber.level);
 if (levelFromXp(s.skills.timber.xp) !== s.skills.timber.level) throw new Error("xp/level mismatch");
 
+const batch = createState();
+addItem(batch, "log-0", 8);
+const bstart = startAction(batch, "ember-0", { count: 2 });
+if (bstart) throw new Error(bstart);
+for (let i = 0; i < 500; i++) tick(batch, 50);
+if (batch.action) throw new Error("craft batch should halt after 2");
+if ((batch.actionCounts["ember-0"] || 0) !== 2) throw new Error("crafted " + batch.actionCounts["ember-0"] + ", wanted 2");
+if (C.actions["smelt-0"]?.category !== "smelt" || !C.actions["smith-drift-saber"]?.category) throw new Error("anvil lanes missing");
+
 const need5 = XP_TABLE[5];
 const xpPerAct = C.actions["timber-0"].xp;
 const actsFor5 = Math.ceil(need5 / xpPerAct);

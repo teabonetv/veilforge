@@ -285,13 +285,13 @@ export function buildContent() {
     const arrow = addItem({ id: `arrow-${t}`, name: `${tier} Shafts`, category: "ammo", slot: "ammo", tier: t, stack: true, value: 1 + t, stats: { ranged: 1 + t }, desc: "Consumed on most mark shots." });
     actions[`fletch-arrow-${t}`] = {
       id: `fletch-arrow-${t}`, skill: "fletch", name: `Fletch ${tier} Shafts`, level: req,
-      time: 2800, xp: 5 + t * 3, masteryId: `fletch-arrow-${t}`,
+      time: 2800, xp: 5 + t * 3, masteryId: `fletch-arrow-${t}`, category: "shafts",
       inputs: [{ item: log, qty: 1 }, { item: "feather", qty: 1 }],
       outputs: [{ item: arrow, min: 12 + t * 2, max: 18 + t * 2 }]
     };
     actions[`fletch-bow-${t}`] = {
       id: `fletch-bow-${t}`, skill: "fletch", name: `Fletch ${tier} Longbow`, level: Math.min(MAX_LEVEL, req + 1),
-      time: 6200, xp: 20 + t * 13, masteryId: `fletch-bow-${t}`,
+      time: 6200, xp: 20 + t * 13, masteryId: `fletch-bow-${t}`, category: "bows",
       inputs: [{ item: log, qty: 2 }, { item: "thread", qty: 1 }],
       outputs: [{ item: idify(`${tier}-longbow`), min: 1, max: 1 }]
     };
