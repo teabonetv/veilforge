@@ -4,7 +4,7 @@ A browser idle / incremental RPG in the spirit of Melvor Idle and Melvor Idle 2 
 
 **Play (free, HTTPS):** https://teabonetv.github.io/veilforge/
 
-That GitHub Pages site updates when `main` is pushed to `github.com/teabonetv/veilforge`. Live build notes: `progress.html`. Store packaging (Android, iOS, Steam): `RELEASE.md`.
+Source for that site: public repo https://github.com/teabonetv/veilforge — push `main` there to update the playtest (GitHub Pages, no local server). Live build notes: `progress.html`. Store packaging (Android, iOS, Steam): `RELEASE.md`.
 
 ## Run locally
 
