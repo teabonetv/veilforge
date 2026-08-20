@@ -56,6 +56,9 @@ if (!iconMarkup(Object.values(C.monsters)[0].model).includes("rect")) throw new 
 const gates = new Set(C.dungeons.map((d) => d.model.kind));
 if (gates.size < 6) throw new Error("dungeon gates not unique: " + [...gates].join(","));
 
+if (C.quests[0].id !== "q-wake" || !/Timber/.test(C.quests[0].how || "")) {
+  throw new Error("first-hour goal is still flavor: " + JSON.stringify(C.quests[0]));
+}
 const s = createState();
 if (s.loadouts[0].equipment.weapon !== "drift-saber") throw new Error("default Wanderer loadout missing saber");
 const err = startAction(s, "timber-0");

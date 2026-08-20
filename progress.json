@@ -1,32 +1,31 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-20T15:45:00Z",
-  "wave": 13,
-  "overall": "Live critic: unique-boards, vault-wanderer, and art wowed; overall still Melvor Idle. Wave 13 ships the named gap — per-action item and XP drips so chopping is not a silent bar.",
+  "updatedAt": "2026-08-20T16:00:00Z",
+  "wave": 14,
+  "overall": "Live critics still not overall wow. Wave 14 puts the chop→burn→cook→fight chain on the Goal bar with XP percents on every skill.",
   "comparison": {
-    "melvorIdle": "Yield drip now exists; Melvor still wins on first-hour teaching and drop sourcing",
-    "melvorIdle2": "paperdoll denser; not MI2 illustrated character",
-    "runescape": "workshop player wears the kit; still primitive meshes",
-    "oursBetter": "halt-commit, unique-boards, vault-wanderer, art-models-assets (this critic)",
-    "biggestGap": "per-action dopamine — +item / +xp ticker (this wave)"
+    "melvorIdle": "First hour still thinner than Melvor gated tutorial",
+    "melvorIdle2": "completion log / drop tables still missing",
+    "runescape": "3D monsters exist in workshop but critics missed them or vault inspect failed",
+    "oursBetter": "halt-commit (this live pass)",
+    "biggestGap": "first-hour chain buried under flavor (this wave)"
   },
   "pieces": [
-    {"id": "halt-commit", "name": "One job, Halt overlay", "status": "building", "critic": "this critic: claimed instant switch; prior live play wowed Halt overlay — do not trust either until next live pass"},
-    {"id": "gathering-groves", "name": "Timber Trawl Vein Ember groves", "status": "building", "critic": "this critic: Melvor Idle 2 — missing per-node mastery bars"},
-    {"id": "artisan-sinks", "name": "Hearth Anvil Fletch Loom Sigil Vial", "status": "building", "critic": "this critic: RuneScape Make-X / bulk craft"},
-    {"id": "unique-boards", "name": "Course Whisper Soil Drove Chart", "status": "wow", "critic": "this critic: Veilforge Course pillars"},
-    {"id": "combat-triangle", "name": "Fights food triangle specials", "status": "building", "critic": "this critic: RuneScape — no accuracy/DPS readout"},
-    {"id": "vault-wanderer", "name": "Vault 3D + Wanderer kit", "status": "wow", "critic": "this critic: Veilforge 3D inspect + paperdoll"},
-    {"id": "stall-ledger", "name": "Shop and quests", "status": "building", "critic": "this critic: Melvor Idle 2 drop sourcing"},
-    {"id": "first-hour", "name": "Unlock cascade and goals", "status": "building", "critic": "this critic: Melvor Idle tutorial gating"},
-    {"id": "coherence", "name": "Whole-game connective tissue", "status": "building", "critic": "this critic: Drift flavor hierarchy / Special 28% ON"},
-    {"id": "art-models-assets", "name": "Icons, models, paperdoll, dioramas", "status": "wow", "critic": "this critic: Veilforge 3D groves + paperdoll; vault texture glitch noted"}
+    {"id": "halt-commit", "name": "One job, Halt overlay", "status": "building", "critic": "live: Veilforge wins Halt; not wowed (no queue)"},
+    {"id": "gathering-groves", "name": "Timber Trawl Vein Ember groves", "status": "building", "critic": "live: Melvor Idle 2"},
+    {"id": "artisan-sinks", "name": "Hearth Anvil Fletch Loom Sigil Vial", "status": "building", "critic": "live: RuneScape Make-X"},
+    {"id": "unique-boards", "name": "Course Whisper Soil Drove Chart", "status": "building", "critic": "live vs prior wow conflict — not trusted"},
+    {"id": "combat-triangle", "name": "Fights food triangle specials", "status": "building", "critic": "live: Melvor Idle depth"},
+    {"id": "vault-wanderer", "name": "Vault 3D + Wanderer kit", "status": "building", "critic": "live+art: vault inspect blank"},
+    {"id": "stall-ledger", "name": "Shop and quests", "status": "building", "critic": "live: Melvor Idle 2 completion"},
+    {"id": "first-hour", "name": "Unlock cascade and goals", "status": "building", "critic": "coherence: no numbered teaching — this wave"},
+    {"id": "coherence", "name": "Whole-game connective tissue", "status": "building", "critic": "flavor vs teaching"},
+    {"id": "art-models-assets", "name": "Icons, models, paperdoll, dioramas", "status": "building", "critic": "art: not wow; live: wow — conflict, vault inspect failed"}
   ],
   "log": [
-    "Wave 13: per-action +item/+xp drips on the commit bar, workshop floaters, tick ping; offline skips drip spam.",
-    "Live critic (Pages): unique-boards, vault-wanderer, art wowed; overall Melvor Idle on silent gathering.",
-    "Wave 12: SVG glyphs, monster kinds, dungeon gates, workshop paperdoll.",
-    "Wave 11 builder: unique-skill identity, combat ops, vault ops."
+    "Wave 14: Goal strip with numbered first-hour chain; XP % on skill nav and action bar.",
+    "Wave 13: per-action +item/+xp drips.",
+    "Live trio: not overall wow. Biggest named gap was buried chop→craft→fight teaching."
   ]
 }
