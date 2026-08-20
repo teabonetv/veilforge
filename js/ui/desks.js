@@ -375,11 +375,14 @@ export function renderStall(ctx) {
       const { cost, bought, deal: onDeal } = offerPrice(state, o);
       const sold = o.max && bought >= o.max;
       const it = o.item ? CONTENT.items[o.item] : null;
+      const lvok = !o.reqLevel || skillLevel(state, o.reqSkill) >= o.reqLevel;
       const qty = o.qty && o.qty > 1 ? `×${o.qty}` : (it ? "×1" : "upgrade");
-      return `<button type="button" class="vtile stall-tile ${stallPick === o.id ? "on" : ""} ${sold ? "locked" : ""} ${onDeal ? "deal" : ""}" data-act="stall-pick" data-arg="${o.id}">
+      const req = !lvok ? `Need ${o.reqSkill} ${o.reqLevel}` : "";
+      return `<button type="button" class="vtile stall-tile ${stallPick === o.id ? "on" : ""} ${sold || !lvok ? "locked" : ""} ${onDeal ? "deal" : ""}" data-act="stall-pick" data-arg="${o.id}" ${sold ? "disabled" : ""}>
         <span class="vico">${iconMarkup(offerModel(o), 48)}</span>
         <span class="vnm">${escapeHtml(offerName(o))}</span>
         <span class="vqty">${Math.floor(cost).toLocaleString()} ✦ ${qty}${onDeal ? " · dusk" : ""}</span>
+        ${req ? `<span class="vlock">${escapeHtml(req)}</span>` : ""}
       </button>`;
     }).join("") || "<p class='blurb'>This keeper has nothing hung.</p>";
   }

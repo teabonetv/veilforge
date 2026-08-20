@@ -354,10 +354,9 @@ function glyph(model, cls = "mico") {
 
 export function renderShell(ctx) {
   const { state, root } = ctx;
-  const shopTab = `<button type="button" class="skill shop-rail ${desk === "stall" ? "on" : ""}" data-act="desk" data-arg="stall">${glyph({ kind: "coins", hue: 42, seed: 2, eid: "tab-stall" }, "skico")}<span class="sn">Shop</span><span class="lv">Quay</span></button>`;
-  const left = shopTab + SKILLS.map((s) => {
+  const left = SKILLS.map((s) => {
     const lv = skillLevel(state, s.id);
-    const on = desk === "workshop" && selectedSkill === s.id ? "on" : "";
+    const on = selectedSkill === s.id ? "on" : "";
     const lock = skillLocked(state, s.id);
     const pct = lock ? 0 : Math.floor(xpPct(state, s.id));
     const ico = { kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3, eid: s.id };
@@ -1414,7 +1413,7 @@ function renderShop(ctx) {
       const sold = o.max && bought >= o.max;
       const lvok = !o.reqLevel || skillLevel(state, o.reqSkill) >= o.reqLevel;
       const why = sold ? "Sold out" : !lvok ? `Need ${skillName(o.reqSkill)} ${o.reqLevel}` : state.coins < cost ? "Short on marks" : "";
-      return `<button type="button" class="ware ${sold || !lvok ? "locked" : ""} ${onDeal ? "deal" : ""}" data-act="buy" data-arg="${o.id}" ${sold ? "disabled" : ""}>
+      return `<button type="button" class="ware ${sold || !lvok ? "locked" : ""} ${onDeal ? "deal" : ""}" data-act="buy" data-arg="${o.id}" ${sold || !lvok ? "disabled" : ""}>
         <span class="bico">${iconMarkup(offerModel(o), 28)}</span>
         <strong>${escapeHtml(stallOfferName(o))}</strong>
         <span class="cost">${Math.floor(cost).toLocaleString()} ✦${onDeal ? " dusk" : ""}</span>

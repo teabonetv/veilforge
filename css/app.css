@@ -218,7 +218,6 @@ select, option {
 #codex.closed { min-height: 26px; padding: 2px 14px; }
 #layout { display: grid; grid-template-columns: 196px minmax(0, 1fr) 372px; min-height: 0; min-width: 0; overflow: hidden; }
 #skill-nav { overflow: auto; min-width: 0; min-height: 0; border-right: 1px solid var(--line); padding: 8px; background: #120a1acc; }
-#skill-nav .skill.shop-rail { border-color: var(--gold-dim); margin-bottom: 10px; }
 #skill-nav .skill {
   width: 100%; max-width: 100%; display: grid; grid-template-columns: 28px 1fr auto; grid-template-rows: auto 4px; gap: 4px 6px;
   text-align: left; margin-bottom: 3px; padding: 6px 8px;
@@ -370,6 +369,8 @@ select, option {
   overflow: auto;
 }
 .stall-tile.deal { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold-dim); }
+.stall-tile.locked { opacity: 0.45; }
+.stall-tile .vlock { font-size: 10px; color: var(--rose); }
 .stall-inspect { border-left: 1px solid var(--line); padding: 12px; background: #160e22; overflow: auto; }
 .stall-inspect .dico.lg { width: 64px; height: 64px; display: inline-flex; }
 .quay-banner {
