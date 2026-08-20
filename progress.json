@@ -1,31 +1,33 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-20T16:00:00Z",
-  "wave": 14,
-  "overall": "Live critics still not overall wow. Wave 14 puts the chop→burn→cook→fight chain on the Goal bar with XP percents on every skill.",
+  "updatedAt": "2026-08-20T16:48:00Z",
+  "wave": 15,
+  "overall": "Merged origin/main yield-drip into critic-wave. Live critics still not overall wow. Unique Imagine cells shipped; vault inspect canvas fix shipped. Do not trust earlier wow claims on unique-boards / vault / art.",
   "comparison": {
-    "melvorIdle": "First hour still thinner than Melvor gated tutorial",
+    "melvorIdle": "Yield drip exists; first hour still thinner than Melvor gated tutorial",
     "melvorIdle2": "completion log / drop tables still missing",
-    "runescape": "3D monsters exist in workshop but critics missed them or vault inspect failed",
-    "oursBetter": "halt-commit (this live pass)",
-    "biggestGap": "first-hour chain buried under flavor (this wave)"
+    "runescape": "3D paperdoll and inspect exist; meshes still primitive",
+    "oursBetter": "halt-commit",
+    "biggestGap": "live critics still name first-hour teaching and unique painted icons vs Melvor sprites"
   },
   "pieces": [
     {"id": "halt-commit", "name": "One job, Halt overlay", "status": "building", "critic": "live: Veilforge wins Halt; not wowed (no queue)"},
     {"id": "gathering-groves", "name": "Timber Trawl Vein Ember groves", "status": "building", "critic": "live: Melvor Idle 2"},
     {"id": "artisan-sinks", "name": "Hearth Anvil Fletch Loom Sigil Vial", "status": "building", "critic": "live: RuneScape Make-X"},
-    {"id": "unique-boards", "name": "Course Whisper Soil Drove Chart", "status": "building", "critic": "live vs prior wow conflict — not trusted"},
-    {"id": "combat-triangle", "name": "Fights food triangle specials", "status": "building", "critic": "live: Melvor Idle depth"},
-    {"id": "vault-wanderer", "name": "Vault 3D + Wanderer kit", "status": "building", "critic": "live+art: vault inspect blank"},
+    {"id": "unique-boards", "name": "Course Whisper Soil Drove Chart", "status": "building", "critic": "main claimed wow; later live pass conflicted — not trusted"},
+    {"id": "vault-wanderer", "name": "Vault 3D + Wanderer kit", "status": "building", "critic": "main claimed wow; later live pass saw blank inspect — canvas fix after"},
     {"id": "stall-ledger", "name": "Shop and quests", "status": "building", "critic": "live: Melvor Idle 2 completion"},
-    {"id": "first-hour", "name": "Unlock cascade and goals", "status": "building", "critic": "coherence: no numbered teaching — this wave"},
+    {"id": "first-hour", "name": "Unlock cascade and goals", "status": "building", "critic": "Goal bar shipped; still not a Melvor tutorial gate"},
     {"id": "coherence", "name": "Whole-game connective tissue", "status": "building", "critic": "flavor vs teaching"},
-    {"id": "art-models-assets", "name": "Icons, models, paperdoll, dioramas", "status": "building", "critic": "art: not wow; live: wow — conflict, vault inspect failed"}
+    {"id": "combat-triangle", "name": "Fights food triangle specials", "status": "building", "critic": "live: Melvor Idle depth"},
+    {"id": "art-models-assets", "name": "Icons, models, paperdoll, dioramas", "status": "building", "critic": "unique eid atlases shipped after main; prior wow not trusted"}
   ],
   "log": [
+    "Wave 15: merge origin/main yield-drip (floaters) with critic-wave sticky Last yield + unique Imagine icons.",
     "Wave 14: Goal strip with numbered first-hour chain; XP % on skill nav and action bar.",
-    "Wave 13: per-action +item/+xp drips.",
-    "Live trio: not overall wow. Biggest named gap was buried chop→craft→fight teaching."
+    "Wave 13: per-action +item/+xp drips on the commit bar, workshop floaters, tick ping; offline skips drip spam.",
+    "Wave 12: SVG glyphs, monster kinds, dungeon gates, workshop paperdoll.",
+    "Wave 11 builder: unique-skill identity, combat ops, vault ops."
   ]
 }
