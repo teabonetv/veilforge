@@ -790,7 +790,7 @@ function renderChart(ctx) {
   const study = CONTENT.constellations.map((c) => {
     return `<button type="button" class="card" data-act="start" data-arg="chart-${c.id}" disabled style="display:none"></button>`;
   }).join("");
-  return `<p class="blurb">Only ${state.chart.slots} constellations bind at once. Study grants stardust. Spend dust on ranked modifiers — that is Chart, not another timer.</p>
+  return `<p class="blurb">Only ${state.chart.slots} constellations bind at once. Study grants stardust. Spend dust on ranked modifiers — that is Chart, not another timer. A slotted star with 0 study grants nothing.</p>
     <div class="pillars">${slots.join("")}</div>
     <p class="muted">Stardust ${bankCount(state, "stardust")}</p>
     <div class="grid">${(CONTENT.chartRanks || []).map((r) => {

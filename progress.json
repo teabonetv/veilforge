@@ -1,9 +1,9 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-20T15:40:00Z",
+  "updatedAt": "2026-08-20T16:00:00Z",
   "wave": 12,
-  "overall": "Wave 12 adds an art-models-assets piece and ships Melvor-style readable SVG glyphs, 18+ monster silhouettes, dungeon gate variants, workshop paperdoll, and complete wanderer attachments. Halt still the only wow; art was the sneer.",
+  "overall": "Wave 12 adds an art-models-assets piece and ships Melvor-style readable SVG glyphs, 18+ monster silhouettes, dungeon gate variants, workshop paperdoll, and complete wanderer attachments. Halt still the only wow; art was the sneer. Merged main review-fix pass (honest offline, vault/PWA/save safety).",
   "comparison": {
     "melvorIdle": "Bank glyphs now exist; still not a hand-painted unique sprite per item",
     "melvorIdle2": "paperdoll denser; not MI2 illustrated character",
@@ -24,8 +24,10 @@
     {"id": "art-models-assets", "name": "Icons, models, paperdoll, dioramas", "status": "building", "critic": "art director: Melvor wins on icons; 130 monsters were 3 templates — glyphs + families shipped"}
   ],
   "log": [
+    "Merged origin/main review-fix pass: offline hours, frozen hunts, loadout/unequip safety, network-first SW, escaped journal.",
     "Wave 12: dedicated art critic; SVG bank/skill/combat glyphs; monster kinds; dungeon gates; workshop=wanderer mesh; helm/gloves/amulet/ring/ammo on paperdoll.",
     "Wave 11 builder: unique-skill identity, combat ops, vault ops.",
-    "Wave 10 live critic: Halt wow; overall Melvor Idle."
+    "Wave 10 live critic: Halt wow; overall Melvor Idle.",
+    "Fixes that unblocked play: app grid, lastFloater, XP-on-cap, body-level Halt."
   ]
 }
