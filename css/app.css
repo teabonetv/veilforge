@@ -63,7 +63,7 @@ button.locked, button:disabled { opacity: 0.45; cursor: not-allowed; }
 #codex { grid-area: codex; }
 #commit { grid-area: commit; }
 #desk-nav { grid-area: nav; }
-#layout, #bank-desk, #wander-desk { grid-area: stage; min-height: 0; }
+#layout, #bank-desk, #wander-desk, #stall-desk { grid-area: stage; min-height: 0; }
 #layout { min-height: 0; }
 #top {
   display: grid;
@@ -326,6 +326,58 @@ select, option {
 }
 .mico.lg { width: 48px; height: 48px; margin: 4px 0; }
 .card .mico { margin-bottom: 4px; }
+.card.compact { min-height: 0; gap: 2px; padding: 8px 9px; }
+.card.compact strong { font-size: 13px; line-height: 1.25; }
+.card.compact .io-short { color: var(--lilac); font-size: 11px; }
+.card.sel { outline: 1px solid var(--gold); }
+.job-tabs { margin: 8px 0 10px; }
+.job-tabs button.on { border-color: var(--gold); color: var(--gold); }
+.job-dock {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  margin: 0 0 12px;
+  background: #161022;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.job-dock.idle { padding: 10px 12px; }
+.job-dock-head { display: flex; gap: 10px; align-items: center; }
+.job-dock-head h3 { margin: 0; font-size: 18px; }
+.job-dock .io { display: flex; flex-direction: column; gap: 2px; font-size: 12px; }
+.qty-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin-top: 4px; }
+.qty-row > span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; margin-right: 4px; }
+.qty-row button { padding: 4px 9px; font-size: 12px; }
+.qty-row button.on { border-color: var(--gold); color: var(--gold); }
+.job-acts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px; }
+.compact-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+.stall-layout { display: grid; grid-template-columns: 1fr 340px; min-height: 0; gap: 0; flex: 1; }
+#stall-desk { grid-template-rows: auto auto auto auto 1fr; }
+#stall-search { margin: 8px 16px; width: calc(100% - 32px); background: #0e0816; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; color: inherit; }
+#stall-booths { padding: 0 16px 8px; }
+#stall-booths button { display: inline-flex; align-items: center; gap: 6px; }
+#stall-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+  gap: 8px;
+  padding: 12px 16px 32px;
+  align-content: start;
+  overflow: auto;
+}
+.stall-tile.deal { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold-dim); }
+.stall-inspect { border-left: 1px solid var(--line); padding: 12px; background: #160e22; overflow: auto; }
+.stall-inspect .dico.lg { width: 64px; height: 64px; display: inline-flex; }
+.quay-banner {
+  margin: 0 16px 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--gold-dim);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #2a1810aa, #160e22f2);
+}
+.quay-banner p { margin: 4px 0; font-size: 13px; }
+.hunger-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.hunger-row button { font-size: 11px; }
 .heat { margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #181022; }
 .heat .xpbar { margin: 6px 0; }
 #commit.warn { color: var(--warn); }
@@ -466,8 +518,8 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 #desk-nav button.on { border-color: var(--gold); color: var(--gold); }
 .desk-tag { margin-left: auto; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--rose); }
 #layout.away { display: none !important; }
-#wander-desk:not([hidden]), #bank-desk:not([hidden]) { display: grid; height: 100%; min-height: 0; }
-#bank-desk[hidden], #wander-desk[hidden] { display: none !important; }
+#wander-desk:not([hidden]), #bank-desk:not([hidden]), #stall-desk:not([hidden]) { display: grid; height: 100%; min-height: 0; }
+#bank-desk[hidden], #wander-desk[hidden], #stall-desk[hidden] { display: none !important; }
 .desk-head { display: flex; gap: 12px; align-items: baseline; padding: 12px 16px 4px; }
 .desk-head h2 { margin: 0; font-size: 28px; }
 .desk-head p { color: var(--muted); margin: 0; }
@@ -552,5 +604,5 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
   #app { height: auto; min-height: 100dvh; }
   .bank-grid { grid-template-columns: 1fr; }
   #right { padding-bottom: max(16px, env(safe-area-inset-bottom)); }
-  .vault-layout, .wander-grid, .wander-stage { grid-template-columns: 1fr; }
+  .vault-layout, .wander-grid, .wander-stage, .stall-layout { grid-template-columns: 1fr; }
 }

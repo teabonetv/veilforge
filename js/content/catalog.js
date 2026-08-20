@@ -285,13 +285,13 @@ export function buildContent() {
     const arrow = addItem({ id: `arrow-${t}`, name: `${tier} Shafts`, category: "ammo", slot: "ammo", tier: t, stack: true, value: 1 + t, stats: { ranged: 1 + t }, desc: "Consumed on most mark shots." });
     actions[`fletch-arrow-${t}`] = {
       id: `fletch-arrow-${t}`, skill: "fletch", name: `Fletch ${tier} Shafts`, level: req,
-      time: 2800, xp: 5 + t * 3, masteryId: `fletch-arrow-${t}`,
+      time: 2800, xp: 5 + t * 3, masteryId: `fletch-arrow-${t}`, category: "shafts",
       inputs: [{ item: log, qty: 1 }, { item: "feather", qty: 1 }],
       outputs: [{ item: arrow, min: 12 + t * 2, max: 18 + t * 2 }]
     };
     actions[`fletch-bow-${t}`] = {
       id: `fletch-bow-${t}`, skill: "fletch", name: `Fletch ${tier} Longbow`, level: Math.min(MAX_LEVEL, req + 1),
-      time: 6200, xp: 20 + t * 13, masteryId: `fletch-bow-${t}`,
+      time: 6200, xp: 20 + t * 13, masteryId: `fletch-bow-${t}`, category: "bows",
       inputs: [{ item: log, qty: 2 }, { item: "thread", qty: 1 }],
       outputs: [{ item: idify(`${tier}-longbow`), min: 1, max: 1 }]
     };
@@ -343,7 +343,7 @@ export function buildContent() {
       });
       shop.push({
         id: `shop-${id}`, item: id, qty: 1, cost: 80 * Math.pow(t + 1, 2.15),
-        reqSkill: tt.skill, reqLevel: Math.min(1 + t * 8, 99),
+        reqSkill: tt.skill, reqLevel: Math.min(1 + t * 8, 99), booth: "tools",
         desc: `${tt.name} upgrade. The gathering identity of Melvor lives or dies on this ladder.`
       });
     });
@@ -363,7 +363,11 @@ export function buildContent() {
     { id: "shop-slots", item: null, effect: "slots", cost: 400, repeatable: true, max: 20, name: "Bank Slots", desc: "+6 unique stacks. Full banks halt crafts — this is the Melvor tax." },
     { id: "shop-thread", item: "thread", qty: 12, cost: 80, repeatable: true, name: "Silver Thread Pack", desc: "Loom binder. Fletch and hidework starve without it." },
     { id: "shop-feather", item: "feather", qty: 20, cost: 70, repeatable: true, name: "Gloam Feather Pack", desc: "Fletching shafts. Trawl snags a few; the stall is the faucet." },
-    { id: "shop-bounty-pack", item: "bounty-token", qty: 4, cost: 220, repeatable: true, name: "Bounty Token Pack", desc: "Spend tokens on rerolls and this stall — contracts are not a dead currency." }
+    { id: "shop-bounty-pack", item: "bounty-token", qty: 4, cost: 220, repeatable: true, name: "Bounty Token Pack", desc: "Spend tokens on rerolls and this stall — contracts are not a dead currency." },
+    { id: "shop-food", item: "food-0", qty: 8, cost: 48, repeatable: true, booth: "larder", name: "Dock Rations", desc: "Eight braised Drift. A tax for skipping the hearth — still cheaper than a gravestone." },
+    { id: "shop-ashes", item: "ashes", qty: 12, cost: 36, repeatable: true, booth: "packs", name: "Star Ash Sack", desc: "Ash without a fire. Sigil and vial still want a plan." },
+    { id: "shop-bones", item: "bones", qty: 8, cost: 48, repeatable: true, booth: "contract", name: "Pale Bone Bundle", desc: "Vow refill when the docks go quiet." },
+    { id: "shop-pouches", item: "seed-pouch", qty: 3, cost: 90, repeatable: true, booth: "larder", name: "Three Pouches", desc: "Soil's faucet when groves refuse a seed." }
   );
 
   addItem({
@@ -380,6 +384,16 @@ export function buildContent() {
     { id: "shop-star-signet", item: "star-signet", qty: 1, cost: 1400, name: "Star Signet", desc: "A ring stall classic." },
     { id: "shop-chart-slot", item: null, effect: "chartSlot", cost: 20000, name: "Third Chart Slot", desc: "Aim one more constellation. Scarcity is the point of Chart." }
   );
+
+  for (let t = 0; t < 4; t++) {
+    const tax = 3;
+    const log = items[`log-${t}`];
+    const ore = items[`ore-${t}`];
+    const fish = items[`fish-${t}`];
+    if (log) shop.push({ id: `shop-relief-log-${t}`, item: `log-${t}`, qty: 4, cost: (log.value || 4) * 4 * tax, repeatable: true, booth: "relief", name: `Four ${TIER_NAMES[t]} logs`, desc: "Relief stock. Chopping is cheaper; this is a dusk tax." });
+    if (ore) shop.push({ id: `shop-relief-ore-${t}`, item: `ore-${t}`, qty: 4, cost: (ore.value || 6) * 4 * tax, repeatable: true, booth: "relief", name: `Four ${TIER_NAMES[t]} ore`, desc: "Skip the seam once. The quay keeps the difference." });
+    if (fish) shop.push({ id: `shop-relief-fish-${t}`, item: `fish-${t}`, qty: 4, cost: (fish.value || 4) * 4 * tax, repeatable: true, booth: "relief", name: `Four ${TIER_NAMES[t]} catch`, desc: "Raw. Hearth still has to see it." });
+  }
 
   const monsterPacks = [
     ["Ash Mite", "Gutter Rat", "Dusk Imp", "Cinder Bat", "Moss Wolf", "Vault Crab"],

@@ -6,6 +6,7 @@ import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
 import { iconMarkup, iconUrl } from "../scene/icons.js";
 import { PIX_EID } from "../scene/pix-map.js";
+import { offerModel, quayDeal, inferBooth, QUAY_BOOTHS } from "../engine/market.js";
 
 let rng = 20260820;
 Math.random = () => {
@@ -109,6 +110,15 @@ if (!(s._dripSeq > 0) || !(s.lastDrip?.xp > 0) || !s.lastDrip.items?.length) {
 if (skillLevel(s, "timber") < 2) throw new Error("100s of chopping should ding at least once: " + s.skills.timber.level);
 if (skillLevel(s, "timber") >= 8) throw new Error("timber still rocket-levels: " + s.skills.timber.level);
 if (levelFromXp(s.skills.timber.xp) !== s.skills.timber.level) throw new Error("xp/level mismatch");
+
+const batch = createState();
+addItem(batch, "log-0", 8);
+const bstart = startAction(batch, "ember-0", { count: 2 });
+if (bstart) throw new Error(bstart);
+for (let i = 0; i < 500; i++) tick(batch, 50);
+if (batch.action) throw new Error("craft batch should halt after 2");
+if ((batch.actionCounts["ember-0"] || 0) !== 2) throw new Error("crafted " + batch.actionCounts["ember-0"] + ", wanted 2");
+if (C.actions["smelt-0"]?.category !== "smelt" || !C.actions["smith-drift-saber"]?.category) throw new Error("anvil lanes missing");
 
 const need5 = XP_TABLE[5];
 const xpPerAct = C.actions["timber-0"].xp;
@@ -334,6 +344,19 @@ const te = equipItem(tool, "drift-hatchet");
 if (te) throw new Error(te);
 if (bankCount(tool, "drift-hatchet")) throw new Error("equipped tool still in the vault");
 if (tool.tools.axe !== "drift-hatchet") throw new Error("tool slot empty");
+
+if (QUAY_BOOTHS.length < 6) throw new Error("quay booths missing");
+if (!C.shop.find((o) => o.id === "shop-food") || !C.shop.find((o) => o.id === "shop-relief-log-0")) {
+  throw new Error("quay larder/relief stock missing");
+}
+for (const o of C.shop) {
+  const booth = inferBooth(o);
+  if (!QUAY_BOOTHS.some((b) => b.id === booth)) throw new Error("ware without a keeper: " + o.id);
+  const html = iconMarkup(offerModel(o));
+  if (!html.includes("pix") && !html.includes("<svg")) throw new Error("shop ware has no icon: " + o.id);
+}
+if (!quayDeal().offer) throw new Error("dusk bargain missing");
+if (offerModel(C.shop.find((o) => o.item === "log-0")).kind !== "log") throw new Error("relief log icon not a log");
 
 console.log(JSON.stringify({
   items: Object.keys(C.items).length,

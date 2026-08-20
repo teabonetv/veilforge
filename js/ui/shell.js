@@ -1,11 +1,12 @@
 import { escapeHtml } from "../util/text.js";
 import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap, stashItem, upcomingUnlocks, bankValue, masteryBonus } from "../engine/state.js";
-import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems, setUseCompost } from "../engine/sim.js";
+import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems, setUseCompost, maxAffordable } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval, swapWeaponStyle } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
-import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
+import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf, onStallSearch, onStallBooth, onStallPick, onStallPacks, stallPackCount } from "./desks.js";
 import { iconMarkup, SKILL_ICON_KIND } from "../scene/icons.js";
+import { quayDeal, offerName as stallOfferName, offerPrice, pawnRate } from "../engine/market.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -14,11 +15,11 @@ let lastDrip = 0;
 let audioCtx = null;
 let bankFilter = "";
 let bankTab = "All";
-let shopFilter = "";
-let shopCat = "tools";
-let shopTool = "all";
 let codexOpen = localStorage.getItem("veilforge-codex") !== "0";
 let selectedSkill = "timber";
+let selectedAction = null;
+let craftQty = "inf";
+let jobTabs = { anvil: "smelt" };
 let openAreas = new Set();
 
 const TOOL_LABEL = { axe: "Hatchets", pick: "Picks", rod: "Rods" };
@@ -47,9 +48,9 @@ export function bindUI(ctx) {
       bankFilter = e.target.value.toLowerCase();
       renderBank(ctx);
     }
-    if (e.target.id === "shop-search") {
-      shopFilter = e.target.value.toLowerCase();
-      renderShop(ctx);
+    if (e.target.id === "stall-search") {
+      onStallSearch(e.target.value);
+      renderDesks(ctx);
     }
     if (e.target.id === "vault-search") {
       onVaultSearch(e.target.value);
@@ -86,7 +87,22 @@ function handle(ctx, act, arg, el) {
   switch (act) {
     case "skill":
       selectedSkill = arg;
+      if (selectedAction && CONTENT.actions[selectedAction]?.skill !== arg) selectedAction = null;
       setDesk("workshop");
+      ctx.render();
+      break;
+    case "job-pick":
+      selectedAction = arg;
+      setDesk("workshop");
+      ctx.render();
+      break;
+    case "job-tab":
+      jobTabs[selectedSkill] = arg;
+      selectedAction = null;
+      ctx.render();
+      break;
+    case "job-qty":
+      craftQty = arg || "inf";
       ctx.render();
       break;
     case "checkpoint": err(spendCheckpoint(state, arg)); ctx.render(); break;
@@ -102,9 +118,15 @@ function handle(ctx, act, arg, el) {
       break;
     case "start":
       setDesk("workshop");
+      selectedAction = arg;
       if (state.action?.id === arg) break;
-      if (!confirmBusy(ctx, arg, "action", () => { err(startAction(state, arg)); ctx.render(); })) break;
-      err(startAction(state, arg)); ctx.render(); break;
+      {
+        const count = resolveCraftCount(state, CONTENT.actions[arg]);
+        const go = () => { err(startAction(state, arg, { count })); ctx.render(); };
+        if (!confirmBusy(ctx, arg, "action", go)) break;
+        go();
+      }
+      break;
     case "stop":
       if (state.combat.fighting || state.action) {
         confirmHalt(ctx);
@@ -158,9 +180,20 @@ function handle(ctx, act, arg, el) {
     case "feed": err(feedPen(state, +arg)); ctx.render(); break;
     case "bounty": err(rollBounty(state)); ctx.render(); break;
     case "bury": err(buryBones(state)); ctx.render(); break;
-    case "buy": err(buyShop(state, arg)); ctx.render(); break;
+    case "buy": err(buyShop(state, arg, stallPackCount())); ctx.render(); break;
     case "sell": sellItems(state, arg, 1); ctx.render(); break;
     case "sell-all": sellItems(state, arg, "all"); ctx.render(); break;
+    case "quay-pawn": {
+      const deal = quayDeal();
+      const it = CONTENT.items[arg];
+      if (!it || (it.category !== deal.hunger && it.id !== deal.hunger)) {
+        toast(ctx, "The quay is not hungry for that this watch.");
+        break;
+      }
+      err(sellItems(state, arg, "all", { rate: pawnRate(), quay: true }));
+      ctx.render();
+      break;
+    }
     case "pouch": err(openPouch(state)); ctx.render(); break;
     case "build-pillar": err(buyPillar(state, el.dataset.cat, arg)); ctx.render(); break;
     case "chart-rank": err(spendChartRank(state, arg)); ctx.render(); break;
@@ -175,8 +208,14 @@ function handle(ctx, act, arg, el) {
       renderBank(ctx);
       break;
     }
-    case "shop-cat": shopCat = arg; renderShop(ctx); break;
-    case "shop-tool": shopTool = arg; renderShop(ctx); break;
+    case "shop-cat":
+      onStallBooth(arg);
+      setDesk("stall");
+      ctx.render();
+      break;
+    case "stall-booth": onStallBooth(arg); renderDesks(ctx); break;
+    case "stall-pick": onStallPick(arg); renderDesks(ctx); break;
+    case "stall-packs": onStallPacks(arg); renderDesks(ctx); break;
     case "codex-toggle":
       codexOpen = !codexOpen;
       localStorage.setItem("veilforge-codex", codexOpen ? "1" : "0");
@@ -228,7 +267,7 @@ function handle(ctx, act, arg, el) {
     }
     case "wipe": if (confirm("Reset Veilforge?")) ctx.wipe(); break;
     case "panel":
-      if (arg === "shop") setDesk("workshop");
+      if (arg === "shop") { setDesk("stall"); ctx.render(); ctx.portraits?.resize?.(); break; }
       document.getElementById(arg)?.scrollIntoView({ behavior: "smooth", block: "start" });
       break;
     default: break;
@@ -247,26 +286,27 @@ function togglePrayer(state, id) {
   }
 }
 
-function buyShop(state, id) {
+function buyShop(state, id, packs = 1) {
   const offer = CONTENT.shop.find((s) => s.id === id);
   if (!offer) return "Unknown wares.";
-  const bought = state.shopBought[id] || 0;
-  if (offer.max && bought >= offer.max) return "Sold out.";
-  let cost = offer.cost;
-  if (offer.repeatable) cost = Math.floor(cost * Math.pow(1.45, bought));
-  if (offer.reqLevel && skillLevel(state, offer.reqSkill) < offer.reqLevel) return `Need ${offer.reqSkill} ${offer.reqLevel}.`;
-  if (state.coins < cost) return "Not enough veilmarks.";
-  state.coins -= cost;
-  state.shopBought[id] = bought + 1;
-  if (offer.item) stashItem(state, offer.item, offer.qty || 1, "stall");
-  if (offer.effect === "bankTab") state.bankTabs.push("Tab " + state.bankTabs.length);
-  if (offer.effect === "plot") state.soil.plots.push(null);
-  if (offer.effect === "pen") state.drove.pens.push(null);
-  if (offer.effect === "autoEat") state.combat.autoEat = 0.6;
-  if (offer.effect === "autoEat2") { state.combat.autoEat = 0.75; }
-  if (offer.effect === "loadout") state.loadouts.push({ name: "Set " + state.loadouts.length, equipment: { ...state.equipment } });
-  if (offer.effect === "chartSlot") state.chart.slots = Math.max(state.chart.slots, 3);
-  if (offer.effect === "offlineHours") state.offlineHours = 24;
+  const times = offer.repeatable && offer.item && !offer.effect ? Math.max(1, Math.min(10, packs || 1)) : 1;
+  for (let i = 0; i < times; i++) {
+    const { cost, bought } = offerPrice(state, offer);
+    if (offer.max && bought >= offer.max) return i ? null : "Sold out.";
+    if (offer.reqLevel && skillLevel(state, offer.reqSkill) < offer.reqLevel) return `Need ${offer.reqSkill} ${offer.reqLevel}.`;
+    if (state.coins < cost) return i ? null : "Not enough veilmarks.";
+    state.coins -= cost;
+    state.shopBought[id] = bought + 1;
+    if (offer.item) stashItem(state, offer.item, offer.qty || 1, "quay");
+    if (offer.effect === "bankTab") state.bankTabs.push("Tab " + state.bankTabs.length);
+    if (offer.effect === "plot") state.soil.plots.push(null);
+    if (offer.effect === "pen") state.drove.pens.push(null);
+    if (offer.effect === "autoEat") state.combat.autoEat = 0.6;
+    if (offer.effect === "autoEat2") { state.combat.autoEat = 0.75; }
+    if (offer.effect === "loadout") state.loadouts.push({ name: "Set " + state.loadouts.length, equipment: { ...state.equipment } });
+    if (offer.effect === "chartSlot") state.chart.slots = Math.max(state.chart.slots, 3);
+    if (offer.effect === "offlineHours") state.offlineHours = 24;
+  }
   return null;
 }
 
@@ -306,13 +346,6 @@ function itemName(id) {
 
 function glyph(model, cls = "mico") {
   return `<span class="${cls}">${iconMarkup(model || {}, 48)}</span>`;
-}
-
-function shopGroup(o) {
-  const it = o.item ? CONTENT.items[o.item] : null;
-  if (it?.category === "tool") return "tools";
-  if (it && ["cape", "amulet", "ring"].includes(it.slot)) return "cosmetics";
-  return "upgrades";
 }
 
 export function renderShell(ctx) {
@@ -434,7 +467,7 @@ function renderTop(ctx) {
       const death = state._deathSheet
         ? ` <button type="button" data-act="death-ack">You fell${state._deathSheet.dungeon ? ` in ${state._deathSheet.dungeon}` : ""} — dismiss</button>`
         : "";
-      commit.innerHTML = `<b>Committed:</b> ${escapeHtml(a?.name || act.id)} (${skillName(act.skill)})${capNote}. Switching jobs asks Halt.${report}${death}`;
+      commit.innerHTML = `<b>Committed:</b> ${escapeHtml(a?.name || act.id)} (${skillName(act.skill)})${act.remaining != null ? ` · ${act.remaining} left in batch` : ""}${capNote}. Switching jobs asks Halt.${report}${death}`;
       commit.className = state._yieldWarn ? "danger" : "";
     } else {
       const off = state.lastOffline;
@@ -720,7 +753,7 @@ function renderCodex(ctx) {
       ${jump}
       <button type="button" data-act="desk" data-arg="bank">Open vault</button>
       <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
-      <button type="button" data-act="panel" data-arg="shop">Stall</button>
+      <button type="button" data-act="desk" data-arg="stall">Lantern Quay</button>
       <button type="button" data-act="codex-toggle">Hide</button>
     </div>`;
 }
@@ -847,6 +880,37 @@ function fmtIo(state, list, kind) {
   }).join(" · ");
 }
 
+function fmtIoShort(state, a) {
+  const ins = (a.inputs || []).map((i) => `${i.qty} ${itemName(i.item)}`).join(" + ") || "no inputs";
+  const outs = (a.outputs || []).map((i) => {
+    const min = i.min ?? i.qty ?? 1;
+    const max = i.max ?? min;
+    return min === max ? `${itemName(i.item)} ×${min}` : `${itemName(i.item)} ×${min}–${max}`;
+  }).join(" + ") || "xp";
+  return `${ins} → ${outs}`;
+}
+
+const JOB_TAB_LABEL = {
+  smelt: "Smelting",
+  smith: "Smithing",
+  train: "Jobs",
+  shafts: "Shafts",
+  bows: "Bows"
+};
+
+function resolveCraftCount(state, act) {
+  if (!act) return null;
+  if (craftQty === "inf") return null;
+  if (craftQty === "all") {
+    const n = maxAffordable(state, act);
+    return Number.isFinite(n) ? n : null;
+  }
+  const n = Math.max(1, parseInt(craftQty, 10) || 1);
+  const cap = maxAffordable(state, act);
+  if (Number.isFinite(cap)) return Math.max(1, Math.min(n, cap || n));
+  return n;
+}
+
 function lockReason(state, a) {
   const lv = skillLevel(state, a.skill);
   if (lv < a.level) return `Locked — need ${skillName(a.skill)} ${a.level} (you are ${lv}).`;
@@ -867,50 +931,92 @@ function renderActions(ctx, skill) {
     const g = a.category || "train";
     (groups[g] = groups[g] || []).push(a);
   });
-  return Object.entries(groups).map(([g, arr]) => `
-    <h3 class="grp">${g}</h3>
-    <div class="grid">
-      ${arr.map((a) => {
-        const lvok = skillLevel(state, skill) >= a.level;
-        const ml = masteryLevel(state.skills[skill].mastery[a.masteryId] || 0);
-        const why = lockReason(state, a);
-        const on = state.action?.id === a.id;
-        const outs = fmtIo(state, a.outputs, "out");
-        const ins = fmtIo(state, a.inputs, "in");
-        const invBits = [];
-        (a.inputs || []).forEach((i) => invBits.push(`${bankCount(state, i.item)} ${itemName(i.item)}`));
-        (a.outputs || []).forEach((i) => invBits.push(`${bankCount(state, i.item)} ${itemName(i.item)}`));
-        const inv = [...new Set(invBits)].slice(0, 4).join(" · ");
-        const cp = state.skills[skill].checkpoints?.[a.masteryId] || 0;
-        const cost = checkpointCost(state, a.id);
-        const pool = state.skills[skill].pool || 0;
-        const n = state.actionCounts?.[a.id] || 0;
-        const sinkBits = (a.outputs || []).flatMap((o) => sinksOf(o.item));
-        const sinks = [...new Set(sinkBits)].slice(0, 3).join(" · ");
-        const mb = masteryBonus(state, a.masteryId, skill);
-        const rares = (a.rare || []).map((r) => `${Math.round(r.chance * 1000) / 10}% ${itemName(r.item)}`).join(", ");
-        const burn = a.burn ? `Burn ${Math.round(a.burn.chance * 100)}%` : "";
-        const mast = `M${ml}: +${(mb.speed * 100).toFixed(1)}% speed · +${(mb.preserve * 100).toFixed(1)}% preserve`;
-        return `<div class="cardwrap">
-        <button type="button" class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
-          ${glyph(a.model)}
-          <strong>${a.name}</strong>
-          <span>Lv ${a.level} · ${(actionDuration(state, a) / 1000).toFixed(1)}s · ${a.xp} xp · ${mast} · CP${cp} · ×${n} done</span>
-          <div class="io">
-            ${ins ? `<span class="in">In ${ins}</span>` : `<span class="in">No inputs</span>`}
-            ${outs ? `<span class="out">Out ${outs}</span>` : `<span class="out">${a.desc || "No listed outputs"}</span>`}
-          </div>
-          ${rares ? `<span class="sink">Rare ${rares}</span>` : ""}
-          ${burn ? `<span class="in">${burn} → ashes</span>` : ""}
-          ${sinks ? `<span class="sink">Then ${sinks}</span>` : ""}
-          ${inv ? `<span class="inv">Bank ${inv}</span>` : ""}
-          ${why ? `<em class="lock-why">${why}</em>` : ""}
-        </button>
-        <button type="button" class="tiny" data-act="checkpoint" data-arg="${a.id}">Checkpoint THIS node ${cost} pool (have ${pool}) — +${((0.04 + mb.speed) * 100).toFixed(0)}% speed here, skip the rest</button>
-        </div>`;
-      }).join("")}
+  const keys = Object.keys(groups).sort((a, b) => {
+    const order = { smelt: 0, smith: 1, shafts: 0, bows: 1, train: 9 };
+    return (order[a] ?? 5) - (order[b] ?? 5) || a.localeCompare(b);
+  });
+  const tab = jobTabs[skill] && groups[jobTabs[skill]] ? jobTabs[skill] : keys[0];
+  jobTabs[skill] = tab;
+  const shown = groups[tab] || list;
+  const tabs = keys.length > 1
+    ? `<div class="tabs job-tabs">${keys.map((k) => `<button type="button" class="${k === tab ? "on" : ""}" data-act="job-tab" data-arg="${k}">${JOB_TAB_LABEL[k] || k}</button>`).join("")}</div>`
+    : (JOB_TAB_LABEL[tab] && tab !== "train" ? `<h3 class="grp">${JOB_TAB_LABEL[tab]}</h3>` : "");
+  const running = state.action && CONTENT.actions[state.action.id];
+  const picked = selectedAction && CONTENT.actions[selectedAction]?.skill === skill
+    ? CONTENT.actions[selectedAction]
+    : (running?.skill === skill && (running.category || "train") === tab ? running : null);
+  const cards = shown.map((a) => {
+    const lvok = skillLevel(state, skill) >= a.level;
+    const on = state.action?.id === a.id;
+    const sel = picked?.id === a.id;
+    const why = !lvok ? lockReason(state, a) : "";
+    return `<button type="button" class="card compact ${on ? "on" : ""} ${sel ? "sel" : ""} ${lvok ? "" : "locked"}" data-act="job-pick" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
+      ${glyph(a.model)}
+      <strong>${a.name}</strong>
+      <span>Lv ${a.level} · ${(actionDuration(state, a) / 1000).toFixed(1)}s${on && state.action?.remaining != null ? ` · ${state.action.remaining} left` : ""}</span>
+      <span class="io-short">${fmtIoShort(state, a)}</span>
+      ${why ? `<em class="lock-why">${why}</em>` : ""}
+    </button>`;
+  }).join("");
+  return `${tabs}
+    ${renderJobDock(ctx, picked)}
+    <div class="grid compact-grid">${cards}</div>`;
+}
+
+function renderJobDock(ctx, a) {
+  const { state } = ctx;
+  if (!a) {
+    return `<div class="job-dock idle"><p class="muted">Pick a job. Cards stay quiet — details and batch size live here.</p></div>`;
+  }
+  const lvok = skillLevel(state, a.skill) >= a.level;
+  const ml = masteryLevel(state.skills[a.skill].mastery[a.masteryId] || 0);
+  const why = lockReason(state, a);
+  const on = state.action?.id === a.id;
+  const outs = fmtIo(state, a.outputs, "out");
+  const ins = fmtIo(state, a.inputs, "in");
+  const cp = state.skills[a.skill].checkpoints?.[a.masteryId] || 0;
+  const cost = checkpointCost(state, a.id);
+  const pool = state.skills[a.skill].pool || 0;
+  const n = state.actionCounts?.[a.id] || 0;
+  const sinks = [...new Set((a.outputs || []).flatMap((o) => sinksOf(o.item)))].slice(0, 3).join(" · ");
+  const mb = masteryBonus(state, a.masteryId, a.skill);
+  const rares = (a.rare || []).map((r) => `${Math.round(r.chance * 1000) / 10}% ${itemName(r.item)}`).join(", ");
+  const burn = a.burn ? `Burn ${Math.round(a.burn.chance * 100)}% → ashes` : "";
+  const can = maxAffordable(state, a);
+  const planned = resolveCraftCount(state, a);
+  const qtyBtns = ["1", "5", "10", "25", "all", "inf"].map((q) => {
+    const lab = q === "inf" ? "Until halt" : q === "all" ? "All" : q;
+    return `<button type="button" class="${craftQty === q ? "on" : ""}" data-act="job-qty" data-arg="${q}">${lab}</button>`;
+  }).join("");
+  const planNote = planned == null
+    ? (Number.isFinite(can) ? `Idle until the vault runs dry (${can} in stock).` : "Idle until you Halt.")
+    : `Batch ${planned}${Number.isFinite(can) ? ` · vault can pay ${can}` : ""}.`;
+  const blocked = !lvok || (a.inputs && maxAffordable(state, a) <= 0);
+  return `<div class="job-dock">
+    <div class="job-dock-head">
+      ${glyph(a.model, "mico lg")}
+      <div>
+        <h3>${a.name}</h3>
+        <p class="muted">${a.catalogName || ""} · Lv ${a.level} · ${(actionDuration(state, a) / 1000).toFixed(1)}s · ${a.xp} xp</p>
+      </div>
     </div>
-  `).join("");
+    <p class="blurb">${a.desc || a.voice || ""}</p>
+    <div class="io">
+      ${ins ? `<span class="in">In ${ins}</span>` : `<span class="in">No inputs — this is an idle node.</span>`}
+      ${outs ? `<span class="out">Out ${outs}</span>` : ""}
+    </div>
+    <span>Mastery ${ml} · +${(mb.speed * 100).toFixed(1)}% speed · +${(mb.preserve * 100).toFixed(1)}% preserve · checkpoint ${cp} · ×${n} done</span>
+    ${rares ? `<span class="sink">Rare ${rares}</span>` : ""}
+    ${burn ? `<span class="in">${burn}</span>` : ""}
+    ${sinks ? `<span class="sink">Then ${sinks}</span>` : ""}
+    ${why ? `<em class="lock-why">${why}</em>` : ""}
+    <div class="qty-row"><span>Make</span>${qtyBtns}</div>
+    <p class="muted">${planNote}</p>
+    <div class="job-acts">
+      <button type="button" class="primary" data-act="start" data-arg="${a.id}" ${blocked ? "disabled" : ""}>${on ? "Already idling this" : (planned == null ? "Idle this job" : `Craft ${planned}`)}</button>
+      <button type="button" class="tiny" data-act="checkpoint" data-arg="${a.id}">Checkpoint ${cost} pool (have ${pool})</button>
+    </div>
+  </div>`;
 }
 
 function renderCourse(ctx) {
@@ -1287,67 +1393,12 @@ function renderQuests(ctx) {
   document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>`;
 }
 
-function offerName(o) {
-  return o.name || CONTENT.items[o.item]?.name || o.id;
-}
-
-function offerCost(state, o) {
-  const bought = state.shopBought[o.id] || 0;
-  let cost = o.cost;
-  if (o.repeatable) cost = Math.floor(cost * Math.pow(1.45, bought));
-  return { cost, bought };
-}
-
 function renderShop(ctx) {
-  const { state } = ctx;
-  const cats = [
-    ["tools", "Tools"],
-    ["upgrades", "Upgrades"],
-    ["cosmetics", "Cosmetics"]
-  ];
-  const chips = cats.map(([id, lab]) => `<button type="button" class="${shopCat === id ? "on" : ""}" data-act="shop-cat" data-arg="${id}">${lab}</button>`).join("");
-  let list = CONTENT.shop.filter((o) => shopGroup(o) === shopCat);
-  if (shopFilter) {
-    list = CONTENT.shop.filter((o) => offerName(o).toLowerCase().includes(shopFilter) || (o.desc || "").toLowerCase().includes(shopFilter));
-  }
-  if (shopCat === "tools" && !shopFilter && shopTool !== "all") {
-    list = list.filter((o) => CONTENT.items[o.item]?.toolSlot === shopTool);
-  }
-  const toolChips = shopCat === "tools" && !shopFilter ? `<div class="tabs">
-    <button type="button" class="${shopTool === "all" ? "on" : ""}" data-act="shop-tool" data-arg="all">All tools</button>
-    <button type="button" class="${shopTool === "axe" ? "on" : ""}" data-act="shop-tool" data-arg="axe">Hatchets</button>
-    <button type="button" class="${shopTool === "pick" ? "on" : ""}" data-act="shop-tool" data-arg="pick">Picks</button>
-    <button type="button" class="${shopTool === "rod" ? "on" : ""}" data-act="shop-tool" data-arg="rod">Rods</button>
-  </div>` : "";
-
-  const families = {};
-  list.forEach((o) => {
-    const it = o.item ? CONTENT.items[o.item] : null;
-    const fam = it?.toolSlot ? TOOL_LABEL[it.toolSlot] || it.toolSlot : (shopFilter ? shopGroup(o) : "wares");
-    (families[fam] = families[fam] || []).push(o);
-  });
-
-  const body = Object.keys(families).length === 0
-    ? `<p class="blurb">${shopCat === "cosmetics" ? "No lanterns or veils hung yet — this stall is still a workshop." : "Nothing matches."}</p>`
-    : Object.entries(families).map(([fam, arr]) => `
-        ${shopCat === "tools" || shopFilter ? `<div class="shop-fam">${fam}</div>` : ""}
-        <div class="wares">${arr.map((o) => {
-          const { cost, bought } = offerCost(state, o);
-          const sold = o.max && bought >= o.max;
-          const lvok = !o.reqLevel || skillLevel(state, o.reqSkill) >= o.reqLevel;
-          const why = sold ? "Sold out" : !lvok ? `Need ${skillName(o.reqSkill)} ${o.reqLevel}` : state.coins < cost ? "Short on marks" : "";
-          return `<button type="button" class="ware ${sold || !lvok ? "locked" : ""}" data-act="buy" data-arg="${o.id}" ${sold ? "disabled" : ""}>
-            <strong>${offerName(o)}</strong>
-            <span class="cost">${Math.floor(cost).toLocaleString()} ✦</span>
-            <span class="sub">${o.desc || ""} · owned ${bought}${o.max ? "/" + o.max : ""}${why ? " · " + why : ""}</span>
-          </button>`;
-        }).join("")}</div>`).join("");
-
-  const html = `<div class="shop-head">
-      <div class="tabs">${chips}</div>
-      <input id="shop-search" placeholder="Filter stall" value="${escapeHtml(shopFilter)}" />
-      ${toolChips}
-    </div>${body}`;
+  const deal = quayDeal();
+  const nm = deal.offer ? stallOfferName(deal.offer) : "nothing hung";
+  const html = `<p class="blurb">The stall left the workshop. It lives on the quay.</p>
+    <p class="muted">${escapeHtml(deal.watch)} · lantern: ${escapeHtml(nm)} · hunger: ${deal.hunger}</p>
+    <button type="button" class="primary" data-act="desk" data-arg="stall">Walk the Lantern Quay</button>`;
   fillHtml(document.getElementById("shop"), html);
 }
 
