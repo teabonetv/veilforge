@@ -494,7 +494,15 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 .vtile .vnm { font-size: 11px; line-height: 1.25; }
 .vtile .vqty { font-size: 10px; color: var(--gold); }
 .vault-inspect { border-left: 1px solid var(--line); padding: 12px; background: #160e22; }
-#vault-view, #wander-view { width: 100%; height: 320px; display: block; background: #080610; border-radius: 12px; }
+#vault-view, #wander-view {
+  width: 100%;
+  height: 320px;
+  min-height: 320px;
+  display: block;
+  background: #080610;
+  border-radius: 12px;
+  color: transparent;
+}
 #vault-copy h3 { margin: 10px 0 4px; }
 #vault-copy blockquote, #wander-profile blockquote, .wd-card blockquote {
   margin: 8px 0;

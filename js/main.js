@@ -55,15 +55,19 @@ const ctx = {
     sync() {
       if (desk === "bank") {
         if (wanderPort) { dropPort(wanderPort); wanderPort = null; wanderKey = ""; }
-        if (!vaultPort) vaultPort = createPortrait(document.getElementById("vault-view"));
+        const canvas = document.getElementById("vault-view");
+        if (!vaultPort) vaultPort = createPortrait(canvas);
         const m = inspectModelOf();
         const key = `${m?.eid || m?.kind}:${m?.seed}`;
+        vaultPort.resize();
         if (key !== inspectKey) {
           inspectKey = key;
           vaultPort.showModel(m);
         }
-        vaultPort.resize();
-        requestAnimationFrame(() => vaultPort?.resize());
+        requestAnimationFrame(() => {
+          vaultPort?.resize();
+          vaultPort?.frame();
+        });
       } else if (desk === "loadout") {
         if (vaultPort) { dropPort(vaultPort); vaultPort = null; inspectKey = ""; }
         if (!wanderPort) wanderPort = createPortrait(document.getElementById("wander-view"));

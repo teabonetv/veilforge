@@ -5,7 +5,13 @@ export function createPortrait(canvas) {
   if (!canvas) {
     return { showModel() {}, showWanderer() {}, frame() {}, resize() {}, renderer: null, dispose() {} };
   }
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
+  const renderer = new THREE.WebGLRenderer({
+    canvas,
+    antialias: true,
+    alpha: false,
+    preserveDrawingBuffer: true,
+    powerPreference: "high-performance"
+  });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
   renderer.setClearColor(0x080610, 1);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -42,11 +48,17 @@ export function createPortrait(canvas) {
   let t = 0;
   let mode = "empty";
 
+  function measure() {
+    const box = canvas.getBoundingClientRect();
+    const w = Math.max(64, Math.floor(box.width || canvas.clientWidth || canvas.parentElement?.clientWidth || 320));
+    const h = Math.max(64, Math.floor(box.height || canvas.clientHeight || 320));
+    return { w, h };
+  }
+
   function resize() {
-    const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 280;
-    const h = canvas.clientHeight || 280;
+    const { w, h } = measure();
     renderer.setSize(w, h, false);
-    camera.aspect = w / Math.max(1, h);
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
   resize();
@@ -68,6 +80,8 @@ export function createPortrait(canvas) {
     subject.add(mesh);
     camera.position.set(0, 1.05, 3.1);
     camera.lookAt(0, 0.7, 0);
+    resize();
+    renderer.render(scene, camera);
   }
 
   function showWanderer(equipment, items, pets = {}) {
@@ -77,6 +91,8 @@ export function createPortrait(canvas) {
     subject.add(w);
     camera.position.set(0.35, 1.45, 4.1);
     camera.lookAt(0, 1.05, 0);
+    resize();
+    renderer.render(scene, camera);
   }
 
   function frame() {
