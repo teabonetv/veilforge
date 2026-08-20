@@ -65,6 +65,9 @@ if (dur < 2000) throw new Error("timber too snappy: " + dur);
 
 for (let i = 0; i < 2000; i++) tick(s, 50); // 100s
 if ((s.actionCounts["timber-0"] || 0) < 5) throw new Error("timber too slow: " + s.actionCounts["timber-0"]);
+if (!(s._dripSeq > 0) || !(s.lastDrip?.xp > 0) || !s.lastDrip.items?.length) {
+  throw new Error("chop drip missing: " + JSON.stringify(s.lastDrip));
+}
 if (skillLevel(s, "timber") < 2) throw new Error("100s of chopping should ding at least once: " + s.skills.timber.level);
 if (skillLevel(s, "timber") >= 8) throw new Error("timber still rocket-levels: " + s.skills.timber.level);
 if (levelFromXp(s.skills.timber.xp) !== s.skills.timber.level) throw new Error("xp/level mismatch");
@@ -128,6 +131,7 @@ applyOffline(off, 3 * 3600000);
 if ((off.actionCounts["timber-0"] || 0) < 900) {
   throw new Error("3h offline should resolve far more than a 50-minute cap: " + off.actionCounts["timber-0"]);
 }
+if (off._dripSeq) throw new Error("offline should not spam yield drips: " + off._dripSeq);
 if (offlineCapMs(off) < 18 * 3600000 - 1) throw new Error("offline cap too small");
 
 const hunt = createState();
