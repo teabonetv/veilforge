@@ -29,7 +29,8 @@ const KIND_CELL = {
   ring: ["items", 0, 3], ammo: ["items", 1, 3], axe: ["items", 2, 3], pick: ["items", 3, 3], rod: ["items", 4, 3], potion: ["items", 5, 3],
   rune: ["items", 0, 4], gem: ["items", 1, 4], herb: ["items", 2, 4], seed: ["items", 3, 4],
   coins: ["items", 4, 5], currency: ["items", 4, 5], bones: ["items", 5, 5], hide: ["items", 4, 2],
-  ashes: ["items", 5, 4], key: ["items", 4, 4], essence: ["items", 1, 4], material: ["items", 1, 4], fodder: ["skills", 3, 2],
+  ashes: ["items", 5, 4], key: ["items", 4, 4], essence: ["skills", 3, 4], material: ["skills", 3, 4], fodder: ["skills", 3, 2],
+  thread: ["skills", 2, 1], feather: ["items", 1, 3],
   "beast-rat": ["beasts", 0, 0], "beast-wolf": ["beasts", 2, 0], "beast-bat": ["beasts", 3, 0], "beast-spider": ["beasts", 4, 0],
   "beast-knight": ["beasts", 5, 0], "beast-moth": ["beasts", 0, 1], "beast-imp": ["beasts", 1, 1], "beast-crab": ["beasts", 2, 1],
   "beast-hydra": ["beasts", 3, 1], "beast-ghoul": ["beasts", 4, 1], "beast-troll": ["beasts", 5, 1], "beast-golem": ["beasts", 0, 2],
@@ -58,13 +59,16 @@ function sheetOf(sheetId) {
 export function iconMarkup(model = {}, size = 64) {
   const kind = model.kind || "material";
   const unique = model.eid && PIX_EID[model.eid];
-  const cell = unique || pixCell(kind);
+  const typed = pixCell(kind);
+  const named = kind.startsWith("beast") || kind.startsWith("boss") || kind.startsWith("gate") || kind.startsWith("pet-")
+    || kind === "grove" || kind === "tide" || kind === "seam" || kind === "pyre";
+  const cell = typed || unique;
   if (cell) {
     const [sheetId, c, r] = cell;
     const sh = sheetOf(sheetId);
     if (!sh) return "";
     const hue = ((model.hue ?? 40) - 40);
-    const rot = unique ? 0 : (kind.startsWith("beast") || kind.startsWith("boss") || kind.startsWith("gate") ? 0 : (hue * 0.35));
+    const rot = named && unique && !typed ? 0 : (named ? 0 : (hue * 0.45));
     return `<span class="pix" style="background-image:url('${sh.src}');background-size:${sh.cols * 100}% ${sh.rows * 100}%;background-position:${(c / Math.max(1, sh.cols - 1)) * 100}% ${(r / Math.max(1, sh.rows - 1)) * 100}%;filter:hue-rotate(${rot}deg)"></span>`;
   }
   const hue = ((model.hue ?? 270) % 360 + 360) % 360;
@@ -189,6 +193,10 @@ function drawKind(kind, seed, fill, deep, gold) {
       return bg + `<rect x="16" y="22" width="32" height="28" rx="4" fill="${fill}"/><ellipse cx="32" cy="22" rx="14" ry="6" fill="${gold}"/>`;
     case "fodder":
       return bg + `<rect x="12" y="30" width="40" height="16" rx="3" fill="${fill}"/><rect x="18" y="18" width="8" height="16" fill="${gold}"/><rect x="38" y="18" width="8" height="16" fill="${gold}"/>`;
+    case "thread":
+      return bg + `<circle cx="32" cy="32" r="16" fill="none" stroke="${gold}" stroke-width="5"/><circle cx="32" cy="32" r="6" fill="${fill}"/>`;
+    case "feather":
+      return bg + `<path d="M18 48 L32 10 L46 48" fill="${fill}"/><line x1="32" y1="16" x2="32" y2="48" stroke="${gold}" stroke-width="3"/>`;
     case "key":
       return bg + `<circle cx="22" cy="24" r="10" fill="none" stroke="${gold}" stroke-width="4"/><rect x="28" y="20" width="26" height="8" fill="${fill}"/>`;
     case "token":

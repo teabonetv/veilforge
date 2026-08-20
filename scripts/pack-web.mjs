@@ -13,8 +13,12 @@ const dest = join(root, "www");
 rmSync(dest, { recursive: true, force: true });
 mkdirSync(dest, { recursive: true });
 
-for (const dir of ["css", "js", "branding"]) {
-  cpSync(join(root, dir), join(dest, dir), { recursive: true });
+for (const dir of ["css", "js", "branding", "assets"]) {
+  const src = join(root, dir);
+  if (existsSync(src)) cpSync(src, join(dest, dir), { recursive: true });
+}
+if (!existsSync(join(dest, "assets", "pix", "u-items-0.png")) && !existsSync(join(dest, "assets", "pix", "atlas-items.png"))) {
+  throw new Error("pack-web: missing assets/pix atlases");
 }
 
 cpSync(join(root, "manifest.webmanifest"), join(dest, "manifest.webmanifest"));

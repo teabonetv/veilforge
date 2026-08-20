@@ -62,6 +62,7 @@ export function applyKit(state, mode) {
   for (const slot of ["helm", "body", "legs", "boots", "gloves", "cape", "amulet", "ring", "shield"]) {
     wear(best(slot, (it) => !it.style || it.style === style, ["def", "hp"]));
   }
+  if (style === "mark") wear(best("ammo", () => true, ["ranged", "acc"]));
 }
 
 function statScore(it, keys) {
@@ -164,7 +165,9 @@ function renderInspect(ctx) {
       <blockquote>${it.voice}</blockquote>
       <p class="blurb">${it.desc || ""}</p>
       <p class="muted">${it.category}${it.slot ? " · " + it.slot : ""} · ${n.toLocaleString()} held · ${it.value || 0} ✦</p>
-      ${it.stats ? `<p class="muted">Acc ${it.stats.acc || 0} · Str ${it.stats.str || 0} · Def ${it.stats.def || 0} · HP ${it.stats.hp || 0}</p>` : ""}
+      ${it.stats ? `<p class="muted">Acc ${it.stats.acc || 0} · Str ${it.stats.str || 0} · Ranged ${it.stats.ranged || 0} · Magic ${it.stats.magic || 0} · Def ${it.stats.def || 0} · HP ${it.stats.hp || 0}</p>` : ""}
+      ${it.heal ? `<p class="muted">Heals ${it.heal}</p>` : ""}
+      ${it.special ? `<p class="muted">Special ${it.special}</p>` : ""}
       <div class="acts">${(it.category === "equipment" || it.category === "tool" || it.category === "ammo") ? `<button type="button" data-act="equip" data-arg="${id}">Equip</button>` : ""}
         ${id === "seed-pouch" && n ? `<button type="button" data-act="pouch">Open pouch</button>` : ""}
         ${n ? `<button type="button" data-act="sell" data-arg="${id}">Sell one</button>
@@ -177,7 +180,8 @@ function renderInspect(ctx) {
       <blockquote>${m.voice}</blockquote>
       <p class="blurb">${m.desc || ""}</p>
       <p class="muted">HP ${m.hp} · max hit ${m.maxHit} · interval ${(m.interval / 1000).toFixed(1)}s · slayer ${m.slayerReq}</p>
-      <button type="button" data-act="fight" data-arg="${id}">Hunt</button>`;
+      <p class="muted">${(m.drops || []).map((d) => `${Math.round(d.chance * 100)}% ${CONTENT.items[d.item]?.name || d.item}`).join(" · ")}</p>
+      ${m.dungeonOnly ? `<p class="blurb">Dungeon closer — hunt it inside its gate, not on the field.</p>` : `<button type="button" data-act="fight" data-arg="${id}">Hunt</button>`}`;
   } else if (kind === "dungeon") {
     const d = CONTENT.dungeons.find((x) => x.id === id);
     if (!d) return;
@@ -229,9 +233,9 @@ function renderWandererBody(ctx, state) {
   const prev = XP_TABLE[vit];
   const xp = state.skills.vitality.xp;
   const xpPct = next === prev ? 100 : Math.min(100, 100 * (xp - prev) / (next - prev));
-  const focusId = state.equipment[focusedSlot] || state.equipment.weapon;
-  const wpn = CONTENT.items[focusId];
   const slotLabel = focusedSlot || "weapon";
+  const focusId = state.equipment[slotLabel];
+  const wpn = CONTENT.items[focusId];
 
   const profile = document.getElementById("wander-profile");
   const kits = document.getElementById("wander-kits");
@@ -287,7 +291,9 @@ function renderWandererBody(ctx, state) {
       <h4>${wpn?.name || "Empty " + slotLabel}</h4>
       <p class="muted">${slotLabel} · ${wpn?.special || wpn?.slot || "empty"} · ${wpn?.temper || ""}</p>
       <blockquote>${wpn?.voice || "A wanderer is still a person without a blade."}</blockquote>
-      <p>Attack +${wpn?.stats?.acc || 0} · Strength +${wpn?.stats?.str || 0} · Defence +${wpn?.stats?.def || 0}</p>
+      <p>Acc +${wpn?.stats?.acc || 0} · Str +${wpn?.stats?.str || 0} · Ranged +${wpn?.stats?.ranged || 0} · Magic +${wpn?.stats?.magic || 0} · Def +${wpn?.stats?.def || 0}</p>
+      ${wpn?.heal ? `<p>Heal ${wpn.heal}</p>` : ""}
+      ${wpn?.special ? `<p>Special ${wpn.special}</p>` : ""}
       ${wpn ? `<button type="button" data-act="unequip" data-arg="${slotLabel}">Unequip</button>` : ""}
     </section>
     <section class="wd-card">

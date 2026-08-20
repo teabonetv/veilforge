@@ -13,7 +13,7 @@ export function emptySkills() {
 
 export function createState() {
   return {
-    version: 1,
+    version: 2,
     name: "Aelric",
     bornAt: Date.now(),
     lastSave: Date.now(),
@@ -29,11 +29,7 @@ export function createState() {
       helm: null, body: null, legs: null, boots: null, gloves: null,
       shield: null, cape: null, amulet: null, ammo: null, ring: null
     },
-    loadouts: [{ name: "Wanderer", equipment: {
-      weapon: "drift-saber",
-      helm: null, body: null, legs: null, boots: null, gloves: null,
-      shield: null, cape: null, amulet: null, ammo: null, ring: null
-    }, tools: { axe: null, pick: null, rod: null } }],
+    loadouts: [{ name: "Wanderer", equipment: { weapon: "drift-saber" }, tools: {} }],
     activeLoadout: 0,
     tools: { axe: null, pick: null, rod: null },
     skills: emptySkills(),
@@ -47,9 +43,9 @@ export function createState() {
     },
     bounty: { monsterId: null, need: 0, have: 0, streak: 0, block: [] },
     course: { chosen: {}, built: {} },
-    soil: { plots: [null, null, null, null] },
+    soil: { plots: [null, null, null, null], useCompost: false },
     drove: { pens: [null, null] },
-    chart: { active: ["the-hatchet"], slots: 2, studied: {}, ranks: {} },
+    chart: { active: [null, null], slots: 2, studied: {}, ranks: {} },
     lastOffline: null,
     whisper: { heat: 0, streak: 0 },
     quests: { active: ["q-wake"], done: [], stats: { harvests: 0, laps: 0, bounties: 0, drove: {}, guildMax: 0 } },
@@ -95,7 +91,8 @@ export function skillName(id) {
 export function recalcHp(state) {
   const lvl = skillLevel(state, "vitality");
   const gearHp = sumGear(state, "hp");
-  state.combat.maxHp = 9 + lvl + gearHp;
+  const courseHp = courseBonuses(state).hp || 0;
+  state.combat.maxHp = Math.max(1, 9 + lvl + gearHp + courseHp);
   if (state.combat.hp > state.combat.maxHp) state.combat.hp = state.combat.maxHp;
 }
 
@@ -119,7 +116,7 @@ export function bankUsed(state) {
 }
 
 export function bankCap(state) {
-  return 12 + (state.shopBought["shop-slots"] || 0) * 6;
+  return 36 + (state.shopBought["shop-slots"] || 0) * 6;
 }
 
 export function skillLocked(state, skillId) {
@@ -329,7 +326,9 @@ export function save(state) {
   state.lastSave = Date.now();
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    state._saveFail = null;
   } catch (e) {
+    state._saveFail = e.message || "quota";
     console.warn("save failed", e);
   }
 }
@@ -350,11 +349,22 @@ export function normalizeState(merged) {
   merged.name = clampName(merged.name);
   if (merged.shopBought?.["shop-offline"] && (merged.offlineHours || 18) < 24) merged.offlineHours = 24;
   if (!merged.offlineHours) merged.offlineHours = 18;
+  merged.version = 2;
+  if (!merged.skills || typeof merged.skills !== "object") merged.skills = emptySkills();
+  for (const s of SKILLS) {
+    if (!merged.skills[s.id] || typeof merged.skills[s.id] !== "object") merged.skills[s.id] = emptySkills()[s.id];
+    const sk = merged.skills[s.id];
+    sk.xp = Math.max(0, Number(sk.xp) || 0);
+    sk.level = levelFromXp(sk.xp);
+    sk.mastery = sk.mastery && typeof sk.mastery === "object" ? sk.mastery : {};
+    sk.guildProgress = Number(sk.guildProgress) || 0;
+    sk.guildRank = Number(sk.guildRank) || 0;
+  }
   merged.course = merged.course || { chosen: {}, built: {} };
   merged.course.built = merged.course.built || {};
-  for (const [cat, pick] of Object.entries(merged.course.chosen || {})) {
-    if (pick && !merged.course.built[cat]) merged.course.built[cat] = pick;
-  }
+  merged.course.chosen = merged.course.chosen || {};
+  merged.soil = merged.soil || { plots: [null, null, null, null], useCompost: false };
+  merged.soil.useCompost = !!merged.soil.useCompost;
   merged.chart = merged.chart || { active: [], slots: 2, studied: {}, ranks: {} };
   merged.chart.ranks = merged.chart.ranks || {};
   merged.bounty = merged.bounty || { monsterId: null, need: 0, have: 0, streak: 0, block: [] };
