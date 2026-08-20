@@ -1,5 +1,5 @@
 /* Offline cache for the hosted / PWA build. Native shells skip this file. */
-const CACHE = "veilforge-v1";
+const CACHE = "veilforge-v2";
 const PRECACHE = [
   "./",
   "./index.html",
@@ -24,11 +24,30 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  const dest = req.destination;
+  const live = dest === "script" || dest === "style" || dest === "document" || dest === "worker"
+    || /\.(js|mjs|css|html|webmanifest)$/i.test(url.pathname)
+    || url.pathname.endsWith("/");
+  if (live) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res.ok && url.origin === self.location.origin) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((hit) => hit || caches.match("./index.html")))
+    );
+    return;
+  }
   event.respondWith(
     caches.match(req).then((hit) => {
       const net = fetch(req)
         .then((res) => {
-          if (res.ok && req.url.startsWith(self.location.origin)) {
+          if (res.ok && url.origin === self.location.origin) {
             const copy = res.clone();
             caches.open(CACHE).then((c) => c.put(req, copy));
           }

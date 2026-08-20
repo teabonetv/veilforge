@@ -352,6 +352,7 @@ export function buildContent() {
     { id: "shop-eat2", item: null, effect: "autoEat2", cost: 40000, name: "Auto-Eat Mastery", desc: "Auto-eat at 75% and 8% extra healing." },
     { id: "shop-loadout", item: null, effect: "loadout", cost: 8000, repeatable: true, max: 5, name: "Gear Loadout", desc: "Save another equipment set." },
     { id: "shop-offline", item: null, effect: "offlineHours", cost: 15000, name: "Deep Rest", desc: "Offline cap 18 → 24 hours." },
+    { id: "shop-key", item: "dungeon-key", qty: 1, cost: 400, repeatable: true, name: "Citadel Key", desc: "Spend one to enter a dungeon." },
     { id: "shop-slots", item: null, effect: "slots", cost: 400, repeatable: true, max: 20, name: "Bank Slots", desc: "+6 unique stacks. Full banks halt crafts — this is the Melvor tax." }
   );
 
@@ -599,7 +600,7 @@ export function buildContent() {
         skill: sk.id,
         need,
         bonus: guildBonus(sk.kind, i),
-        desc: `Complete ${need.toLocaleString()} ${sk.name} actions (or hits, for war-arts).`
+        desc: `Complete ${need.toLocaleString()} ${sk.name} actions (kills, for war-arts).`
       });
     }
     guildTasks[sk.id] = tasks;
@@ -610,12 +611,12 @@ export function buildContent() {
     { id: "q-fire", name: "First Ember", desc: "Burn those logs. Ash is civilization.", req: [{ type: "action", id: "ember-0", count: 3 }], reward: { coins: 40, xp: { ember: 40 }, items: [{ id: "food-0", qty: 12 }] } },
     { id: "q-fish", name: "Docks at Dusk", desc: "Pull Drift catches. The river feeds the line.", req: [{ type: "action", id: "trawl-0", count: 4 }], reward: { coins: 50, items: [{ id: "drift-rod", qty: 1 }] } },
     { id: "q-cook", name: "Salt and Pan", desc: "Cook the catch. Combat without food is a dare.", req: [{ type: "action", id: "cook-0", count: 4 }], reward: { coins: 50, items: [{ id: "food-0", qty: 24 }] } },
-    { id: "q-blood", name: "First Blood", desc: "Fight in Cinder Docks. Equip food. Watch the triangle.", req: [{ type: "kills", area: "Cinder Docks", count: 4 }], reward: { coins: 80, xp: { might: 80, vitality: 80 }, items: [{ id: "dock-warden", qty: 1 }, { id: "potion-0", qty: 3 }, { id: "hide", qty: 4 }] } },
+    { id: "q-blood", name: "First Blood", desc: "Fight in Cinder Docks. Equip food. Watch the triangle.", req: [{ type: "kills", area: "Cinder Docks", count: 4 }], reward: { coins: 80, xp: { might: 80, vitality: 80 }, items: [{ id: "dock-warden", qty: 1 }, { id: "potion-0", qty: 3 }, { id: "hide", qty: 4 }, { id: "dungeon-key", qty: 1 }] } },
     { id: "q-anvil", name: "Open the Vein", desc: "Mine Drift ore, smelt it, and hammer a saber. The anvil is the spine.", req: [{ type: "action", id: "vein-0", count: 6 }, { type: "action", id: "smelt-0", count: 3 }, { type: "action", id: "smith-drift-saber", count: 1 }], reward: { coins: 120, items: [{ id: "copper-pick", qty: 1 }, { id: "thread", qty: 6 }] } },
     { id: "q-loom", name: "Cut and Stitch", desc: "Sew Drift hide into a cape. War-drops become a loadout.", req: [{ type: "action", id: "loom-drift-hide-cape", count: 1 }], reward: { coins: 120, items: [{ id: "lantern-cape", qty: 1 }, { id: "hide", qty: 8 }] } },
     { id: "q-bounty", name: "Take a Contract", desc: "Finish a bounty. Tokens buy identity, not just more damage.", req: [{ type: "bounty", count: 1 }], reward: { coins: 150, items: [{ id: "bounty-token", qty: 8 }, { id: "food-1", qty: 20 }] } },
     { id: "q-vault", name: "Dock Vault", desc: "Clear Dock Vault. Sequential kills, no cowardice.", req: [{ type: "dungeon", id: "dock-vault" }], reward: { coins: 200, items: [{ id: "dungeon-key", qty: 2 }, { id: "food-1", qty: 16 }] } },
-    { id: "whisper-dock-beggar", name: "Quiet Hands", desc: "Pickpocket the Dock Beggar. Stun is the tax.", req: [{ type: "action", id: "whisper-dock-beggar", count: 12 }], reward: { coins: 100, xp: { whisper: 160 }, items: [{ id: "veil-circlet", qty: 1 }] } },
+    { id: "q-whisper", name: "Quiet Hands", desc: "Pickpocket the Dock Beggar. Stun is the tax.", req: [{ type: "action", id: "whisper-dock-beggar", count: 12 }], reward: { coins: 100, xp: { whisper: 160 }, items: [{ id: "veil-circlet", qty: 1 }] } },
     { id: "q-soil", name: "A Plot of Dusk", desc: "Harvest Drift crops. Soil ticks while you war.", req: [{ type: "harvest", count: 6 }], reward: { coins: 140, items: [{ id: "seed-1", qty: 8 }, { id: "copper-rod", qty: 1 }] } },
     { id: "q-drove", name: "Keep a Ewe", desc: "Collect Gloom Ewe hide. Ranching is a second clock.", req: [{ type: "drove", animal: "gloom-ewe", count: 8 }], reward: { coins: 140, items: [{ id: "thread", qty: 24 }] } },
     { id: "q-chart", name: "Name a Star", desc: "Study The Hatchet until Chart 10.", req: [{ type: "level", skill: "chart", level: 10 }], reward: { coins: 160, items: [{ id: "star-signet", qty: 1 }] } },

@@ -2,6 +2,7 @@ import { wandererRanks, gearSet, weightKg } from "../engine/wanderer.js";
 import { CONTENT, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, bankCap, bankUsed } from "../engine/state.js";
 import { playerStats, equipItem } from "../engine/combat.js";
 import { silhouetteStyle } from "../scene/models.js";
+import { escapeHtml } from "../util/text.js";
 
 const SLOTS = [
   { id: "helm", label: "Hood", side: "left", i: 0 },
@@ -39,15 +40,31 @@ export function setFocusedSlot(slot) {
 
 export function applyKit(state, mode) {
   kitMode = mode;
-  if (mode === "prayer" || mode === "custom") return;
-  const style = mode === "melee" ? "might" : mode === "ranged" ? "mark" : "weave";
+  if (mode === "custom") return;
   const pool = Object.keys(state.bank).concat(Object.values(state.equipment).filter(Boolean));
-  const bestW = pool.map((id) => CONTENT.items[id]).filter((it) => it?.slot === "weapon" && it.style === style)
-    .sort((a, b) => ((b.stats?.str || b.stats?.ranged || b.stats?.magic || 0) - (a.stats?.str || a.stats?.ranged || a.stats?.magic || 0)))[0];
-  if (bestW && state.equipment.weapon !== bestW.id && bankCount(state, bestW.id)) equipItem(state, bestW.id);
-  const bestB = pool.map((id) => CONTENT.items[id]).filter((it) => it?.slot === "body" && it.style === style)
-    .sort((a, b) => (b.stats?.def || 0) - (a.stats?.def || 0))[0];
-  if (bestB && state.equipment.body !== bestB.id && bankCount(state, bestB.id)) equipItem(state, bestB.id);
+  const best = (slot, pred, statKeys) => pool.map((id) => CONTENT.items[id])
+    .filter((it) => it?.slot === slot && pred(it))
+    .sort((a, b) => statScore(b, statKeys) - statScore(a, statKeys))[0];
+  const wear = (it) => {
+    if (!it || state.equipment[it.slot] === it.id) return;
+    if (bankCount(state, it.id)) equipItem(state, it.id);
+  };
+  if (mode === "prayer") {
+    for (const slot of ["helm", "body", "legs", "boots", "shield", "gloves", "cape"]) {
+      wear(best(slot, () => true, ["def", "hp"]));
+    }
+    return;
+  }
+  const style = mode === "melee" ? "might" : mode === "ranged" ? "mark" : "weave";
+  const wstat = style === "mark" ? ["ranged", "acc"] : style === "weave" ? ["magic", "acc"] : ["str", "acc"];
+  wear(best("weapon", (it) => it.style === style, wstat));
+  for (const slot of ["helm", "body", "legs", "boots", "gloves", "cape", "amulet", "ring", "shield"]) {
+    wear(best(slot, (it) => !it.style || it.style === style, ["def", "hp"]));
+  }
+}
+
+function statScore(it, keys) {
+  return keys.reduce((n, k) => n + (it?.stats?.[k] || 0), 0);
 }
 
 export function renderDesks(ctx) {
@@ -95,11 +112,11 @@ function renderVault(ctx) {
       : held.map(([id]) => CONTENT.items[id]).filter(Boolean);
     if (vaultCat !== "held" && vaultCat !== "all") list = list.filter((it) => catOf(it) === vaultCat || it.category === vaultCat);
     if (vaultFilter) list = list.filter((it) => `${it.name} ${it.voice}`.toLowerCase().includes(vaultFilter));
-    tiles = list.slice(0, 220).map((it) => tile("item", it.id, it.name, bankCount(state, it.id), it.model)).join("");
+    tiles = list.map((it) => tile("item", it.id, it.name, bankCount(state, it.id), it.model)).join("");
   } else if (vaultLens === "monsters") {
     let list = Object.values(CONTENT.monsters);
     if (vaultFilter) list = list.filter((m) => `${m.name} ${m.area}`.toLowerCase().includes(vaultFilter));
-    tiles = list.slice(0, 180).map((m) => tile("monster", m.id, m.name, state.combat.kills?.[m.id] || 0, m.model)).join("");
+    tiles = list.map((m) => tile("monster", m.id, m.name, state.combat.kills?.[m.id] || 0, m.model)).join("");
   } else if (vaultLens === "dungeons") {
     tiles = CONTENT.dungeons
       .filter((d) => !vaultFilter || d.name.toLowerCase().includes(vaultFilter))
@@ -107,7 +124,7 @@ function renderVault(ctx) {
   } else {
     let list = Object.values(CONTENT.actions);
     if (vaultFilter) list = list.filter((a) => a.name.toLowerCase().includes(vaultFilter));
-    tiles = list.slice(0, 180).map((a) => tile("action", a.id, a.name, state.actionCounts?.[a.id] || 0, a.model)).join("");
+    tiles = list.map((a) => tile("action", a.id, a.name, state.actionCounts?.[a.id] || 0, a.model)).join("");
   }
 
   document.getElementById("vault-chips").innerHTML = `<div class="tabs">${lens}</div><div class="tabs">${chips}</div>`;
@@ -121,7 +138,7 @@ function tile(kind, id, name, qty, model) {
   const on = vaultPick.kind === kind && vaultPick.id === id ? "on" : "";
   return `<button type="button" class="vtile ${on}" data-act="vault-pick" data-kind="${kind}" data-arg="${id}" style="background:${st.background};border-color:${st.borderColor};border-radius:${st.borderRadius};box-shadow:${st.boxShadow}">
     <span class="vqty">${qty ? qty.toLocaleString() : ""}</span>
-    <span class="vnm">${name}</span>
+    <span class="vnm">${escapeHtml(name)}</span>
   </button>`;
 }
 
@@ -139,8 +156,8 @@ function renderInspect(ctx) {
       <p class="blurb">${it.desc || ""}</p>
       <p class="muted">${it.category}${it.slot ? " · " + it.slot : ""} · ${n.toLocaleString()} held · ${it.value || 0} ✦</p>
       ${it.stats ? `<p class="muted">Acc ${it.stats.acc || 0} · Str ${it.stats.str || 0} · Def ${it.stats.def || 0} · HP ${it.stats.hp || 0}</p>` : ""}
-      <div class="acts">${(it.category === "equipment" || it.category === "tool" || it.category === "ammo") ? `<button data-act="equip" data-arg="${id}">Equip</button>` : ""}
-        ${n ? `<button data-act="sell" data-arg="${id}">Sell one</button>` : ""}</div>`;
+      <div class="acts">${(it.category === "equipment" || it.category === "tool" || it.category === "ammo") ? `<button type="button" data-act="equip" data-arg="${id}">Equip</button>` : ""}
+        ${n ? `<button type="button" data-act="sell" data-arg="${id}">Sell one</button>` : ""}</div>`;
   } else if (kind === "monster") {
     const m = CONTENT.monsters[id];
     if (!m) return;
@@ -149,7 +166,7 @@ function renderInspect(ctx) {
       <blockquote>${m.voice}</blockquote>
       <p class="blurb">${m.desc || ""}</p>
       <p class="muted">HP ${m.hp} · max hit ${m.maxHit} · interval ${(m.interval / 1000).toFixed(1)}s · slayer ${m.slayerReq}</p>
-      <button data-act="fight" data-arg="${id}">Hunt</button>`;
+      <button type="button" data-act="fight" data-arg="${id}">Hunt</button>`;
   } else if (kind === "dungeon") {
     const d = CONTENT.dungeons.find((x) => x.id === id);
     if (!d) return;
@@ -157,7 +174,7 @@ function renderInspect(ctx) {
       <p class="temper">${d.temper} · ${d.sequence.length} floors · ${d.bossName}</p>
       <blockquote>${d.voice}</blockquote>
       <p class="blurb">${d.desc || ""}</p>
-      <button data-act="dungeon" data-arg="${id}">Enter</button>`;
+      <button type="button" data-act="dungeon" data-arg="${id}">Enter</button>`;
   } else {
     const a = CONTENT.actions[id];
     if (!a) return;
@@ -166,7 +183,7 @@ function renderInspect(ctx) {
       <blockquote>${a.voice}</blockquote>
       <p class="blurb">${a.desc || ""}</p>
       <p class="muted">${((a.time || 0) / 1000).toFixed(1)}s base · ${a.xp} xp</p>
-      <button data-act="start" data-arg="${id}">Commit this job</button>`;
+      <button type="button" data-act="start" data-arg="${id}">Commit this job</button>`;
   }
 }
 
@@ -204,7 +221,7 @@ function renderWandererBody(ctx, state) {
   if (!profile || !kits || !stats || !detail) return;
 
   profile.innerHTML = `
-    <div class="w-name">${state.name || "Aelric"}</div>
+    <div class="w-name">${escapeHtml(state.name || "Aelric")}</div>
     <div class="w-title">${r.title}</div>
     <div class="w-stars">${stars}</div>
     <div class="w-lvls"><div><em>${r.combat}</em><span>Combat</span></div><div><em>${r.idle}</em><span>Idle</span></div></div>

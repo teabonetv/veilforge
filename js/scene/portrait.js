@@ -3,7 +3,7 @@ import { makeEntityModel, makeWanderer } from "./models.js";
 
 export function createPortrait(canvas) {
   if (!canvas) {
-    return { showModel() {}, showWanderer() {}, frame() {}, resize() {}, renderer: null };
+    return { showModel() {}, showWanderer() {}, frame() {}, resize() {}, renderer: null, dispose() {} };
   }
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.6));
@@ -75,5 +75,11 @@ export function createPortrait(canvas) {
     renderer.render(scene, camera);
   }
 
-  return { showModel, showWanderer, frame, resize, renderer };
+  function dispose() {
+    clearSubject();
+    renderer.dispose();
+    renderer.forceContextLoss?.();
+  }
+
+  return { showModel, showWanderer, frame, resize, renderer, dispose };
 }

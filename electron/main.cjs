@@ -16,6 +16,14 @@ function trySteam() {
   }
 }
 
+function gameIndex() {
+  const packed = path.join(__dirname, "..", "www", "index.html");
+  const live = path.join(__dirname, "..", "index.html");
+  const fs = require("fs");
+  if (fs.existsSync(packed)) return packed;
+  return live;
+}
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1440,
@@ -34,7 +42,7 @@ function createWindow() {
     }
   });
 
-  win.loadFile(path.join(__dirname, "..", "www", "index.html"));
+  win.loadFile(gameIndex());
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url);
     return { action: "deny" };

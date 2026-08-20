@@ -20,12 +20,12 @@ export function bootPlatform() {
     const fork = document.getElementById("fork-modal");
     const level = document.getElementById("level-modal");
     if (fork?.classList.contains("open")) {
-      fork.classList.remove("open");
-      fork.hidden = true;
+      fork.querySelector("[data-act='fork-no']")?.click();
       return;
     }
     if (level && !level.hidden) {
-      level.hidden = true;
+      const all = level.querySelector("[data-act='dismiss-levels']");
+      (all || level.querySelector("[data-act='dismiss-level']"))?.click();
       return;
     }
     if (canGoBack) window.history.back();

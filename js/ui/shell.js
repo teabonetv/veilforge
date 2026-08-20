@@ -1,7 +1,9 @@
-import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, addItem, takeItem, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap } from "../engine/state.js";
+import { escapeHtml } from "../util/text.js";
+import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, addItem, takeItem, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap, stashItem } from "../engine/state.js";
 import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
+import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
 import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
 
 let forkFn = null;
@@ -113,7 +115,7 @@ function handle(ctx, act, arg, el) {
     }
     case "fork-no": forkFn = null; hideFork(); break;
     case "equip": err(equipItem(state, arg)); ctx.render(); break;
-    case "unequip": unequip(state, arg); ctx.render(); break;
+    case "unequip": err(unequip(state, arg)); ctx.render(); break;
     case "drink": err(drinkPotion(state, arg)); ctx.render(); break;
     case "plant": err(plantPlot(state, +arg, el.dataset.seed)); ctx.render(); break;
     case "harvest": harvestPlot(state, +arg); ctx.render(); break;
@@ -141,7 +143,7 @@ function handle(ctx, act, arg, el) {
       renderCodex(ctx);
       break;
     case "loadout-save": saveLoadout(state); toast(ctx, "Loadout saved."); break;
-    case "loadout-load": loadLoadout(state, +arg); ctx.render(); break;
+    case "loadout-load": err(loadLoadout(state, +arg)); ctx.render(); break;
     case "desk": setDesk(arg); ctx.render(); ctx.portraits?.resize?.(); break;
     case "vault-pick": setVaultPick(el.dataset.kind || "item", arg); renderDesks(ctx); break;
     case "vault-cat": onVaultCat(arg); renderDesks(ctx); break;
@@ -154,10 +156,28 @@ function handle(ctx, act, arg, el) {
       renderDesks(ctx);
       break;
     }
-    case "export": navigator.clipboard.writeText(ctx.exportSave()); toast(ctx, "Save copied."); break;
+    case "export": {
+      try {
+        const text = ctx.exportSave();
+        navigator.clipboard.writeText(text).then(
+          () => toast(ctx, "Save copied."),
+          () => toast(ctx, "Copy failed — allow clipboard permission, or copy from the prompt.")
+        );
+      } catch (e) {
+        toast(ctx, e.message || "Export failed.");
+      }
+      break;
+    }
     case "import": {
       const s = prompt("Paste save");
-      if (s) ctx.importSave(s);
+      if (s) {
+        try {
+          ctx.importSave(s);
+          toast(ctx, "Save imported.");
+        } catch (e) {
+          toast(ctx, e.message || "Import failed.");
+        }
+      }
       break;
     }
     case "wipe": if (confirm("Reset Veilforge?")) ctx.wipe(); break;
@@ -189,7 +209,7 @@ function buyShop(state, id) {
   if (state.coins < cost) return "Not enough veilmarks.";
   state.coins -= cost;
   state.shopBought[id] = bought + 1;
-  if (offer.item) addItem(state, offer.item, offer.qty || 1);
+  if (offer.item) stashItem(state, offer.item, offer.qty || 1, "stall");
   if (offer.effect === "bankTab") state.bankTabs.push("Tab " + state.bankTabs.length);
   if (offer.effect === "plot") state.soil.plots.push(null);
   if (offer.effect === "pen") state.drove.pens.push(null);
@@ -197,6 +217,7 @@ function buyShop(state, id) {
   if (offer.effect === "autoEat2") { state.combat.autoEat = 0.75; }
   if (offer.effect === "loadout") state.loadouts.push({ name: "Set " + state.loadouts.length, equipment: { ...state.equipment } });
   if (offer.effect === "chartSlot") state.chart.slots = Math.max(state.chart.slots, 3);
+  if (offer.effect === "offlineHours") state.offlineHours = 24;
   return null;
 }
 
@@ -205,23 +226,6 @@ function sellOne(state, id) {
   if (!it || !bankCount(state, id)) return;
   takeItem(state, id, 1);
   addItem(state, "coins", Math.max(1, Math.floor((it.value || 1) * 0.4)));
-}
-
-function saveLoadout(state) {
-  const lo = state.loadouts[state.activeLoadout] || state.loadouts[0];
-  lo.equipment = { ...state.equipment };
-}
-
-function loadLoadout(state, i) {
-  const lo = state.loadouts[i];
-  if (!lo?.equipment) return;
-  for (const slot of Object.keys(state.equipment)) {
-    if (state.equipment[slot]) unequip(state, slot);
-  }
-  for (const [slot, id] of Object.entries(lo.equipment)) {
-    if (id) equipItem(state, id);
-  }
-  state.activeLoadout = i;
 }
 
 function fillHtml(el, html) {
@@ -262,7 +266,7 @@ export function renderShell(ctx) {
     const lv = skillLevel(state, s.id);
     const on = selectedSkill === s.id ? "on" : "";
     const lock = skillLocked(state, s.id);
-    return `<button class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}><span>${s.icon}</span><span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : lv}</span></button>`;
+    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}><span>${s.icon}</span><span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : lv}</span></button>`;
   }).join("");
   root.querySelector("#skill-nav").innerHTML = left;
   renderTop(ctx);
@@ -347,7 +351,7 @@ function renderTop(ctx) {
   if (commit) {
     if (m) {
       const foodN = bankCount(state, state.combat.foodId);
-      commit.innerHTML = `<b>Committed:</b> fighting ${m.name} · ${foodN} food · Halt to leave. Soil/Drove still tick.`;
+      commit.innerHTML = `<b>Committed:</b> fighting ${escapeHtml(m.name)} · ${foodN} food · Halt to leave. Soil/Drove still tick.`;
       commit.className = "danger";
     } else if (act) {
       const a = CONTENT.actions[act.id];
@@ -355,7 +359,7 @@ function renderTop(ctx) {
       const outN = outId ? bankCount(state, outId) : 0;
       const outNm = outId ? (CONTENT.items[outId]?.name || outId) : "yield";
       const capNote = state._yieldWarn ? ` · ${state._yieldWarn}` : ` · ${outN} ${outNm}`;
-      commit.innerHTML = `<b>Committed:</b> ${a?.name || act.id} (${skillName(act.skill)})${capNote}. Switching jobs asks Halt.`;
+      commit.innerHTML = `<b>Committed:</b> ${escapeHtml(a?.name || act.id)} (${skillName(act.skill)})${capNote}. Switching jobs asks Halt.`;
       commit.className = state._yieldWarn ? "danger" : "";
     } else {
       commit.innerHTML = `<b>Uncommitted.</b> Pick one action. You cannot train 22 skills at once — that was never the game.`;
@@ -395,16 +399,49 @@ function confirmBusy(ctx, nextId, kind, fn) {
   el.hidden = false;
   el.classList.add("open");
   el.innerHTML = `<div class="sheet"><h3>Halt?</h3>
-    <p>You are committed to <strong>${cur}</strong>. Switch to <strong>${nextName}</strong>?</p>
+    <p>You are committed to <strong>${escapeHtml(cur)}</strong>. Switch to <strong>${escapeHtml(nextName)}</strong>?</p>
     <p class="blurb">Soil and Drove still tick. Everything else waits.</p>
     <button type="button" data-act="fork-yes">Halt and switch</button>
     <button type="button" data-act="fork-no">Keep this job</button></div>`;
+  trapModal(el);
   return false;
 }
 
 function hideFork() {
   const el = document.getElementById("fork-modal");
+  releaseModal();
   if (el) { el.hidden = true; el.classList.remove("open"); el.innerHTML = ""; }
+}
+
+let modalKeyHandler = null;
+function trapModal(el) {
+  releaseModal();
+  const app = document.getElementById("app");
+  app?.setAttribute("inert", "");
+  const focusables = () => [...el.querySelectorAll("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")]
+    .filter((n) => !n.disabled && n.offsetParent !== null);
+  modalKeyHandler = (e) => {
+    if (e.key === "Escape") {
+      const no = el.querySelector("[data-act='fork-no'], [data-act='dismiss-level']");
+      no?.click();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const f = focusables();
+    if (!f.length) return;
+    const first = f[0];
+    const last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  };
+  document.addEventListener("keydown", modalKeyHandler);
+  queueMicrotask(() => focusables()[0]?.focus());
+}
+
+function releaseModal() {
+  if (modalKeyHandler) document.removeEventListener("keydown", modalKeyHandler);
+  modalKeyHandler = null;
+  document.getElementById("app")?.removeAttribute("inert");
 }
 
 function foldLevelUps(list) {
@@ -429,6 +466,7 @@ function renderLevelModal(ctx) {
   const ev = folded[0];
   if (!ev) {
     shownLevelKey = "";
+    releaseModal();
     modal.hidden = true;
     return;
   }
@@ -448,6 +486,7 @@ function renderLevelModal(ctx) {
     <button type="button" data-act="dismiss-level">Continue</button>
     ${folded.length > 1 ? `<button type="button" data-act="dismiss-levels">Dismiss all ${folded.length}</button>` : ""}
   </div>`;
+  trapModal(modal);
 }
 
 function renderCodex(ctx) {
@@ -586,7 +625,7 @@ function renderActions(ctx, skill) {
         const cost = checkpointCost(state, a.id);
         const pool = state.skills[skill].pool || 0;
         return `<div class="cardwrap">
-        <button class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
+        <button type="button" class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
           <strong>${a.name}</strong>
           <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · M${ml} · CP${cp}</span>
           <div class="io">
@@ -617,7 +656,7 @@ function renderCourse(ctx) {
   }).join("");
   return `<p class="blurb">Each pillar is a loadout slot. You cannot take every bonus. Time multiplies — greedy circuits run slower.</p>
     <div class="pillars">${picks}</div>
-    <button class="primary" data-act="start" data-arg="course-lap">Run the circuit</button>`;
+    <button type="button" class="primary" data-act="start" data-arg="course-lap">Run the circuit</button>`;
 }
 
 function renderSoil(ctx) {
@@ -626,13 +665,13 @@ function renderSoil(ctx) {
   const plots = state.soil.plots.map((p, i) => {
     if (!p) {
       return `<div class="plot empty"><h4>Plot ${i + 1}</h4>
-        ${seeds.map((s) => `<button data-act="plant" data-arg="${i}" data-seed="${s}">Plant ${CONTENT.items[s].name} (${state.bank[s]})</button>`).join("") || "<em>No seeds. Chop groves.</em>"}
+        ${seeds.map((s) => `<button type="button" data-act="plant" data-arg="${i}" data-seed="${s}">Plant ${CONTENT.items[s].name} (${state.bank[s]})</button>`).join("") || "<em>No seeds. Chop groves.</em>"}
       </div>`;
     }
     return `<div class="plot ${p.ready ? "ready" : ""}">
       <h4>${CONTENT.items[p.seed].name}</h4>
       <p>${p.ready ? "Ready" : `${Math.ceil(p.left / 1000)}s`}</p>
-      ${p.ready ? `<button data-act="harvest" data-arg="${i}">Harvest</button>` : ""}
+      ${p.ready ? `<button type="button" data-act="harvest" data-arg="${i}">Harvest</button>` : ""}
     </div>`;
   }).join("");
   return `<div class="plots">${plots}</div>`;
@@ -643,14 +682,14 @@ function renderDrove(ctx) {
   const pens = state.drove.pens.map((p, i) => {
     if (!p) {
       return `<div class="plot empty"><h4>Pen ${i + 1}</h4>
-        ${CONTENT.animals.map((a) => `<button data-act="stock" data-arg="${i}" data-animal="${a.id}" ${skillLevel(state, "drove") < a.level ? "disabled" : ""}>${a.name} · ${20 + a.level * 4}m · Lv ${a.level}</button>`).join("")}
+        ${CONTENT.animals.map((a) => `<button type="button" data-act="stock" data-arg="${i}" data-animal="${a.id}" ${skillLevel(state, "drove") < a.level ? "disabled" : ""}>${a.name} · ${20 + a.level * 4}m · Lv ${a.level}</button>`).join("")}
       </div>`;
     }
     const a = CONTENT.animals.find((x) => x.id === p.animal);
     return `<div class="plot ${p.ready ? "ready" : ""}">
       <h4>${a.name}</h4>
       <p>${p.ready ? `Ready: ${CONTENT.items[a.produce].name}` : `${Math.ceil(p.left / 1000)}s`}</p>
-      ${p.ready ? `<button data-act="collect" data-arg="${i}">Collect</button>` : ""}
+      ${p.ready ? `<button type="button" data-act="collect" data-arg="${i}">Collect</button>` : ""}
     </div>`;
   }).join("");
   return `<div class="plots">${pens}</div>`;
@@ -666,14 +705,15 @@ function renderChart(ctx) {
     </select>`);
   }
   const study = CONTENT.constellations.map((c) => {
-    return `<button class="card" data-act="start" data-arg="chart-${c.id}" disabled style="display:none"></button>`;
+    return `<button type="button" class="card" data-act="start" data-arg="chart-${c.id}" disabled style="display:none"></button>`;
   }).join("");
-  return `<p class="blurb">Only ${state.chart.slots} constellations bind at once. The Veil is a scarce buff budget.</p>
+  return `<p class="blurb">Only ${state.chart.slots} constellations bind at once. A slotted star with 0 study grants nothing — study it to arm the bonus.</p>
     <div class="pillars">${slots.join("")}</div>
     <div class="grid">${CONTENT.constellations.map((c) => {
       const on = state.chart.active.includes(c.id);
-      return `<button class="card ${on ? "on" : ""}" data-act="start" data-arg="chart-study-${c.id}">
-        <strong>Study ${c.name}</strong><span>Chart xp · ${c.studyTime / 1000}s</span><em>${JSON.stringify(c.bonus)}</em>
+      const n = state.chart.studied?.[c.id] || 0;
+      return `<button type="button" class="card ${on ? "on" : ""}" data-act="start" data-arg="chart-study-${c.id}">
+        <strong>Study ${c.name}</strong><span>Chart xp · ${c.studyTime / 1000}s · insight ${n}${on && n <= 0 ? " · slotted, unarmed" : ""}</span><em>${JSON.stringify(c.bonus)}</em>
       </button>`;
     }).join("")}</div>${study}`;
 }
@@ -722,20 +762,20 @@ function renderCombatSkill(ctx, id) {
     return theater + `<div class="grid">${CONTENT.prayers.map((p) => {
       const on = state.combat.prayers.includes(p.id);
       const ok = skillLevel(state, "vow") >= p.level;
-      return `<button class="card ${on ? "on" : ""}" data-act="pray" data-arg="${p.id}" ${ok ? "" : "disabled"}>
+      return `<button type="button" class="card ${on ? "on" : ""}" data-act="pray" data-arg="${p.id}" ${ok ? "" : "disabled"}>
         <strong>${p.name}</strong><span>Lv ${p.level} · drain ${p.drain}/s</span>
         <em>${p.desc}</em>
         ${ok ? "" : `<em class="lock-why">Locked — Vow ${p.level}</em>`}
       </button>`;
     }).join("")}
-    <p><button class="primary" data-act="bury">Bury all pale bones (${bankCount(state, "bones")})</button></p></div>`;
+    <p><button type="button" class="primary" data-act="bury">Bury all pale bones (${bankCount(state, "bones")})</button></p></div>`;
   }
   if (id === "weave") {
     return theater + `<div class="grid">${CONTENT.spells.map((s) => {
       const on = state.combat.spell === s.id;
       const ok = skillLevel(state, "weave") >= s.level;
       const cost = Object.entries(s.runes).map(([r, n]) => `${n} ${CONTENT.items[r].name} (have ${bankCount(state, r)})`).join(", ");
-      return `<button class="card ${on ? "on" : ""}" data-act="spell-pick" data-arg="${s.id}" ${ok ? "" : "disabled"}>
+      return `<button type="button" class="card ${on ? "on" : ""}" data-act="spell-pick" data-arg="${s.id}" ${ok ? "" : "disabled"}>
         <strong>${s.name}</strong><span>Lv ${s.level} · hit ${s.maxHit}</span><em>${s.desc} · ${cost}</em>
         ${ok ? "" : `<em class="lock-why">Locked — Weave ${s.level}</em>`}
       </button>`;
@@ -748,7 +788,7 @@ function renderCombatSkill(ctx, id) {
     const m = CONTENT.monsters[b.monsterId];
     return theater + `<div class="panel">
       <p>${m ? `Hunt <strong>${m.name}</strong> in ${m.area}: ${b.have}/${b.need} · streak ${b.streak}` : "No contract."}</p>
-      <button class="primary" data-act="bounty">Roll a contract</button>
+      <button type="button" class="primary" data-act="bounty">Roll a contract</button>
       <p>Tokens: ${bankCount(state, "bounty-token")}</p>
     </div>${renderAreas(ctx)}`;
   }
@@ -763,7 +803,7 @@ function renderAreas(ctx) {
       <div class="grid">${a.monsters.map((id) => {
         const m = CONTENT.monsters[id];
         const on = state.combat.fighting && state.combat.monsterId === id;
-        return `<button class="card ${on ? "on" : ""}" data-act="fight" data-arg="${id}">
+        return `<button type="button" class="card ${on ? "on" : ""}" data-act="fight" data-arg="${id}">
           <strong>${m.name}</strong>
           <span>HP ${m.hp} · hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</span>
           <em>${m.desc}</em>
@@ -773,7 +813,7 @@ function renderAreas(ctx) {
   const duns = `<h3 class="grp">Dungeons</h3><div class="grid">${CONTENT.dungeons.map((d) => {
     const n = (state.combat.dungeonClears || {})[d.id] || 0;
     const on = state.combat.dungeon === d.id;
-    return `<button class="card ${on ? "on" : ""}" data-act="dungeon" data-arg="${d.id}">
+    return `<button type="button" class="card ${on ? "on" : ""}" data-act="dungeon" data-arg="${d.id}">
       <strong>${d.name}</strong><span>Req ${d.req} · ${d.sequence.length} floors · clears ${n}</span><em>${d.desc}</em>
     </button>`;
   }).join("")}</div>`;
@@ -782,10 +822,10 @@ function renderAreas(ctx) {
   const uniqueFood = [...new Set(foodOpts)];
   return `<div class="stats-strip">Style <b>${st.style}</b> · Acc ${st.acc.toFixed(0)} · Power ${st.power.toFixed(0)} · Def ${st.def.toFixed(0)} · Auto-eat ${(state.combat.autoEat * 100).toFixed(0)}%</div>
     <label>Food <select data-act="food">${uniqueFood.map((id) => `<option value="${id}" ${state.combat.foodId === id ? "selected" : ""}>${CONTENT.items[id]?.name} +${CONTENT.items[id]?.heal} (${bankCount(state, id)})</option>`).join("")}</select></label>
-    <div class="potions">${Object.keys(state.bank).filter((id) => CONTENT.items[id]?.potion).slice(0, 12).map((id) => `<button data-act="drink" data-arg="${id}">Drink ${CONTENT.items[id].name} (${state.bank[id]})</button>`).join("")}</div>
+    <div class="potions">${Object.keys(state.bank).filter((id) => CONTENT.items[id]?.potion).slice(0, 12).map((id) => `<button type="button" data-act="drink" data-arg="${id}">Drink ${CONTENT.items[id].name} (${state.bank[id]})</button>`).join("")}</div>
     ${state.combat.potionId ? `<p class="blurb">Active: ${CONTENT.items[state.combat.potionId].name} · ${state.combat.potionCharges} charges</p>` : ""}
     ${areas}${duns}
-    <div class="clog">${(state._clog || []).map((l) => `<div>${l}</div>`).join("")}</div>
+    <div class="clog">${(state._clog || []).map((l) => `<div>${escapeHtml(l)}</div>`).join("")}</div>
   `;
 }
 
@@ -803,17 +843,17 @@ function renderGear(ctx) {
   document.getElementById("gear").innerHTML = slots.map((s) => {
     const id = state.equipment[s];
     const it = CONTENT.items[id];
-    return `<div class="slot"><b>${s}</b> ${it ? `<span>${it.name}</span> <button data-act="unequip" data-arg="${s}">x</button>` : "<em>empty</em>"}</div>`;
-  }).join("") + `<div class="slot"><b>tools</b> <span>axe ${CONTENT.items[state.tools.axe]?.name || "–"} · pick ${CONTENT.items[state.tools.pick]?.name || "–"} · rod ${CONTENT.items[state.tools.rod]?.name || "–"}</span></div>
-    <button data-act="desk" data-arg="loadout">Open wanderer</button>
-    <button data-act="loadout-save">Save loadout</button>
-    ${state.loadouts.map((l, i) => `<button data-act="loadout-load" data-arg="${i}">${l.name}</button>`).join("")}`;
+    return `<div class="slot"><b>${s}</b> ${it ? `<span>${it.name}</span> <button type="button" data-act="unequip" data-arg="${s}">x</button>` : "<em>empty</em>"}</div>`;
+  }).join("") + `<div class="slot"><b>tools</b> <span>axe ${CONTENT.items[state.tools.axe]?.name || "–"} ${state.tools.axe ? `<button type="button" data-act="unequip" data-arg="axe">x</button>` : ""} · pick ${CONTENT.items[state.tools.pick]?.name || "–"} ${state.tools.pick ? `<button type="button" data-act="unequip" data-arg="pick">x</button>` : ""} · rod ${CONTENT.items[state.tools.rod]?.name || "–"} ${state.tools.rod ? `<button type="button" data-act="unequip" data-arg="rod">x</button>` : ""}</span></div>
+    <button type="button" data-act="desk" data-arg="loadout">Open wanderer</button>
+    <button type="button" data-act="loadout-save">Save loadout</button>
+    ${state.loadouts.map((l, i) => `<button type="button" data-act="loadout-load" data-arg="${i}">${l.name}</button>`).join("")}`;
 }
 
 function renderBank(ctx) {
   const { state } = ctx;
-  const tabBtns = [`<button class="${bankTab === "All" ? "on" : ""}" data-act="tab" data-arg="All">All</button>`]
-    .concat(state.bankTabs.map((t) => `<button class="${t === bankTab ? "on" : ""}" data-act="tab" data-arg="${t}">${t}</button>`))
+  const tabBtns = [`<button type="button" class="${bankTab === "All" ? "on" : ""}" data-act="tab" data-arg="All">All</button>`]
+    .concat(state.bankTabs.map((t) => `<button type="button" class="${t === bankTab ? "on" : ""}" data-act="tab" data-arg="${t}">${t}</button>`))
     .join("");
   const held = Object.entries(state.bank).filter(([, n]) => n > 0);
   const rows = held
@@ -831,24 +871,20 @@ function renderBank(ctx) {
         <span class="qty">${n.toLocaleString()}</span>
         <span class="val">${stackVal.toLocaleString()} ✦ · ${it.category}</span>
         <div class="acts">
-          ${eq ? `<button data-act="equip" data-arg="${id}">equip</button>` : ""}
-          ${it.potion ? `<button data-act="drink" data-arg="${id}">drink</button>` : ""}
-          <button data-act="set-tab" data-arg="${id}">tab</button>
-          <button data-act="sell" data-arg="${id}">sell</button>
+          ${eq ? `<button type="button" data-act="equip" data-arg="${id}">equip</button>` : ""}
+          ${it.potion ? `<button type="button" data-act="drink" data-arg="${id}">drink</button>` : ""}
+          <button type="button" data-act="set-tab" data-arg="${id}">tab</button>
+          <button type="button" data-act="sell" data-arg="${id}">sell</button>
         </div>
       </div>`;
     }).join("");
   const worth = held.reduce((s, [id, n]) => s + (CONTENT.items[id]?.value || 0) * n, 0);
   const html = `<div class="tabs">${tabBtns}</div>
-    <input id="bank-search" placeholder="Search bank" value="${esc(bankFilter)}" />
+    <input id="bank-search" placeholder="Search bank" value="${escapeHtml(bankFilter)}" />
     <div class="bank-meta"><span>${held.length}/${bankCap(state)} stacks${held.length >= bankCap(state) ? " · FULL" : ""}</span><span>${worth.toLocaleString()} ✦</span></div>
-    <button data-act="desk" data-arg="bank">Open dedicated vault</button>
+    <button type="button" data-act="desk" data-arg="bank">Open dedicated vault</button>
     <div class="bank-grid">${rows || "<p class='blurb'>Empty tab.</p>"}</div>`;
   fillHtml(document.getElementById("bank"), html);
-}
-
-function esc(s) {
-  return String(s).replace(/"/g, "&quot;");
 }
 
 function areaKills(state, area) {
@@ -947,7 +983,7 @@ function renderShop(ctx) {
     ["upgrades", "Upgrades"],
     ["cosmetics", "Cosmetics"]
   ];
-  const chips = cats.map(([id, lab]) => `<button class="${shopCat === id ? "on" : ""}" data-act="shop-cat" data-arg="${id}">${lab}</button>`).join("");
+  const chips = cats.map(([id, lab]) => `<button type="button" class="${shopCat === id ? "on" : ""}" data-act="shop-cat" data-arg="${id}">${lab}</button>`).join("");
   let list = CONTENT.shop.filter((o) => shopGroup(o) === shopCat);
   if (shopFilter) {
     list = CONTENT.shop.filter((o) => offerName(o).toLowerCase().includes(shopFilter) || (o.desc || "").toLowerCase().includes(shopFilter));
@@ -956,10 +992,10 @@ function renderShop(ctx) {
     list = list.filter((o) => CONTENT.items[o.item]?.toolSlot === shopTool);
   }
   const toolChips = shopCat === "tools" && !shopFilter ? `<div class="tabs">
-    <button class="${shopTool === "all" ? "on" : ""}" data-act="shop-tool" data-arg="all">All tools</button>
-    <button class="${shopTool === "axe" ? "on" : ""}" data-act="shop-tool" data-arg="axe">Hatchets</button>
-    <button class="${shopTool === "pick" ? "on" : ""}" data-act="shop-tool" data-arg="pick">Picks</button>
-    <button class="${shopTool === "rod" ? "on" : ""}" data-act="shop-tool" data-arg="rod">Rods</button>
+    <button type="button" class="${shopTool === "all" ? "on" : ""}" data-act="shop-tool" data-arg="all">All tools</button>
+    <button type="button" class="${shopTool === "axe" ? "on" : ""}" data-act="shop-tool" data-arg="axe">Hatchets</button>
+    <button type="button" class="${shopTool === "pick" ? "on" : ""}" data-act="shop-tool" data-arg="pick">Picks</button>
+    <button type="button" class="${shopTool === "rod" ? "on" : ""}" data-act="shop-tool" data-arg="rod">Rods</button>
   </div>` : "";
 
   const families = {};
@@ -978,7 +1014,7 @@ function renderShop(ctx) {
           const sold = o.max && bought >= o.max;
           const lvok = !o.reqLevel || skillLevel(state, o.reqSkill) >= o.reqLevel;
           const why = sold ? "Sold out" : !lvok ? `Need ${skillName(o.reqSkill)} ${o.reqLevel}` : state.coins < cost ? "Short on marks" : "";
-          return `<button class="ware ${sold || !lvok ? "locked" : ""}" data-act="buy" data-arg="${o.id}" ${sold ? "disabled" : ""}>
+          return `<button type="button" class="ware ${sold || !lvok ? "locked" : ""}" data-act="buy" data-arg="${o.id}" ${sold ? "disabled" : ""}>
             <strong>${offerName(o)}</strong>
             <span class="cost">${Math.floor(cost).toLocaleString()} ✦</span>
             <span class="sub">${o.desc || ""} · owned ${bought}${o.max ? "/" + o.max : ""}${why ? " · " + why : ""}</span>
@@ -987,14 +1023,14 @@ function renderShop(ctx) {
 
   const html = `<div class="shop-head">
       <div class="tabs">${chips}</div>
-      <input id="shop-search" placeholder="Filter stall" value="${esc(shopFilter)}" />
+      <input id="shop-search" placeholder="Filter stall" value="${escapeHtml(shopFilter)}" />
       ${toolChips}
     </div>${body}`;
   fillHtml(document.getElementById("shop"), html);
 }
 
 function renderLog(ctx) {
-  document.getElementById("journal").innerHTML = ctx.state.log.slice(0, 14).map((l) => `<div>${l.msg}</div>`).join("");
+  document.getElementById("journal").innerHTML = ctx.state.log.slice(0, 14).map((l) => `<div>${escapeHtml(l.msg)}</div>`).join("");
 }
 
 function toast(ctx, msg) {
