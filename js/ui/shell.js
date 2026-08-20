@@ -5,7 +5,7 @@ import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, r
 import { questProgress } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
 import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
-import { iconUrl, SKILL_ICON_KIND } from "../scene/icons.js";
+import { iconMarkup, SKILL_ICON_KIND } from "../scene/icons.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -258,6 +258,10 @@ function itemName(id) {
   return CONTENT.items[id]?.name || id;
 }
 
+function glyph(model, cls = "mico") {
+  return `<span class="${cls}">${iconMarkup(model || {}, 48)}</span>`;
+}
+
 function shopGroup(o) {
   const it = o.item ? CONTENT.items[o.item] : null;
   if (it?.category === "tool") return "tools";
@@ -271,7 +275,9 @@ export function renderShell(ctx) {
     const lv = skillLevel(state, s.id);
     const on = selectedSkill === s.id ? "on" : "";
     const lock = skillLocked(state, s.id);
-    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}><span class="skico" style="background-image:${iconUrl({ kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3 })}"></span><span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : lv}</span>${lock ? "" : `<i class="xpmini" title="${Math.floor(xpPct(state, s.id))}% to next"><b style="width:${xpPct(state, s.id)}%"></b></i>`}</button>`;
+    const pct = lock ? 0 : Math.floor(xpPct(state, s.id));
+    const ico = { kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3 };
+    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}>${glyph(ico, "skico")}<span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : `${lv} · ${pct}%`}</span>${lock ? "" : `<i class="xpmini"><b style="width:${pct}%"></b></i>`}</button>`;
   }).join("");
   root.querySelector("#skill-nav").innerHTML = left;
   renderTop(ctx);
@@ -399,6 +405,15 @@ function renderTop(ctx) {
     }
   }
   spawnYieldDrip(state);
+  const ly = document.getElementById("last-yield");
+  if (ly) {
+    const d = state.lastDrip;
+    if (!d) ly.textContent = "Last yield: —";
+    else {
+      const items = (d.items || []).map((x) => `+${x.n} ${x.item === "coins" ? "veilmarks" : (CONTENT.items[x.item]?.name || x.item)}`).join(" · ");
+      ly.textContent = `Last yield: ${items || "—"}${d.xp ? ` · +${d.xp} ${skillName(d.skill)} xp` : ""}`;
+    }
+  }
   renderLevelModal(ctx);
 }
 
@@ -788,6 +803,7 @@ function renderActions(ctx, skill) {
         const mast = `M${ml}: +${(mb.speed * 100).toFixed(1)}% speed · +${(mb.preserve * 100).toFixed(1)}% preserve`;
         return `<div class="cardwrap">
         <button type="button" class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
+          ${glyph(a.model)}
           <strong>${a.name}</strong>
           <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · ${mast} · CP${cp} · ×${n} done</span>
           <div class="io">
@@ -935,7 +951,7 @@ function renderCombatTheater(ctx) {
     </div>
     <div>
       <h4>${m.name}</h4>
-      <span class="mico lg" style="background-image:${iconUrl(m.model)}"></span>
+      ${glyph(m.model, "mico lg")}
       <div class="bar hp foe"><i style="display:block;height:100%;width:${Math.max(0, 100 * state.combat.monsterHp / m.hp)}%;background:linear-gradient(90deg,#3a2a78,#8b7cff)"></i></div>
       <p class="hint">${Math.max(0, Math.ceil(state.combat.monsterHp))} / ${m.hp} · incoming ${foeSwing.toFixed(0)}%</p>
       <p class="hint">Hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</p>
@@ -993,7 +1009,7 @@ function renderAreas(ctx) {
         const m = CONTENT.monsters[id];
         const on = state.combat.fighting && state.combat.monsterId === id;
         return `<button type="button" class="card ${on ? "on" : ""}" data-act="fight" data-arg="${id}">
-          <span class="mico" style="background-image:${iconUrl(m.model)}"></span>
+          ${glyph(m.model)}
           <strong>${m.name}</strong>
           <span>HP ${m.hp} · hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</span>
           <em>${m.desc}</em>
@@ -1004,7 +1020,7 @@ function renderAreas(ctx) {
     const n = (state.combat.dungeonClears || {})[d.id] || 0;
     const on = state.combat.dungeon === d.id;
     return `<button type="button" class="card ${on ? "on" : ""}" data-act="dungeon" data-arg="${d.id}">
-      <span class="mico" style="background-image:${iconUrl(d.model)}"></span>
+      ${glyph(d.model)}
       <strong>${d.name}</strong><span>Req ${d.req} · ${d.sequence.length} floors · clears ${n}</span><em>${d.desc}</em>
     </button>`;
   }).join("")}</div>`;
@@ -1057,7 +1073,7 @@ function renderBank(ctx) {
       const eq = it.category === "equipment" || it.category === "ammo" || it.category === "tool";
       const stackVal = (it.value || 0) * n;
       return `<div class="brow" title="${it.desc || ""}">
-        <span class="bico" style="background-image:${iconUrl(it.model)}"></span>
+        ${glyph(it.model, "bico")}
         <span class="nm">${it.name}</span>
         <span class="qty">${n.toLocaleString()}</span>
         <span class="val">${stackVal.toLocaleString()} ✦ · ${it.category}</span>

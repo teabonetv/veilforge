@@ -20,7 +20,7 @@ export function iconMarkup(model = {}, size = 64) {
 }
 
 export function iconUrl(model, size = 64) {
-  return `url("data:image/svg+xml,${encodeURIComponent(iconMarkup(model, size))}")`;
+  return `url('data:image/svg+xml;charset=utf-8,${encodeURIComponent(iconMarkup(model, size))}')`;
 }
 
 export function iconDataUri(model, size = 64) {

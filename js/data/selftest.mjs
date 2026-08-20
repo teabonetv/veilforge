@@ -4,7 +4,7 @@ import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouc
 import { startFight, startDungeon, equipItem, unequip, rollBounty } from "../engine/combat.js";
 import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
-import { iconMarkup } from "../scene/icons.js";
+import { iconMarkup, iconUrl } from "../scene/icons.js";
 
 let rng = 20260820;
 Math.random = () => {
@@ -52,6 +52,7 @@ if (seedClash > Object.keys(C.items).length * 0.02) throw new Error("too many mo
 const mk = new Set(Object.values(C.monsters).map((m) => m.model.kind));
 if (mk.size < 12) throw new Error("monster silhouettes too few: " + [...mk].join(","));
 if (!iconMarkup(C.items["log-0"].model).includes("<svg")) throw new Error("icon markup broken");
+if (!iconUrl(C.items["log-0"].model).includes("url('")) throw new Error("icon data-url quotes would break HTML style attrs");
 if (!iconMarkup(Object.values(C.monsters)[0].model).includes("rect")) throw new Error("monster icon empty");
 const gates = new Set(C.dungeons.map((d) => d.model.kind));
 if (gates.size < 6) throw new Error("dungeon gates not unique: " + [...gates].join(","));
