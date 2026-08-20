@@ -100,6 +100,9 @@ export function buildContent() {
   addItem({ id: "seed-pouch", name: "Seed Pouch", category: "material", stack: true, value: 5, desc: "Opens into a random soil seed." });
   addItem({ id: "bounty-token", name: "Bounty Token", category: "token", stack: true, value: 40, desc: "Contract proof. Spend in the bounty stall." });
   addItem({ id: "dungeon-key", name: "Citadel Key", category: "key", stack: true, value: 80, desc: "Opens a dungeon floor's lock." });
+  addItem({ id: "compost", name: "Dusk Compost", category: "material", stack: true, value: 6, desc: "Work into a soil plot: faster grow, fatter harvest." });
+  addItem({ id: "stardust", name: "Stardust", category: "material", stack: true, value: 12, desc: "Chart spend. Study constellations, then buy ranked modifiers." });
+  addItem({ id: "fodder", name: "Pen Fodder", category: "material", stack: true, value: 4, desc: "Feed a drove pen. Next collect pays more." });
 
   const logs = [];
   const ores = [];
@@ -115,7 +118,7 @@ export function buildContent() {
   });
 
   TIER_NAMES.forEach((tier, t) => {
-    const req = Math.min(1 + t * 8, 99);
+    const req = t >= 13 ? 120 : t >= 12 ? 112 : t >= 11 ? 105 : Math.min(1 + t * 8, 99);
     const val = Math.round(4 * Math.pow(1.55, t));
     const time = 7200 + t * 960;
 
@@ -209,13 +212,15 @@ export function buildContent() {
         ammo: w.ammo || false,
         desc: `${w.name} identity: ${w.special}. Weapons are jobs, not a ladder with one winner.`
       });
-      actions[`smith-${id}`] = {
-        id: `smith-${id}`, skill: "anvil", name: `Forge ${tier} ${w.name}`, level: req + (w.style === "might" ? 0 : 2),
-        time: 6200 + t * 280, xp: 22 + t * 14, masteryId: `smith-${id}`, category: "smith",
-        inputs: [{ item: bar, qty: 2 + Math.floor(t / 4) }],
-        outputs: [{ item: id, min: 1, max: 1 }],
-        desc: `Smith a ${tier} ${w.name}.`
-      };
+      if (w.name !== "Longbow") {
+        actions[`smith-${id}`] = {
+          id: `smith-${id}`, skill: "anvil", name: `Forge ${tier} ${w.name}`, level: req + (w.style === "might" ? 0 : 2),
+          time: 6200 + t * 280, xp: 22 + t * 14, masteryId: `smith-${id}`, category: "smith",
+          inputs: [{ item: bar, qty: 2 + Math.floor(t / 4) }],
+          outputs: [{ item: id, min: 1, max: 1 }],
+          desc: `Smith a ${tier} ${w.name}. Bows are fletched, not forged.`
+        };
+      }
     });
 
     ["helm", "body", "legs", "boots", "gloves", "shield"].forEach((slot, si) => {
@@ -353,6 +358,8 @@ export function buildContent() {
     { id: "shop-loadout", item: null, effect: "loadout", cost: 8000, repeatable: true, max: 5, name: "Gear Loadout", desc: "Save another equipment set." },
     { id: "shop-offline", item: null, effect: "offlineHours", cost: 15000, name: "Deep Rest", desc: "Offline cap 18 → 24 hours." },
     { id: "shop-key", item: "dungeon-key", qty: 1, cost: 400, repeatable: true, name: "Citadel Key", desc: "Spend one to enter a dungeon." },
+    { id: "shop-compost", item: "compost", qty: 8, cost: 60, repeatable: true, name: "Dusk Compost", desc: "Eight bags. Soil identity is compost, not another timer." },
+    { id: "shop-fodder", item: "fodder", qty: 8, cost: 50, repeatable: true, name: "Pen Fodder", desc: "Feed the drove. Collect without feed is a thin faucet." },
     { id: "shop-slots", item: null, effect: "slots", cost: 400, repeatable: true, max: 20, name: "Bank Slots", desc: "+6 unique stacks. Full banks halt crafts — this is the Melvor tax." }
   );
 
@@ -451,29 +458,55 @@ export function buildContent() {
   });
 
   const dungeonDefs = [
-    { name: "Dock Vault", floors: 4, req: 1, boss: "Vault Crab" },
-    { name: "Sewer Reliquary", floors: 5, req: 20, boss: "Lantern Cultist" },
-    { name: "Fen Crown", floors: 6, req: 40, boss: "Salt Hydra" },
-    { name: "Choir Spire", floors: 7, req: 55, boss: "Choir Ghoul" },
-    { name: "Pyre Cathedral", floors: 8, req: 70, boss: "Pyre Troll" },
-    { name: "Oathkeep", floors: 8, req: 85, boss: "Oathbreaker" },
-    { name: "Starwell", floors: 9, req: 96, boss: "Glass Drake" },
-    { name: "Veilheart", floors: 10, req: 110, boss: "Thorn Colossus" },
-    { name: "Silent Stacks", floors: 7, req: 62, boss: "Codex Beast" },
-    { name: "The Last Page", floors: 12, req: 118, boss: "The Ledger" }
+    { name: "Dock Vault", floors: 4, req: 1, boss: "Vault Crab", specials: ["drain", "poison", "burst"] },
+    { name: "Sewer Reliquary", floors: 5, req: 20, boss: "Reliquary Cultist", specials: ["poison", "drain", "burst"] },
+    { name: "Fen Crown", floors: 6, req: 40, boss: "Crown Hydra", specials: ["poison", "burst", "drain"] },
+    { name: "Choir Spire", floors: 7, req: 55, boss: "Spire Ghoul", specials: ["drain", "burst", "poison"] },
+    { name: "Pyre Cathedral", floors: 8, req: 70, boss: "Cathedral Troll", specials: ["burst", "drain", "poison"] },
+    { name: "Oathkeep", floors: 8, req: 85, boss: "Keep Oathbreaker", specials: ["drain", "burst", "poison"] },
+    { name: "Starwell", floors: 9, req: 96, boss: "Well Drake", specials: ["burst", "poison", "drain"] },
+    { name: "Veilheart", floors: 10, req: 110, boss: "Heart Colossus", specials: ["burst", "drain", "poison"] },
+    { name: "Silent Stacks", floors: 7, req: 62, boss: "Stacks Codex", specials: ["drain", "poison", "burst"] },
+    { name: "The Last Page", floors: 12, req: 118, boss: "Page Primus", specials: ["burst", "drain", "poison"] }
   ];
   dungeonDefs.forEach((d, di) => {
     const seq = [];
-    for (let f = 0; f < d.floors; f++) {
-      const area = areas[Math.min(areas.length - 1, di + Math.floor(f / 3))];
-      seq.push(area.monsters[f % area.monsters.length]);
+    const used = new Set();
+    for (let f = 0; f < d.floors - 1; f++) {
+      const start = Math.min(areas.length - 1, Math.floor(di * 1.3 + f * 0.7));
+      let pick = null;
+      for (let ai = start; ai < areas.length && !pick; ai++) {
+        pick = areas[ai].monsters.find((id) => !used.has(id)) || null;
+      }
+      if (!pick) pick = areas.flatMap((a) => a.monsters).find((id) => !used.has(id));
+      if (!pick) pick = areas[Math.min(areas.length - 1, di)].monsters[0];
+      used.add(pick);
+      seq.push(pick);
     }
-    const rewardTier = Math.min(13, 2 + di * 2);
+    const bossId = idify(`${d.name}-boss`);
+    const t = Math.min(13, 2 + di * 2);
+    const style = di % 3 === 0 ? "might" : di % 3 === 1 ? "mark" : "weave";
+    monsters[bossId] = {
+      id: bossId, name: d.boss, area: d.name, dungeonOnly: true,
+      hp: 48 + di * 36, maxHit: 8 + di * 5, acc: 12 + di * 8, eva: 10 + di * 7,
+      style, interval: 2400 + (di % 3) * 200, def: 8 + di * 6, slayerReq: d.req, tier: t,
+      special: d.specials[0], burstMul: 2.6,
+      xp: { might: 22 + di * 8, guard: 18 + di * 6, vitality: 16 + di * 5, mark: 22 + di * 8, weave: 22 + di * 8 },
+      drops: [
+        { item: "coins", min: 40 + di * 20, max: 90 + di * 40, chance: 1 },
+        { item: "bones", min: 2, max: 4, chance: 1 },
+        { item: "dungeon-key", min: 1, max: 1, chance: 0.12 + di * 0.02 },
+        { item: idify(`${TIER_NAMES[t]}-amulet`), min: 1, max: 1, chance: 0.08 }
+      ],
+      unique: { item: idify(`${TIER_NAMES[t]}-amulet`), chance: 0.06 },
+      desc: `${d.name} closer. Authored boss — not a recycled field mob.`
+    };
+    seq.push(bossId);
     dungeons.push({
       id: idify(d.name), name: d.name, req: d.req, sequence: seq, bossName: d.boss,
-      reward: { item: idify(`${TIER_NAMES[rewardTier]}-amulet`), qty: 1 },
+      reward: { item: idify(`${TIER_NAMES[t]}-amulet`), qty: 1 },
       tokens: 3 + di,
-      desc: `${d.floors} sequential kills. Death resets the run. This is Melvor's dungeon tension.`
+      desc: `${d.floors} authored floors, unique closer ${d.boss}. Death resets. Style ${style} on the last door.`
     });
   });
 
@@ -497,7 +530,7 @@ export function buildContent() {
   );
 
   prayers.push(
-    { id: "vow-sharp", name: "Sharp Oath", level: 1, drain: 2, stats: { accMul: 1.1 }, desc: "Accuracy. Two-prayer cap — pick a partner." },
+    { id: "vow-protect", name: "Aegis Oath", level: 8, drain: 4, stats: { takenMul: 0.78 }, desc: "Protection. Cuts incoming hits. The RS click, idled." },
     { id: "vow-heavy", name: "Heavy Oath", level: 10, drain: 3, stats: { strMul: 1.12 }, desc: "Melee strength. Drains vow; bury bones to last a dungeon." },
     { id: "vow-iron", name: "Iron Oath", level: 20, drain: 3, stats: { defMul: 1.14 }, desc: "Defence. Surviving burst/poison is a vow job." },
     { id: "vow-sight", name: "Sight Oath", level: 30, drain: 3, stats: { rangedMul: 1.12 }, desc: "Ranged. Mark still spends ammo." },
@@ -541,29 +574,29 @@ export function buildContent() {
 
   const pillarCats = [
     { id: "tempo", name: "Tempo", options: [
-      { id: "stride", name: "Long Stride", skillSpeed: 0.03, time: 1 },
-      { id: "sprint", name: "Sprint Latch", skillSpeed: 0.06, hp: -4, time: 1.15 },
-      { id: "measure", name: "Measured Step", skillSpeed: 0.02, xpMul: 0.03, time: 0.95 }
+      { id: "stride", name: "Long Stride", skillSpeed: 0.03, time: 1, cost: 20 },
+      { id: "sprint", name: "Sprint Latch", skillSpeed: 0.06, hp: -4, time: 1.15, cost: 90 },
+      { id: "measure", name: "Measured Step", skillSpeed: 0.02, xpMul: 0.03, time: 0.95, cost: 70 }
     ]},
     { id: "fortune", name: "Fortune", options: [
-      { id: "coin", name: "Coin Bell", gpMul: 0.06, time: 1 },
-      { id: "rare", name: "Rare Chime", rareMul: 0.08, gpMul: -0.02, time: 1.05 },
-      { id: "preserve", name: "Thrifty Hands", preserve: 0.05, time: 1 }
+      { id: "coin", name: "Coin Bell", gpMul: 0.06, time: 1, cost: 50 },
+      { id: "rare", name: "Rare Chime", rareMul: 0.08, gpMul: -0.02, time: 1.05, cost: 85 },
+      { id: "preserve", name: "Thrifty Hands", preserve: 0.05, time: 1, cost: 65 }
     ]},
     { id: "war", name: "War", options: [
-      { id: "edge", name: "Edge Wind", accMul: 0.04, time: 1 },
-      { id: "hide", name: "Hide Wind", defMul: 0.05, time: 1 },
-      { id: "blood", name: "Blood Wind", leech: 0.03, hp: -6, time: 1.1 }
+      { id: "edge", name: "Edge Wind", accMul: 0.04, time: 1, cost: 55 },
+      { id: "hide", name: "Hide Wind", defMul: 0.05, time: 1, cost: 55 },
+      { id: "blood", name: "Blood Wind", leech: 0.03, hp: -6, time: 1.1, cost: 95 }
     ]},
     { id: "craft", name: "Craft", options: [
-      { id: "yield", name: "Yield Knot", outputMul: 0.04, time: 1 },
-      { id: "mastery", name: "Mastery Knot", masteryMul: 0.08, time: 1.05 },
-      { id: "burn", name: "Clean Burn", burnReduce: 0.2, time: 0.98 }
+      { id: "yield", name: "Yield Knot", outputMul: 0.04, time: 1, cost: 60 },
+      { id: "mastery", name: "Mastery Knot", masteryMul: 0.08, time: 1.05, cost: 80 },
+      { id: "burn", name: "Clean Burn", burnReduce: 0.2, time: 0.98, cost: 75 }
     ]},
     { id: "star", name: "Star", options: [
-      { id: "chart", name: "Open Chart", chartXp: 0.1, time: 1 },
-      { id: "veil", name: "Veil Lean", allXp: 0.02, time: 1.12 },
-      { id: "rest", name: "Rest Gate", offlineMul: 0.08, time: 1.08 }
+      { id: "chart", name: "Open Chart", chartXp: 0.1, time: 1, cost: 70 },
+      { id: "veil", name: "Veil Lean", allXp: 0.02, time: 1.12, cost: 110 },
+      { id: "rest", name: "Rest Gate", offlineMul: 0.08, time: 1.08, cost: 100 }
     ]}
   ];
   coursePillars.push(...pillarCats);
@@ -662,10 +695,19 @@ export function buildContent() {
     };
   });
 
+  const chartRanks = [
+    { id: "dust-speed", name: "Dust Tempo", cost: 8, bonus: { speed: 0.03 }, desc: "+3% skill speed. Stacks with slotted stars." },
+    { id: "dust-rare", name: "Dust Luck", cost: 10, bonus: { rare: 0.04 }, desc: "+4% rare chance." },
+    { id: "dust-preserve", name: "Dust Thrift", cost: 12, bonus: { preserve: 0.03 }, desc: "+3% resource preserve." },
+    { id: "dust-xp", name: "Dust Insight", cost: 14, bonus: { allXp: 0.02 }, desc: "+2% all XP." },
+    { id: "dust-str", name: "Dust Edge", cost: 16, bonus: { str: 0.04 }, desc: "+4% melee power." },
+    { id: "dust-ward", name: "Dust Ward", cost: 16, bonus: { magic: 0.04 }, desc: "+4% weave power." }
+  ];
+
   return imprintContent({
     items, actions, monsters, areas, dungeons, shop, quests, guildTasks,
     npcs, spells, prayers, potions, pets, constellations, coursePillars, animals, crops,
-    logs, ores, bars, fish, cooked, herbs, gems, runes
+    chartRanks, logs, ores, bars, fish, cooked, herbs, gems, runes
   });
 }
 

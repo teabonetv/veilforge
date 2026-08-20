@@ -2,9 +2,11 @@
 
 A browser idle / incremental RPG in the spirit of Melvor Idle and Melvor Idle 2 — duskbound, not a reskin.
 
-Open `index.html` via any static server (or the Cloud Agent preview). Live build notes: `progress.html`. Store packaging (Android, iOS, Steam): `RELEASE.md`.
+**Play (free, HTTPS):** https://teabonetv.github.io/veilforge/
 
-## Run
+Source for that site: public repo https://github.com/teabonetv/veilforge — push `main` there to update the playtest (GitHub Pages, no local server). Live build notes: `progress.html`. Store packaging (Android, iOS, Steam): `RELEASE.md`.
+
+## Run locally
 
 ```bash
 python3 -m http.server 8080

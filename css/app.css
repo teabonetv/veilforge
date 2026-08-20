@@ -187,7 +187,7 @@ select, option {
 #layout { display: grid; grid-template-columns: 196px 1fr 372px; min-height: 0; }
 #skill-nav { overflow: auto; border-right: 1px solid var(--line); padding: 8px; background: #120a1acc; }
 #skill-nav .skill {
-  width: 100%; display: grid; grid-template-columns: 22px 1fr auto; gap: 6px;
+  width: 100%; display: grid; grid-template-columns: 28px 1fr auto; gap: 6px;
   text-align: left; margin-bottom: 3px; padding: 6px 8px;
   background: #1a1024;
 }
@@ -246,6 +246,22 @@ select, option {
 .card .out { color: var(--ok); }
 .card .inv { color: var(--lilac); }
 .card .lock-why { color: var(--rose); }
+.skico {
+  width: 28px; height: 28px; border-radius: 7px;
+  background-size: cover; background-position: center; flex-shrink: 0;
+  border: 1px solid var(--line);
+}
+.bico, .mico {
+  width: 28px; height: 28px; border-radius: 6px;
+  background-size: cover; background-position: center; display: inline-block; flex-shrink: 0;
+  border: 1px solid var(--line-soft);
+}
+.mico.lg { width: 48px; height: 48px; margin: 4px 0; }
+.card .mico { margin-bottom: 4px; }
+.heat { margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #181022; }
+.heat .xpbar { margin: 6px 0; }
+#commit.warn { color: var(--warn); }
+.blurb.warn { color: var(--warn); }
 .card.on { background: linear-gradient(180deg, #2e1a38, #1c1228); }
 .grp { margin: 16px 0 8px; color: var(--lilac); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; }
 .area { margin: 8px 0; border: 1px solid var(--line); border-radius: 10px; padding: 8px; background: #160e22; }
@@ -276,7 +292,7 @@ select, option {
 .bank-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
 .brow {
   display: grid;
-  grid-template-columns: 18px 1fr auto;
+  grid-template-columns: 28px 1fr auto;
   gap: 1px 6px;
   font-size: 12px;
   padding: 6px 7px;

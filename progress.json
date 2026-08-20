@@ -1,33 +1,33 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-20T14:00:00Z",
-  "wave": 9,
-  "overall": "Review-fix pass: honest offline (18/24h, combat frozen while hidden), vault/loadout item safety, PWA network-first scripts, save sanitization.",
+  "updatedAt": "2026-08-20T16:00:00Z",
+  "wave": 12,
+  "overall": "Wave 12 adds an art-models-assets piece and ships Melvor-style readable SVG glyphs, 18+ monster silhouettes, dungeon gate variants, workshop paperdoll, and complete wanderer attachments. Halt still the only wow; art was the sneer. Merged main review-fix pass (honest offline, vault/PWA/save safety).",
   "comparison": {
-    "melvorIdle": "latest live critic: Veilforge Halt fork > Melvor instant switch",
-    "melvorIdle2": "earlier critics: MI2 still the content-depth bar",
-    "oursBetter": "split — UX fork yes, encyclopedia no",
-    "biggestGap": "Taste/prose, and MI2-scale mastery/ranching/astro boards we did not fully match"
+    "melvorIdle": "Bank glyphs now exist; still not a hand-painted unique sprite per item",
+    "melvorIdle2": "paperdoll denser; not MI2 illustrated character",
+    "runescape": "workshop player wears the kit; still primitive meshes",
+    "oursBetter": "halt-commit",
+    "biggestGap": "art-models-assets — unique readable icons and monster silhouettes (this wave)"
   },
   "pieces": [
-    {"id": "core-loop", "name": "Tick, save, offline, action bars", "status": "wow", "critic": "Halt overlay verified"},
-    {"id": "gathering", "name": "Timber, Trawl, Vein, Ember", "status": "wow", "critic": "cap keeps XP, live banner"},
-    {"id": "artisan", "name": "Hearth, Anvil, Fletch, Loom, Sigil, Vial", "status": "done", "critic": "Anvil lock toast verified"},
-    {"id": "unique-skills", "name": "Course, Whisper, Soil, Drove, Chart", "status": "done", "critic": "gated"},
-    {"id": "combat", "name": "Might, Guard, Vitality, Mark, Weave, Vow, Bounty", "status": "done", "critic": "not the last playtest's focus"},
-    {"id": "guilds", "name": "Mastery + Guild tasks (MI2-inspired)", "status": "done", "critic": "pool checkpoints exist"},
-    {"id": "quests", "name": "Story ledger and side contracts", "status": "done", "critic": "2-minute loop"},
-    {"id": "bank-shop", "name": "Bank, shop, tools, loadouts", "status": "done", "critic": "caps + XP-on-full"},
-    {"id": "threejs", "name": "Citadel scene, combat arena, skill dioramas", "status": "done", "critic": "dioramas"},
-    {"id": "ui-qol", "name": "Nav, toasts, stats, settings, identity", "status": "wow", "critic": "commitment + Halt"},
-    {"id": "pacing", "name": "Economy, drop tables, long-term goals", "status": "done", "critic": "scarcity"},
-    {"id": "coherence", "name": "Whole-game playthrough polish", "status": "done", "critic": "client finally presents the fork"}
+    {"id": "halt-commit", "name": "One job, Halt overlay", "status": "wow", "critic": "live: Veilforge wins vs Melvor instant swap"},
+    {"id": "gathering-groves", "name": "Timber Trawl Vein Ember groves", "status": "building", "critic": "awaiting fresh live critic"},
+    {"id": "artisan-sinks", "name": "Hearth Anvil Fletch Loom Sigil Vial", "status": "building", "critic": "awaiting fresh live critic"},
+    {"id": "unique-boards", "name": "Course Whisper Soil Drove Chart", "status": "building", "critic": "awaiting fresh live critic"},
+    {"id": "combat-triangle", "name": "Fights food triangle specials", "status": "building", "critic": "awaiting fresh live critic"},
+    {"id": "vault-wanderer", "name": "Vault 3D + Wanderer kit", "status": "building", "critic": "awaiting fresh live critic"},
+    {"id": "stall-ledger", "name": "Shop and quests", "status": "building", "critic": "awaiting fresh live critic"},
+    {"id": "first-hour", "name": "Unlock cascade and goals", "status": "building", "critic": "awaiting fresh live critic"},
+    {"id": "coherence", "name": "Whole-game connective tissue", "status": "building", "critic": "awaiting fresh live critic"},
+    {"id": "art-models-assets", "name": "Icons, models, paperdoll, dioramas", "status": "building", "critic": "art director: Melvor wins on icons; 130 monsters were 3 templates — glyphs + families shipped"}
   ],
   "log": [
-    "Review-fix pass: offline hours, frozen hunts, loadout/unequip safety, network-first SW, escaped journal.",
-    "Latest live critic: Halt overlay + Keep/Switch both work; wowed vs Melvor instant swap.",
-    "Earlier critics: Melvor/MI2 win on breadth until the board was actually playable.",
+    "Merged origin/main review-fix pass: offline hours, frozen hunts, loadout/unequip safety, network-first SW, escaped journal.",
+    "Wave 12: dedicated art critic; SVG bank/skill/combat glyphs; monster kinds; dungeon gates; workshop=wanderer mesh; helm/gloves/amulet/ring/ammo on paperdoll.",
+    "Wave 11 builder: unique-skill identity, combat ops, vault ops.",
+    "Wave 10 live critic: Halt wow; overall Melvor Idle.",
     "Fixes that unblocked play: app grid, lastFloater, XP-on-cap, body-level Halt."
   ]
 }

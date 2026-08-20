@@ -231,6 +231,7 @@ export function playerStats(state) {
     acc: acc * accMul * tri.acc,
     power: Math.max(1, power) * pwrMul * tri.dmg,
     def: def * defMul,
+    takenMul: ps.takenMul || 1,
     ps, pot, cb, ch, tri
   };
 }
@@ -351,8 +352,30 @@ function playerHit(state, echoFollow = false) {
     state.combat.spec = state.combat.spec || 0;
     if (state.combat.useSpec !== false && state.combat.spec >= 50) {
       state.combat.spec -= 50;
-      dmg = Math.floor(dmg * 1.5);
-      notes.push("special");
+      const specName = w?.special || "surge";
+      if (specName === "riposte") {
+        notes.push("special: riposte");
+        riposte(state, m, st, "special");
+        if (!state.combat.fighting) return;
+      } else if (specName === "shred") {
+        state.combat.shred = Math.min(SHRED_MAX, (state.combat.shred || 0) + 2);
+        notes.push("special: shred");
+      } else if (specName === "bleed") {
+        state.combat.bleed = (state.combat.bleed || 0) + 3;
+        notes.push("special: bleed");
+      } else if (specName === "pierce") {
+        dmg = Math.floor(dmg * 1.25);
+        ignoreDef = Math.max(ignoreDef, 0.7);
+        notes.push("special: pierce");
+      } else if (specName === "echo") {
+        notes.push("special: echo");
+        combatLog(state, "Special — echo.");
+        playerHit(state, true);
+        if (!state.combat.fighting) return;
+      } else {
+        dmg = Math.floor(dmg * 1.35);
+        notes.push("special");
+      }
     } else {
       state.combat.spec = Math.min(100, state.combat.spec + 14);
     }
@@ -459,7 +482,7 @@ function enemyHit(state) {
   }
 
   let dmg = 1 + Math.floor(Math.random() * m.maxHit);
-  dmg = Math.max(1, Math.floor(dmg * st.tri.taken));
+  dmg = Math.max(1, Math.floor(dmg * st.tri.taken * (st.takenMul || 1)));
   if (boss) dmg = Math.floor(dmg * 1.18);
   if (state.combat.ward > 0) {
     dmg = Math.floor(dmg * 0.72);
@@ -592,14 +615,16 @@ function die(state) {
 function autoEat(state) {
   const th = state.combat.autoEat;
   if (state.combat.hp > state.combat.maxHp * th) return;
-  const food = state.combat.foodId;
-  const it = CONTENT.items[food];
-  if (!it?.heal) return;
-  if (!takeItem(state, food, 1)) {
+  const ids = [state.combat.foodId, state.combat.foodId2].filter(Boolean);
+  let food = ids.find((id) => bankCount(state, id) > 0);
+  if (!food) {
     const now = state.now || 0;
-    if (now >= (state.combat.dryUntil || 0)) dryLog(state, "No food left. Auto-eat has nothing.");
+    if (now >= (state.combat.dryUntil || 0)) dryLog(state, "No food left on either pipe. Auto-eat has nothing.");
     return;
   }
+  const it = CONTENT.items[food];
+  if (!it?.heal) return;
+  if (!takeItem(state, food, 1)) return;
   let heal = it.heal;
   if (state.shopBought["shop-eat2"]) heal = Math.floor(heal * 1.08);
   heal = Math.floor(heal * (1 + (potionStats(state).eatBoost || 0)));
@@ -721,11 +746,48 @@ function bumpGuild(state, skill) {
 }
 
 export function rollBounty(state) {
+  const had = state.bounty?.monsterId;
+  if (had) {
+    if (!takeItem(state, "bounty-token", 1)) return "Rerolling a live contract costs 1 bounty token.";
+  }
+  const blocked = new Set(state.bounty?.block || []);
+  if (had) blocked.add(had);
   const lvl = skillLevel(state, "bounty");
-  const pool = Object.values(CONTENT.monsters).filter((m) => m.slayerReq <= lvl + 8);
-  if (!pool.length) return;
-  const m = pool[Math.floor(Math.random() * pool.length)];
-  state.bounty = { monsterId: m.id, need: 8 + Math.floor(Math.random() * 18), have: 0, streak: state.bounty.streak || 0 };
+  const pool = Object.values(CONTENT.monsters).filter((m) => !m.dungeonOnly && m.slayerReq <= lvl + 8 && !blocked.has(m.id));
+  const pickFrom = pool.length ? pool : Object.values(CONTENT.monsters).filter((m) => !m.dungeonOnly && m.slayerReq <= lvl + 8);
+  if (!pickFrom.length) return "No contracts in range.";
+  const m = pickFrom[Math.floor(Math.random() * pickFrom.length)];
+  state.bounty = {
+    monsterId: m.id,
+    need: 8 + Math.floor(Math.random() * 18),
+    have: 0,
+    streak: state.bounty.streak || 0,
+    block: [...blocked].slice(-5)
+  };
+  return null;
+}
+
+export function swapWeaponStyle(state, style) {
+  const held = state.equipment.weapon;
+  const pool = Object.keys(state.bank).concat(held ? [held] : []);
+  const best = pool
+    .map((id) => CONTENT.items[id])
+    .filter((it) => it?.slot === "weapon" && it.style === style)
+    .sort((a, b) => statScore(b) - statScore(a))[0];
+  if (!best) return `No ${style} weapon in vault or hand.`;
+  if (held === best.id) {
+    state.combat.style = style;
+    combatLog(state, `Already holding ${best.name}.`);
+    return null;
+  }
+  const err = equipItem(state, best.id);
+  if (!err) combatLog(state, `Swapped to ${best.name} (${style}) mid-fight.`);
+  return err;
+}
+
+function statScore(it) {
+  const s = it.stats || {};
+  return (s.acc || 0) + (s.str || 0) + (s.ranged || 0) + (s.magic || 0) + (s.def || 0);
 }
 
 export function buryBones(state) {

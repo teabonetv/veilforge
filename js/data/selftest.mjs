@@ -1,9 +1,10 @@
 import { SKILLS, XP_TABLE, levelFromXp } from "../content/catalog.js";
 import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem } from "../engine/state.js";
-import { startAction, tick, actionDuration, applyOffline, offlineCapMs } from "../engine/sim.js";
-import { startFight, startDungeon, equipItem, unequip } from "../engine/combat.js";
+import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouch, plantPlot, buyPillar, spendChartRank } from "../engine/sim.js";
+import { startFight, startDungeon, equipItem, unequip, rollBounty } from "../engine/combat.js";
 import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
+import { iconMarkup } from "../scene/icons.js";
 
 let rng = 20260820;
 Math.random = () => {
@@ -47,6 +48,13 @@ for (const it of Object.values(C.items)) {
   seeds.add(it.model.seed);
 }
 if (seedClash > Object.keys(C.items).length * 0.02) throw new Error("too many model seed collisions " + seedClash);
+
+const mk = new Set(Object.values(C.monsters).map((m) => m.model.kind));
+if (mk.size < 12) throw new Error("monster silhouettes too few: " + [...mk].join(","));
+if (!iconMarkup(C.items["log-0"].model).includes("<svg")) throw new Error("icon markup broken");
+if (!iconMarkup(Object.values(C.monsters)[0].model).includes("rect")) throw new Error("monster icon empty");
+const gates = new Set(C.dungeons.map((d) => d.model.kind));
+if (gates.size < 6) throw new Error("dungeon gates not unique: " + [...gates].join(","));
 
 const s = createState();
 if (s.loadouts[0].equipment.weapon !== "drift-saber") throw new Error("default Wanderer loadout missing saber");
@@ -165,6 +173,63 @@ if (dump.log.length <= beforeLog && bankCount(dump, "celestial-saber")) {
 if (bankUsed(dump) >= bankCap(dump) && !bankCount(dump, "celestial-saber")) {
   if (!dump.log.some((l) => /Could not stash/.test(l.msg))) throw new Error("full vault rare was silent");
 }
+
+if (C.actions["smith-copper-longbow"] || Object.keys(C.actions).some((id) => /smith-.*longbow/.test(id))) {
+  throw new Error("longbows must be fletched, not smithed");
+}
+for (const d of C.dungeons) {
+  const seq = d.sequence;
+  if (new Set(seq).size !== seq.length) throw new Error("dungeon repeats floors: " + d.name);
+  const boss = C.monsters[seq[seq.length - 1]];
+  if (!boss?.dungeonOnly) throw new Error("dungeon missing authored boss: " + d.name);
+}
+if (!C.items.compost || !C.items.stardust || !C.items.fodder) throw new Error("missing identity items");
+if (!(C.chartRanks || []).length) throw new Error("chart ranks missing");
+if (C.prayers.find((p) => p.id === "vow-protect")?.stats?.takenMul !== 0.78) throw new Error("aegis oath missing");
+
+const pouch = createState();
+addItem(pouch, "seed-pouch", 1);
+const perr = openPouch(pouch);
+if (perr) throw new Error(perr);
+if (bankCount(pouch, "seed-pouch")) throw new Error("pouch not consumed");
+const seedId = Object.keys(pouch.bank).find((id) => C.items[id]?.category === "seed");
+if (!seedId) throw new Error("pouch did not grant a seed");
+
+addItem(pouch, "compost", 1);
+addItem(pouch, seedId, 1);
+const plant = plantPlot(pouch, 0, seedId);
+if (plant) throw new Error(plant);
+if (!pouch.soil.plots[0].compost) throw new Error("compost not applied");
+if (bankCount(pouch, "compost")) throw new Error("compost not consumed");
+
+const course = createState();
+addItem(course, "coins", 40);
+const berr = buyPillar(course, "tempo", "stride");
+if (berr) throw new Error(berr);
+if (course.course.built.tempo !== "stride") throw new Error("pillar not built");
+const unpaid = createState();
+const lockedLap = startAction(unpaid, "course-lap");
+if (!lockedLap) throw new Error("unbuilt course should refuse");
+
+const dust = createState();
+addItem(dust, "stardust", 20);
+const rerr = spendChartRank(dust, "dust-speed");
+if (rerr) throw new Error(rerr);
+if ((dust.chart.ranks["dust-speed"] || 0) < 1) throw new Error("chart rank not spent");
+
+const bty = createState();
+rollBounty(bty);
+const first = bty.bounty.monsterId;
+const r2 = rollBounty(bty);
+if (!r2) throw new Error("free reroll should cost a token");
+addItem(bty, "bounty-token", 1);
+const r3 = rollBounty(bty);
+if (r3) throw new Error(r3);
+if (!(bty.bounty.block || []).includes(first)) throw new Error("bounty block list empty");
+
+if (!off.lastOffline || off.lastOffline.actions < 900) throw new Error("offline report missing: " + JSON.stringify(off.lastOffline));
+
+if (C.actions["timber-13"] && C.actions["timber-13"].level < 105) throw new Error("late groves still capped at 99");
 
 const tool = createState();
 addItem(tool, "drift-hatchet", 1);

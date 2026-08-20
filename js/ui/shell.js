@@ -1,10 +1,11 @@
 import { escapeHtml } from "../util/text.js";
-import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, addItem, takeItem, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap, stashItem } from "../engine/state.js";
-import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost } from "../engine/sim.js";
-import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval } from "../engine/combat.js";
+import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap, stashItem, upcomingUnlocks, bankValue, masteryBonus } from "../engine/state.js";
+import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems } from "../engine/sim.js";
+import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval, swapWeaponStyle } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
 import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
+import { iconUrl, SKILL_ICON_KIND } from "../scene/icons.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -17,12 +18,6 @@ let shopTool = "all";
 let codexOpen = localStorage.getItem("veilforge-codex") !== "0";
 let selectedSkill = "timber";
 let openAreas = new Set();
-
-const CAT_ICON = {
-  currency: "✦", material: "◇", log: "🌲", ore: "⛏", bar: "▬", fish: "🐟",
-  food: "🍽", seed: "🌱", herb: "🌿", gem: "◆", rune: "✧", potion: "⚗",
-  equipment: "⚔", ammo: "➳", tool: "⚒", token: "◎", key: "⚿", hide: "◇"
-};
 
 const TOOL_LABEL = { axe: "Hatchets", pick: "Picks", rod: "Rods" };
 
@@ -68,6 +63,7 @@ export function bindUI(ctx) {
       state.chart.active[i] = e.target.value;
     }
     if (e.target.dataset.act === "food") state.combat.foodId = e.target.value;
+    if (e.target.dataset.act === "food2") state.combat.foodId2 = e.target.value || null;
     if (e.target.dataset.act === "spell") state.combat.spell = e.target.value;
     if (e.target.dataset.act === "tab-name") {
       state.bankTabs[+e.target.dataset.i] = e.target.value;
@@ -79,11 +75,10 @@ function handle(ctx, act, arg, el) {
   const { state } = ctx;
   const err = (m) => { if (m) toast(ctx, m); };
   switch (act) {
-    case "skill": {
-      const lock = skillLocked(state, arg);
-      if (lock) { err(`Locked until ${lock}. That's the fork — train the requirement, or ignore this art.`); break; }
-      selectedSkill = arg; ctx.render(); break;
-    }
+    case "skill":
+      selectedSkill = arg;
+      ctx.render();
+      break;
     case "checkpoint": err(spendCheckpoint(state, arg)); ctx.render(); break;
     case "dismiss-level":
       state.levelUps = (state.levelUps || []).slice(1);
@@ -121,12 +116,18 @@ function handle(ctx, act, arg, el) {
     case "harvest": harvestPlot(state, +arg); ctx.render(); break;
     case "stock": err(stockPen(state, +arg, el.dataset.animal)); ctx.render(); break;
     case "collect": collectPen(state, +arg); ctx.render(); break;
-    case "bounty": rollBounty(state); ctx.render(); break;
+    case "feed": err(feedPen(state, +arg)); ctx.render(); break;
+    case "bounty": err(rollBounty(state)); ctx.render(); break;
     case "bury": err(buryBones(state)); ctx.render(); break;
     case "buy": err(buyShop(state, arg)); ctx.render(); break;
-    case "sell": sellOne(state, arg); ctx.render(); break;
+    case "sell": sellItems(state, arg, 1); ctx.render(); break;
+    case "sell-all": sellItems(state, arg, "all"); ctx.render(); break;
+    case "pouch": err(openPouch(state)); ctx.render(); break;
+    case "build-pillar": err(buyPillar(state, el.dataset.cat, arg)); ctx.render(); break;
+    case "chart-rank": err(spendChartRank(state, arg)); ctx.render(); break;
+    case "swap-style": err(swapWeaponStyle(state, arg)); ctx.render(); break;
     case "pray": togglePrayer(state, arg); ctx.render(); break;
-    case "spec": state.combat.useSpec = !(state.combat.useSpec !== false); ctx.render(); break;
+    case "offline-ack": state.lastOffline = null; ctx.render(); break;
     case "spell-pick": state.combat.spell = arg; ctx.render(); break;
     case "tab": bankTab = arg; renderBank(ctx); break;
     case "set-tab": {
@@ -221,13 +222,6 @@ function buyShop(state, id) {
   return null;
 }
 
-function sellOne(state, id) {
-  const it = CONTENT.items[id];
-  if (!it || !bankCount(state, id)) return;
-  takeItem(state, id, 1);
-  addItem(state, "coins", Math.max(1, Math.floor((it.value || 1) * 0.4)));
-}
-
 function fillHtml(el, html) {
   if (!el) return;
   const ae = document.activeElement;
@@ -266,7 +260,7 @@ export function renderShell(ctx) {
     const lv = skillLevel(state, s.id);
     const on = selectedSkill === s.id ? "on" : "";
     const lock = skillLocked(state, s.id);
-    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}><span>${s.icon}</span><span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : lv}</span></button>`;
+    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}><span class="skico" style="background-image:${iconUrl({ kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3 })}"></span><span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : lv}</span></button>`;
   }).join("");
   root.querySelector("#skill-nav").innerHTML = left;
   renderTop(ctx);
@@ -362,8 +356,12 @@ function renderTop(ctx) {
       commit.innerHTML = `<b>Committed:</b> ${escapeHtml(a?.name || act.id)} (${skillName(act.skill)})${capNote}. Switching jobs asks Halt.`;
       commit.className = state._yieldWarn ? "danger" : "";
     } else {
-      commit.innerHTML = `<b>Uncommitted.</b> Pick one action. You cannot train 22 skills at once — that was never the game.`;
-      commit.className = "idle";
+      const off = state.lastOffline;
+      const report = off
+        ? ` <button type="button" data-act="offline-ack">Offline: ${off.minutes}m · ${off.job} · ${off.actions} actions${off.huntPaused ? " · hunt paused" : ""} · ${off.plotsReady} plots ready · ${off.pensReady} pens ready — dismiss</button>`
+        : "";
+      commit.innerHTML = `<b>Uncommitted.</b> Pick one action. You cannot train 22 skills at once — that was never the game.${report}`;
+      commit.className = off ? "warn" : "idle";
     }
   }
   const hits = document.getElementById("arena-hits");
@@ -511,9 +509,13 @@ function renderCodex(ctx) {
     const hintSkill = inferQuestSkill(q);
     if (hintSkill) jump = `<button type="button" data-act="skill" data-arg="${hintSkill}">Open ${skillName(hintSkill)}</button>`;
   }
-  let idle = "Tap a Grove on Timber and leave it running.";
+  let idle = pipelineFor(selectedSkill) || "Tap a Grove on Timber and leave it running.";
   if (state.combat.fighting) idle = "In combat. Halt to leave. Watch food.";
-  else if (state.action) idle = `Idling: ${CONTENT.actions[state.action.id]?.name || state.action.id}.`;
+  else if (state.action) {
+    const act = CONTENT.actions[state.action.id];
+    const sink = (act?.outputs || []).flatMap((o) => sinksOf(o.item))[0];
+    idle = `Idling: ${act?.name || state.action.id}${sink ? ` → ${sink}` : ""}.`;
+  }
   el.innerHTML = `<span class="codex-k">Codex</span>
     <span>${next}</span>
     <span class="muted">${idle}</span>
@@ -521,6 +523,7 @@ function renderCodex(ctx) {
       ${jump}
       <button type="button" data-act="desk" data-arg="bank">Open vault</button>
       <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
+      <button type="button" data-act="panel" data-arg="shop">Stall</button>
       <button type="button" data-act="codex-toggle">Hide</button>
     </div>`;
 }
@@ -549,26 +552,86 @@ function renderCenter(ctx) {
   const guild = state.skills[sk.id].guildRank;
   const gtask = CONTENT.guildTasks[sk.id][guild];
   const lock = skillLocked(state, sk.id);
+  const coming = upcomingUnlocks(state, sk.id);
   let body = "";
-  if (lock) body = `<p class="blurb">Locked until <strong>${lock}</strong>. Train that instead — opportunity cost is the whole game.</p>`;
-  else if (sk.kind === "gather" || sk.kind === "artisan") body = renderActions(ctx, sk.id);
+  if (sk.kind === "gather" || sk.kind === "artisan") body = renderActions(ctx, sk.id);
   else if (sk.id === "course") body = renderCourse(ctx);
-  else if (sk.id === "whisper") body = renderActions(ctx, "whisper");
+  else if (sk.id === "whisper") body = renderWhisper(ctx);
   else if (sk.id === "soil") body = renderSoil(ctx);
   else if (sk.id === "drove") body = renderDrove(ctx);
   else if (sk.id === "chart") body = renderChart(ctx);
   else if (COMBAT_SKILLS.includes(sk.id)) body = renderCombatSkill(ctx, sk.id);
+  const lockBanner = lock
+    ? `<p class="blurb warn">Preview only — locked until <strong>${escapeHtml(lock)}</strong>. Read the board. Train the requirement. That is the fork.</p>`
+    : "";
+  const pipeline = pipelineFor(sk.id);
+  const nextLine = coming.length
+    ? `<p class="muted">Next by ${sk.name} ${Math.min(MAX_LEVEL, lv + 12)}: ${coming.join(" · ")}</p>`
+    : `<p class="muted">No new groves in the next dozen levels — push mastery or a sink.</p>`;
   document.getElementById("center").innerHTML = `
     <div class="skill-head">
       <div>
         <h2>${sk.icon} ${sk.name} <em>${lv}</em></h2>
         <p class="blurb">${sk.blurb}</p>
+        ${pipeline ? `<p class="sink">${pipeline}</p>` : ""}
+        ${nextLine}
       </div>
       <div class="xpbar"><i style="width:${pct}%"></i><span>${Math.floor(xp).toLocaleString()} / ${next.toLocaleString()} xp</span></div>
     </div>
+    ${lockBanner}
     <div class="guild">Pool ${state.skills[sk.id].pool || 0} · spend it on one node, not all of them · Guild ${guild}/10 ${gtask ? `· ${gtask.name}: ${state.skills[sk.id].guildProgress.toLocaleString()} / ${gtask.need.toLocaleString()} · ${gtask.bonus.label}` : "· Maxed"}</div>
     ${body}
   `;
+}
+
+function renderWhisper(ctx) {
+  const heat = ctx.state.whisper?.heat || 0;
+  const streak = ctx.state.whisper?.streak || 0;
+  return `<div class="heat">
+      <span>Heat ${heat}/14 — stun chance climbs when you get caught</span>
+      <div class="xpbar"><i style="width:${Math.min(100, heat / 14 * 100)}%"></i></div>
+      <span class="muted">Clean streak ${streak}. Cool off or pick a softer mark.</span>
+    </div>${renderActions(ctx, "whisper")}`;
+}
+
+function pipelineFor(skill) {
+  const map = {
+    timber: "Sink: logs → Ember (ash for Sigil) and Fletch (shafts/bows). Do not hoard Drift wood with nowhere to burn or nock.",
+    trawl: "Sink: raw fish → Hearth. Uncooked catch will not keep you alive in Cinder Docks.",
+    vein: "Sink: ore → Anvil bars → sabers you actually swing. Mining without smithing is a full vault.",
+    ember: "Sink: ash → Sigil runes → Weave. Burning with no rune plan is a vanity fire.",
+    hearth: "Sink: food → auto-eat. Combat without a larder is a dare.",
+    anvil: "Sink: bars → weapons/armour. Each special (riposte, shred, bleed, pierce, echo) is a different hunt.",
+    fletch: "Sink: ammo → Mark. A bow with an empty quiver is furniture.",
+    loom: "Sink: hide → Mark armour. Plate is a tax against weavers.",
+    sigil: "Sink: runes → the spell you actually cast. Out of runes, Weave goes silent.",
+    vial: "Sink: draughts → a fight you chose, with a charge count.",
+    chart: "Study for stardust, then spend ranks. Slots still cap live stars.",
+    soil: "Compost is the click. Plant with a bag, harvest fatter. Pouches open.",
+    drove: "Feed pens. Collect without fodder is a thin faucet.",
+    course: "Pay to build a pillar. Unpaid selects do nothing.",
+    whisper: "Stun is the tax. Heat climbs if you get caught. Pick pockets, not a second job.",
+    might: "Triangle: Might beats Mark, loses to Weave. Food and style, not a DPS sheet.",
+    mark: "Needs ammo. Beats Weave, loses to Might.",
+    weave: "Needs runes. Beats Might, loses to Mark.",
+    vow: "Two prayers. Drain is real — bury bones or go dark.",
+    bounty: "A contract is opportunity cost: this monster, not that grove."
+  };
+  return map[skill] || "";
+}
+
+function sinksOf(itemId) {
+  if (!itemId) return [];
+  const seen = new Set();
+  const out = [];
+  for (const a of Object.values(CONTENT.actions)) {
+    if (!a.inputs?.some((i) => i.item === itemId)) continue;
+    if (seen.has(a.skill)) continue;
+    seen.add(a.skill);
+    out.push(`${skillName(a.skill)} (${a.name})`);
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 function fmtIo(state, list, kind) {
@@ -624,18 +687,28 @@ function renderActions(ctx, skill) {
         const cp = state.skills[skill].checkpoints?.[a.masteryId] || 0;
         const cost = checkpointCost(state, a.id);
         const pool = state.skills[skill].pool || 0;
+        const n = state.actionCounts?.[a.id] || 0;
+        const sinkBits = (a.outputs || []).flatMap((o) => sinksOf(o.item));
+        const sinks = [...new Set(sinkBits)].slice(0, 3).join(" · ");
+        const mb = masteryBonus(state, a.masteryId, skill);
+        const rares = (a.rare || []).map((r) => `${Math.round(r.chance * 1000) / 10}% ${itemName(r.item)}`).join(", ");
+        const burn = a.burn ? `Burn ${Math.round(a.burn.chance * 100)}%` : "";
+        const mast = `M${ml}: +${(mb.speed * 100).toFixed(1)}% speed · +${(mb.preserve * 100).toFixed(1)}% preserve`;
         return `<div class="cardwrap">
         <button type="button" class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
           <strong>${a.name}</strong>
-          <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · M${ml} · CP${cp}</span>
+          <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · ${mast} · CP${cp} · ×${n} done</span>
           <div class="io">
             ${ins ? `<span class="in">In ${ins}</span>` : `<span class="in">No inputs</span>`}
             ${outs ? `<span class="out">Out ${outs}</span>` : `<span class="out">${a.desc || "No listed outputs"}</span>`}
           </div>
+          ${rares ? `<span class="sink">Rare ${rares}</span>` : ""}
+          ${burn ? `<span class="in">${burn} → ashes</span>` : ""}
+          ${sinks ? `<span class="sink">Then ${sinks}</span>` : ""}
           ${inv ? `<span class="inv">Bank ${inv}</span>` : ""}
           ${why ? `<em class="lock-why">${why}</em>` : ""}
         </button>
-        <button type="button" class="tiny" data-act="checkpoint" data-arg="${a.id}">Spend ${cost} pool on THIS node (have ${pool}) — skip the rest</button>
+        <button type="button" class="tiny" data-act="checkpoint" data-arg="${a.id}">Checkpoint THIS node ${cost} pool (have ${pool}) — +${((0.04 + mb.speed) * 100).toFixed(0)}% speed here, skip the rest</button>
         </div>`;
       }).join("")}
     </div>
@@ -646,15 +719,18 @@ function renderCourse(ctx) {
   const { state } = ctx;
   const picks = CONTENT.coursePillars.map((cat) => {
     const cur = state.course.chosen[cat.id] || "";
+    const built = state.course.built?.[cat.id];
+    const opt = cat.options.find((o) => o.id === cur);
     return `<label class="pillar">${cat.name}
       <select data-act="pillar" data-cat="${cat.id}">
         <option value="">— empty —</option>
-        ${cat.options.map((o) => `<option value="${o.id}" ${cur === o.id ? "selected" : ""}>${o.name}</option>`).join("")}
+        ${cat.options.map((o) => `<option value="${o.id}" ${cur === o.id ? "selected" : ""}>${o.name} · ${o.cost}m ${built === o.id ? "· BUILT" : ""}</option>`).join("")}
       </select>
-      <div class="hint">${cat.options.map((o) => `${o.name}: ${Object.entries(o).filter(([k]) => !["id","name"].includes(k)).map(([k,v]) => k + " " + v).join(", ")}`).join("<br>")}</div>
+      <div class="hint">${cat.options.map((o) => `${o.name}: ${o.cost} veilmarks to build. ${Object.entries(o).filter(([k]) => !["id","name","cost"].includes(k)).map(([k,v]) => k + " " + v).join(", ")}`).join("<br>")}</div>
+      ${opt ? `<button type="button" data-act="build-pillar" data-cat="${cat.id}" data-arg="${cur}">${built === cur ? "Armed" : `Build ${opt.name} (${opt.cost}m)`}</button>` : ""}
     </label>`;
   }).join("");
-  return `<p class="blurb">Each pillar is a loadout slot. You cannot take every bonus. Time multiplies — greedy circuits run slower.</p>
+  return `<p class="blurb">Selecting is not building. Pay veilmarks to raise a pillar, then run. Unpaid picks do nothing.</p>
     <div class="pillars">${picks}</div>
     <button type="button" class="primary" data-act="start" data-arg="course-lap">Run the circuit</button>`;
 }
@@ -662,19 +738,23 @@ function renderCourse(ctx) {
 function renderSoil(ctx) {
   const { state } = ctx;
   const seeds = Object.keys(state.bank).filter((id) => CONTENT.items[id]?.category === "seed");
+  const pouches = bankCount(state, "seed-pouch");
   const plots = state.soil.plots.map((p, i) => {
     if (!p) {
       return `<div class="plot empty"><h4>Plot ${i + 1}</h4>
-        ${seeds.map((s) => `<button type="button" data-act="plant" data-arg="${i}" data-seed="${s}">Plant ${CONTENT.items[s].name} (${state.bank[s]})</button>`).join("") || "<em>No seeds. Chop groves.</em>"}
+        ${seeds.map((s) => `<button type="button" data-act="plant" data-arg="${i}" data-seed="${s}">Plant ${CONTENT.items[s].name} (${state.bank[s]})${bankCount(state, "compost") ? " +compost" : ""}</button>`).join("") || "<em>No seeds. Chop groves or open pouches.</em>"}
       </div>`;
     }
     return `<div class="plot ${p.ready ? "ready" : ""}">
-      <h4>${CONTENT.items[p.seed].name}</h4>
+      <h4>${CONTENT.items[p.seed].name}${p.compost ? " · composted" : ""}</h4>
       <p>${p.ready ? "Ready" : `${Math.ceil(p.left / 1000)}s`}</p>
       ${p.ready ? `<button type="button" data-act="harvest" data-arg="${i}">Harvest</button>` : ""}
     </div>`;
   }).join("");
-  return `<div class="plots">${plots}</div>`;
+  return `<p class="blurb">Compost is the identity: plant with a bag in the vault and the plot grows faster and pays more. Pouches from groves open into seeds.</p>
+    ${pouches ? `<button type="button" class="primary" data-act="pouch">Open seed pouch (${pouches})</button>` : ""}
+    <p class="muted">Compost in vault: ${bankCount(state, "compost")} · stall sells bags.</p>
+    <div class="plots">${plots}</div>`;
 }
 
 function renderDrove(ctx) {
@@ -687,12 +767,15 @@ function renderDrove(ctx) {
     }
     const a = CONTENT.animals.find((x) => x.id === p.animal);
     return `<div class="plot ${p.ready ? "ready" : ""}">
-      <h4>${a.name}</h4>
+      <h4>${a.name}${p.fed ? " · fed" : ""}</h4>
       <p>${p.ready ? `Ready: ${CONTENT.items[a.produce].name}` : `${Math.ceil(p.left / 1000)}s`}</p>
       ${p.ready ? `<button type="button" data-act="collect" data-arg="${i}">Collect</button>` : ""}
+      ${!p.fed ? `<button type="button" data-act="feed" data-arg="${i}">Feed (${bankCount(state, "fodder")} fodder)</button>` : "<em>Fed this cycle</em>"}
     </div>`;
   }).join("");
-  return `<div class="plots">${pens}</div>`;
+  return `<p class="blurb">Feed is the identity. Unfed collects are thin. Stall sells fodder.</p>
+    <p class="muted">Fodder ${bankCount(state, "fodder")}</p>
+    <div class="plots">${pens}</div>`;
 }
 
 function renderChart(ctx) {
@@ -707,8 +790,15 @@ function renderChart(ctx) {
   const study = CONTENT.constellations.map((c) => {
     return `<button type="button" class="card" data-act="start" data-arg="chart-${c.id}" disabled style="display:none"></button>`;
   }).join("");
-  return `<p class="blurb">Only ${state.chart.slots} constellations bind at once. A slotted star with 0 study grants nothing — study it to arm the bonus.</p>
+  return `<p class="blurb">Only ${state.chart.slots} constellations bind at once. Study grants stardust. Spend dust on ranked modifiers — that is Chart, not another timer. A slotted star with 0 study grants nothing.</p>
     <div class="pillars">${slots.join("")}</div>
+    <p class="muted">Stardust ${bankCount(state, "stardust")}</p>
+    <div class="grid">${(CONTENT.chartRanks || []).map((r) => {
+      const n = state.chart.ranks?.[r.id] || 0;
+      return `<button type="button" class="card" data-act="chart-rank" data-arg="${r.id}">
+        <strong>${r.name}</strong><span>Rank ${n}/8 · ${r.cost} stardust</span><em>${r.desc}</em>
+      </button>`;
+    }).join("")}</div>
     <div class="grid">${CONTENT.constellations.map((c) => {
       const on = state.chart.active.includes(c.id);
       const n = state.chart.studied?.[c.id] || 0;
@@ -742,11 +832,18 @@ function renderCombatTheater(ctx) {
       <h4>You</h4>
       <div class="bar hp"><i style="width:${Math.max(0, 100 * state.combat.hp / state.combat.maxHp)}%;display:block;height:100%;background:linear-gradient(90deg,#8e3a58,var(--rose))"></i></div>
       <p class="hint">${Math.ceil(state.combat.hp)} / ${state.combat.maxHp} · next strike ${youSwing.toFixed(0)}%</p>
-      <p class="hint">Style ${st.style} · Acc ${st.acc.toFixed(0)} · Power ${st.power.toFixed(0)} · Def ${st.def.toFixed(0)}</p>
-      <p class="hint">Food ${foodN} ${foodId ? itemName(foodId) : "—"} ${foodN <= 3 ? "· running low" : ""}</p>
+      <p class="hint">Style ${st.style} · Acc ${st.acc.toFixed(0)} · Power ${st.power.toFixed(0)} · Def ${st.def.toFixed(0)} · max hit ~${Math.max(1, Math.floor(st.power / 4))}${st.tri?.edge && st.tri.edge !== "even" ? ` · triangle ${st.tri.edge}` : ""}${st.takenMul && st.takenMul < 1 ? ` · Aegis ${Math.round((1 - st.takenMul) * 100)}% less taken` : ""}</p>
+      <p class="hint">Food ${foodN} ${foodId ? itemName(foodId) : "—"} / backup ${state.combat.foodId2 ? `${bankCount(state, state.combat.foodId2)} ${itemName(state.combat.foodId2)}` : "none"} ${foodN <= 3 ? "· running low" : ""}</p>
+      <p class="hint">Special ${Math.floor(state.combat.spec || 0)}% ${(state.combat.useSpec !== false) ? "ON" : "OFF"} — spends into your weapon job (riposte/shred/bleed/pierce/echo), not a generic 1.5×</p>
+      <div class="tabs">
+        <button type="button" data-act="swap-style" data-arg="might">Swap Might</button>
+        <button type="button" data-act="swap-style" data-arg="mark">Swap Mark</button>
+        <button type="button" data-act="swap-style" data-arg="weave">Swap Weave</button>
+      </div>
     </div>
     <div>
       <h4>${m.name}</h4>
+      <span class="mico lg" style="background-image:${iconUrl(m.model)}"></span>
       <div class="bar hp foe"><i style="display:block;height:100%;width:${Math.max(0, 100 * state.combat.monsterHp / m.hp)}%;background:linear-gradient(90deg,#3a2a78,#8b7cff)"></i></div>
       <p class="hint">${Math.max(0, Math.ceil(state.combat.monsterHp))} / ${m.hp} · incoming ${foeSwing.toFixed(0)}%</p>
       <p class="hint">Hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</p>
@@ -788,8 +885,8 @@ function renderCombatSkill(ctx, id) {
     const m = CONTENT.monsters[b.monsterId];
     return theater + `<div class="panel">
       <p>${m ? `Hunt <strong>${m.name}</strong> in ${m.area}: ${b.have}/${b.need} · streak ${b.streak}` : "No contract."}</p>
-      <button type="button" class="primary" data-act="bounty">Roll a contract</button>
-      <p>Tokens: ${bankCount(state, "bounty-token")}</p>
+      <button type="button" class="primary" data-act="bounty">${m ? "Reroll (1 token)" : "Take a contract (free)"}</button>
+      <p>Tokens: ${bankCount(state, "bounty-token")}. Live rerolls cost a token and block the last targets.</p>
     </div>${renderAreas(ctx)}`;
   }
   return theater + renderAreas(ctx);
@@ -804,6 +901,7 @@ function renderAreas(ctx) {
         const m = CONTENT.monsters[id];
         const on = state.combat.fighting && state.combat.monsterId === id;
         return `<button type="button" class="card ${on ? "on" : ""}" data-act="fight" data-arg="${id}">
+          <span class="mico" style="background-image:${iconUrl(m.model)}"></span>
           <strong>${m.name}</strong>
           <span>HP ${m.hp} · hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</span>
           <em>${m.desc}</em>
@@ -814,6 +912,7 @@ function renderAreas(ctx) {
     const n = (state.combat.dungeonClears || {})[d.id] || 0;
     const on = state.combat.dungeon === d.id;
     return `<button type="button" class="card ${on ? "on" : ""}" data-act="dungeon" data-arg="${d.id}">
+      <span class="mico" style="background-image:${iconUrl(d.model)}"></span>
       <strong>${d.name}</strong><span>Req ${d.req} · ${d.sequence.length} floors · clears ${n}</span><em>${d.desc}</em>
     </button>`;
   }).join("")}</div>`;
@@ -822,6 +921,7 @@ function renderAreas(ctx) {
   const uniqueFood = [...new Set(foodOpts)];
   return `<div class="stats-strip">Style <b>${st.style}</b> · Acc ${st.acc.toFixed(0)} · Power ${st.power.toFixed(0)} · Def ${st.def.toFixed(0)} · Auto-eat ${(state.combat.autoEat * 100).toFixed(0)}%</div>
     <label>Food <select data-act="food">${uniqueFood.map((id) => `<option value="${id}" ${state.combat.foodId === id ? "selected" : ""}>${CONTENT.items[id]?.name} +${CONTENT.items[id]?.heal} (${bankCount(state, id)})</option>`).join("")}</select></label>
+    <label>Backup food <select data-act="food2"><option value="">— none —</option>${uniqueFood.map((id) => `<option value="${id}" ${state.combat.foodId2 === id ? "selected" : ""}>${CONTENT.items[id]?.name} +${CONTENT.items[id]?.heal}</option>`).join("")}</select></label>
     <div class="potions">${Object.keys(state.bank).filter((id) => CONTENT.items[id]?.potion).slice(0, 12).map((id) => `<button type="button" data-act="drink" data-arg="${id}">Drink ${CONTENT.items[id].name} (${state.bank[id]})</button>`).join("")}</div>
     ${state.combat.potionId ? `<p class="blurb">Active: ${CONTENT.items[state.combat.potionId].name} · ${state.combat.potionCharges} charges</p>` : ""}
     ${areas}${duns}
@@ -864,24 +964,24 @@ function renderBank(ctx) {
       const it = CONTENT.items[id];
       const eq = it.category === "equipment" || it.category === "ammo" || it.category === "tool";
       const stackVal = (it.value || 0) * n;
-      const icon = CAT_ICON[it.category] || "·";
       return `<div class="brow" title="${it.desc || ""}">
-        <span>${icon}</span>
+        <span class="bico" style="background-image:${iconUrl(it.model)}"></span>
         <span class="nm">${it.name}</span>
         <span class="qty">${n.toLocaleString()}</span>
         <span class="val">${stackVal.toLocaleString()} ✦ · ${it.category}</span>
         <div class="acts">
           ${eq ? `<button type="button" data-act="equip" data-arg="${id}">equip</button>` : ""}
           ${it.potion ? `<button type="button" data-act="drink" data-arg="${id}">drink</button>` : ""}
+          ${id === "seed-pouch" ? `<button type="button" data-act="pouch">open</button>` : ""}
           <button type="button" data-act="set-tab" data-arg="${id}">tab</button>
-          <button type="button" data-act="sell" data-arg="${id}">sell</button>
+          <button type="button" data-act="sell" data-arg="${id}">sell 1</button>
+          <button type="button" data-act="sell-all" data-arg="${id}">sell all</button>
         </div>
       </div>`;
     }).join("");
-  const worth = held.reduce((s, [id, n]) => s + (CONTENT.items[id]?.value || 0) * n, 0);
   const html = `<div class="tabs">${tabBtns}</div>
     <input id="bank-search" placeholder="Search bank" value="${escapeHtml(bankFilter)}" />
-    <div class="bank-meta"><span>${held.length}/${bankCap(state)} stacks${held.length >= bankCap(state) ? " · FULL" : ""}</span><span>${worth.toLocaleString()} ✦</span></div>
+    <div class="bank-meta"><span>${held.length}/${bankCap(state)} stacks${held.length >= bankCap(state) ? " · FULL" : ""}</span><span>${bankValue(state).toLocaleString()} ✦ vault</span></div>
     <button type="button" data-act="desk" data-arg="bank">Open dedicated vault</button>
     <div class="bank-grid">${rows || "<p class='blurb'>Empty tab.</p>"}</div>`;
   fillHtml(document.getElementById("bank"), html);
@@ -962,7 +1062,12 @@ function renderQuests(ctx) {
     if (q.reward?.items) q.reward.items.forEach((it) => reward.push(`${it.qty} ${itemName(it.id)}`));
     return `<div class="q"><strong>${q.name}</strong><p>${q.desc}</p>${prog}${reward.length ? `<p class="muted">Reward: ${reward.join(" · ")}</p>` : ""}</div>`;
   }).join("");
-  document.getElementById("quests").innerHTML = cards + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>`;
+  const coming = CONTENT.quests
+    .filter((q) => !state.quests.done.includes(q.id) && !state.quests.active.includes(q.id))
+    .slice(0, 4)
+    .map((q) => `<p class="muted">Coming: ${q.name} — ${q.desc}</p>`)
+    .join("");
+  document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>`;
 }
 
 function offerName(o) {

@@ -1,4 +1,4 @@
-/** Seeded voice, unique display names, and model kinds for every catalog entity. */
+import { monsterKindFor, dungeonKindFor } from "../scene/icons.js";
 
 export function hash32(s) {
   let h = 2166136261;
@@ -80,13 +80,29 @@ function roman(n) {
 }
 
 export function modelKindForItem(it) {
+  if (it.id === "coins") return "coins";
+  if (it.id === "bones") return "bones";
+  if (it.id === "hide") return "hide";
+  if (it.id === "essence") return "essence";
+  if (it.id === "stardust") return "dust";
+  if (it.id === "seed-pouch") return "pouch";
+  if (it.id === "compost") return "compost";
+  if (it.id === "fodder") return "fodder";
+  if (it.id === "ashes") return "ashes";
+  if (it.id === "dungeon-key") return "key";
+  if (it.id === "bounty-token") return "token";
   if (it.slot === "weapon") {
-    const n = (it.name || "").toLowerCase();
+    const n = (it.name || it.catalogName || "").toLowerCase();
     if (n.includes("cleaver")) return "cleaver";
     if (n.includes("needle")) return "needle";
     if (n.includes("bow") || n.includes("longbow")) return "bow";
     if (n.includes("crozier")) return "crozier";
     return "saber";
+  }
+  if (it.slot === "body") {
+    if (it.style === "mark") return "hidebody";
+    if (it.style === "weave") return "robe";
+    return "body";
   }
   if (it.toolSlot === "axe") return "axe";
   if (it.toolSlot === "pick") return "pick";
@@ -153,7 +169,7 @@ export function imprintContent(content) {
     m.voice = pick(h, VOICE_MONSTER, 2);
     m.temper = pick(h, TEMPER, 9);
     m.hue = (h % 360);
-    m.model = { kind: `beast-${m.style}`, seed: h, hue: m.hue };
+    m.model = { kind: monsterKindFor({ ...m, catalogName: m.catalogName }), seed: h, hue: m.hue };
   }
 
   for (const d of content.dungeons) {
@@ -163,7 +179,7 @@ export function imprintContent(content) {
     d.voice = pick(h, VOICE_DUNGEON, 1);
     d.temper = pick(h, TEMPER, 4);
     d.hue = (h % 360);
-    d.model = { kind: "gate", seed: h, hue: d.hue };
+    d.model = { kind: dungeonKindFor({ ...d, catalogName: d.catalogName }), seed: h, hue: d.hue };
   }
 
   return content;
