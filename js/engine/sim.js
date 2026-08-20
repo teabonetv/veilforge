@@ -529,15 +529,16 @@ export function openPouch(state) {
   return null;
 }
 
-export function sellItems(state, id, qty) {
+export function sellItems(state, id, qty, opts = {}) {
   const it = CONTENT.items[id];
   const have = bankCount(state, id);
   const n = qty === "all" ? have : Math.max(1, Math.min(have, qty | 0));
   if (!it || n <= 0) return "Nothing to sell.";
   takeItem(state, id, n);
-  const gp = Math.max(1, Math.floor((it.value || 1) * 0.4 * n));
+  const rate = opts.rate != null ? opts.rate : 0.4;
+  const gp = Math.max(1, Math.floor((it.value || 1) * rate * n));
   addItem(state, "coins", gp);
-  log(state, `Sold ${it.name} ×${n} for ${gp} veilmarks.`);
+  log(state, `${opts.quay ? "Quay pawned" : "Sold"} ${it.name} ×${n} for ${gp} veilmarks.`);
   return null;
 }
 

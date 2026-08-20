@@ -1,5 +1,5 @@
 /* Offline cache for the hosted / PWA build. Native shells skip this file. */
-const CACHE = "veilforge-v12";
+const CACHE = "veilforge-v13";
 const PRECACHE = [
   "./",
   "./index.html",

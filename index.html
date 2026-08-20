@@ -76,8 +76,9 @@
     <nav id="desk-nav">
       <button type="button" data-act="desk" data-arg="workshop">Workshop</button>
       <button type="button" data-act="desk" data-arg="bank">Bank</button>
+      <button type="button" data-act="desk" data-arg="stall">Quay</button>
       <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
-      <span class="desk-tag">Prepare. Idle. Grow. The dusk endures.</span>
+      <span class="desk-tag">Prepare. Idle. Trade. The dusk endures.</span>
     </nav>
     <div id="bank-desk" hidden>
       <div class="desk-head">
@@ -110,6 +111,20 @@
         <aside id="wander-detail"></aside>
       </div>
     </div>
+    <div id="stall-desk" hidden>
+      <div class="desk-head">
+        <h2>Lantern Quay</h2>
+        <p>Named keepers, a dusk bargain, and a hunger. The stall is a place, not a list.</p>
+        <span id="stall-meta"></span>
+      </div>
+      <div id="stall-watch"></div>
+      <input id="stall-search" placeholder="Search the quay" />
+      <div id="stall-booths" class="tabs"></div>
+      <div class="stall-layout">
+        <div id="stall-grid"></div>
+        <aside class="stall-inspect" id="stall-copy"></aside>
+      </div>
+    </div>
     <div id="layout">
       <nav id="skill-nav"></nav>
       <div id="mid">
@@ -130,7 +145,7 @@
           <div id="quests"></div>
         </section>
         <section class="pane">
-          <h3>Stall</h3>
+          <h3>Lantern Quay</h3>
           <div id="shop"></div>
         </section>
         <section class="pane">

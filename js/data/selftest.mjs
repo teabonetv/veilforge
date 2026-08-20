@@ -6,6 +6,7 @@ import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
 import { iconMarkup, iconUrl } from "../scene/icons.js";
 import { PIX_EID } from "../scene/pix-map.js";
+import { offerModel, quayDeal, inferBooth, QUAY_BOOTHS } from "../engine/market.js";
 
 let rng = 20260820;
 Math.random = () => {
@@ -343,6 +344,19 @@ const te = equipItem(tool, "drift-hatchet");
 if (te) throw new Error(te);
 if (bankCount(tool, "drift-hatchet")) throw new Error("equipped tool still in the vault");
 if (tool.tools.axe !== "drift-hatchet") throw new Error("tool slot empty");
+
+if (QUAY_BOOTHS.length < 6) throw new Error("quay booths missing");
+if (!C.shop.find((o) => o.id === "shop-food") || !C.shop.find((o) => o.id === "shop-relief-log-0")) {
+  throw new Error("quay larder/relief stock missing");
+}
+for (const o of C.shop) {
+  const booth = inferBooth(o);
+  if (!QUAY_BOOTHS.some((b) => b.id === booth)) throw new Error("ware without a keeper: " + o.id);
+  const html = iconMarkup(offerModel(o));
+  if (!html.includes("pix") && !html.includes("<svg")) throw new Error("shop ware has no icon: " + o.id);
+}
+if (!quayDeal().offer) throw new Error("dusk bargain missing");
+if (offerModel(C.shop.find((o) => o.item === "log-0")).kind !== "log") throw new Error("relief log icon not a log");
 
 console.log(JSON.stringify({
   items: Object.keys(C.items).length,

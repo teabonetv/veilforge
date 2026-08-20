@@ -4,8 +4,9 @@ import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, 
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval, swapWeaponStyle } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
-import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
+import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf, onStallSearch, onStallBooth, onStallPick, onStallPacks, stallPackCount } from "./desks.js";
 import { iconMarkup, SKILL_ICON_KIND } from "../scene/icons.js";
+import { quayDeal, offerName as stallOfferName, offerPrice, pawnRate } from "../engine/market.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -14,9 +15,6 @@ let lastDrip = 0;
 let audioCtx = null;
 let bankFilter = "";
 let bankTab = "All";
-let shopFilter = "";
-let shopCat = "tools";
-let shopTool = "all";
 let codexOpen = localStorage.getItem("veilforge-codex") !== "0";
 let selectedSkill = "timber";
 let selectedAction = null;
@@ -50,9 +48,9 @@ export function bindUI(ctx) {
       bankFilter = e.target.value.toLowerCase();
       renderBank(ctx);
     }
-    if (e.target.id === "shop-search") {
-      shopFilter = e.target.value.toLowerCase();
-      renderShop(ctx);
+    if (e.target.id === "stall-search") {
+      onStallSearch(e.target.value);
+      renderDesks(ctx);
     }
     if (e.target.id === "vault-search") {
       onVaultSearch(e.target.value);
@@ -182,9 +180,20 @@ function handle(ctx, act, arg, el) {
     case "feed": err(feedPen(state, +arg)); ctx.render(); break;
     case "bounty": err(rollBounty(state)); ctx.render(); break;
     case "bury": err(buryBones(state)); ctx.render(); break;
-    case "buy": err(buyShop(state, arg)); ctx.render(); break;
+    case "buy": err(buyShop(state, arg, stallPackCount())); ctx.render(); break;
     case "sell": sellItems(state, arg, 1); ctx.render(); break;
     case "sell-all": sellItems(state, arg, "all"); ctx.render(); break;
+    case "quay-pawn": {
+      const deal = quayDeal();
+      const it = CONTENT.items[arg];
+      if (!it || (it.category !== deal.hunger && it.id !== deal.hunger)) {
+        toast(ctx, "The quay is not hungry for that this watch.");
+        break;
+      }
+      err(sellItems(state, arg, "all", { rate: pawnRate(), quay: true }));
+      ctx.render();
+      break;
+    }
     case "pouch": err(openPouch(state)); ctx.render(); break;
     case "build-pillar": err(buyPillar(state, el.dataset.cat, arg)); ctx.render(); break;
     case "chart-rank": err(spendChartRank(state, arg)); ctx.render(); break;
@@ -199,8 +208,14 @@ function handle(ctx, act, arg, el) {
       renderBank(ctx);
       break;
     }
-    case "shop-cat": shopCat = arg; renderShop(ctx); break;
-    case "shop-tool": shopTool = arg; renderShop(ctx); break;
+    case "shop-cat":
+      onStallBooth(arg);
+      setDesk("stall");
+      ctx.render();
+      break;
+    case "stall-booth": onStallBooth(arg); renderDesks(ctx); break;
+    case "stall-pick": onStallPick(arg); renderDesks(ctx); break;
+    case "stall-packs": onStallPacks(arg); renderDesks(ctx); break;
     case "codex-toggle":
       codexOpen = !codexOpen;
       localStorage.setItem("veilforge-codex", codexOpen ? "1" : "0");
@@ -252,7 +267,7 @@ function handle(ctx, act, arg, el) {
     }
     case "wipe": if (confirm("Reset Veilforge?")) ctx.wipe(); break;
     case "panel":
-      if (arg === "shop") setDesk("workshop");
+      if (arg === "shop") { setDesk("stall"); ctx.render(); ctx.portraits?.resize?.(); break; }
       document.getElementById(arg)?.scrollIntoView({ behavior: "smooth", block: "start" });
       break;
     default: break;
@@ -271,26 +286,27 @@ function togglePrayer(state, id) {
   }
 }
 
-function buyShop(state, id) {
+function buyShop(state, id, packs = 1) {
   const offer = CONTENT.shop.find((s) => s.id === id);
   if (!offer) return "Unknown wares.";
-  const bought = state.shopBought[id] || 0;
-  if (offer.max && bought >= offer.max) return "Sold out.";
-  let cost = offer.cost;
-  if (offer.repeatable) cost = Math.floor(cost * Math.pow(1.45, bought));
-  if (offer.reqLevel && skillLevel(state, offer.reqSkill) < offer.reqLevel) return `Need ${offer.reqSkill} ${offer.reqLevel}.`;
-  if (state.coins < cost) return "Not enough veilmarks.";
-  state.coins -= cost;
-  state.shopBought[id] = bought + 1;
-  if (offer.item) stashItem(state, offer.item, offer.qty || 1, "stall");
-  if (offer.effect === "bankTab") state.bankTabs.push("Tab " + state.bankTabs.length);
-  if (offer.effect === "plot") state.soil.plots.push(null);
-  if (offer.effect === "pen") state.drove.pens.push(null);
-  if (offer.effect === "autoEat") state.combat.autoEat = 0.6;
-  if (offer.effect === "autoEat2") { state.combat.autoEat = 0.75; }
-  if (offer.effect === "loadout") state.loadouts.push({ name: "Set " + state.loadouts.length, equipment: { ...state.equipment } });
-  if (offer.effect === "chartSlot") state.chart.slots = Math.max(state.chart.slots, 3);
-  if (offer.effect === "offlineHours") state.offlineHours = 24;
+  const times = offer.repeatable && offer.item && !offer.effect ? Math.max(1, Math.min(10, packs || 1)) : 1;
+  for (let i = 0; i < times; i++) {
+    const { cost, bought } = offerPrice(state, offer);
+    if (offer.max && bought >= offer.max) return i ? null : "Sold out.";
+    if (offer.reqLevel && skillLevel(state, offer.reqSkill) < offer.reqLevel) return `Need ${offer.reqSkill} ${offer.reqLevel}.`;
+    if (state.coins < cost) return i ? null : "Not enough veilmarks.";
+    state.coins -= cost;
+    state.shopBought[id] = bought + 1;
+    if (offer.item) stashItem(state, offer.item, offer.qty || 1, "quay");
+    if (offer.effect === "bankTab") state.bankTabs.push("Tab " + state.bankTabs.length);
+    if (offer.effect === "plot") state.soil.plots.push(null);
+    if (offer.effect === "pen") state.drove.pens.push(null);
+    if (offer.effect === "autoEat") state.combat.autoEat = 0.6;
+    if (offer.effect === "autoEat2") { state.combat.autoEat = 0.75; }
+    if (offer.effect === "loadout") state.loadouts.push({ name: "Set " + state.loadouts.length, equipment: { ...state.equipment } });
+    if (offer.effect === "chartSlot") state.chart.slots = Math.max(state.chart.slots, 3);
+    if (offer.effect === "offlineHours") state.offlineHours = 24;
+  }
   return null;
 }
 
@@ -330,13 +346,6 @@ function itemName(id) {
 
 function glyph(model, cls = "mico") {
   return `<span class="${cls}">${iconMarkup(model || {}, 48)}</span>`;
-}
-
-function shopGroup(o) {
-  const it = o.item ? CONTENT.items[o.item] : null;
-  if (it?.category === "tool") return "tools";
-  if (it && ["cape", "amulet", "ring"].includes(it.slot)) return "cosmetics";
-  return "upgrades";
 }
 
 export function renderShell(ctx) {
@@ -744,7 +753,7 @@ function renderCodex(ctx) {
       ${jump}
       <button type="button" data-act="desk" data-arg="bank">Open vault</button>
       <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
-      <button type="button" data-act="panel" data-arg="shop">Stall</button>
+      <button type="button" data-act="desk" data-arg="stall">Lantern Quay</button>
       <button type="button" data-act="codex-toggle">Hide</button>
     </div>`;
 }
@@ -1384,67 +1393,12 @@ function renderQuests(ctx) {
   document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>`;
 }
 
-function offerName(o) {
-  return o.name || CONTENT.items[o.item]?.name || o.id;
-}
-
-function offerCost(state, o) {
-  const bought = state.shopBought[o.id] || 0;
-  let cost = o.cost;
-  if (o.repeatable) cost = Math.floor(cost * Math.pow(1.45, bought));
-  return { cost, bought };
-}
-
 function renderShop(ctx) {
-  const { state } = ctx;
-  const cats = [
-    ["tools", "Tools"],
-    ["upgrades", "Upgrades"],
-    ["cosmetics", "Cosmetics"]
-  ];
-  const chips = cats.map(([id, lab]) => `<button type="button" class="${shopCat === id ? "on" : ""}" data-act="shop-cat" data-arg="${id}">${lab}</button>`).join("");
-  let list = CONTENT.shop.filter((o) => shopGroup(o) === shopCat);
-  if (shopFilter) {
-    list = CONTENT.shop.filter((o) => offerName(o).toLowerCase().includes(shopFilter) || (o.desc || "").toLowerCase().includes(shopFilter));
-  }
-  if (shopCat === "tools" && !shopFilter && shopTool !== "all") {
-    list = list.filter((o) => CONTENT.items[o.item]?.toolSlot === shopTool);
-  }
-  const toolChips = shopCat === "tools" && !shopFilter ? `<div class="tabs">
-    <button type="button" class="${shopTool === "all" ? "on" : ""}" data-act="shop-tool" data-arg="all">All tools</button>
-    <button type="button" class="${shopTool === "axe" ? "on" : ""}" data-act="shop-tool" data-arg="axe">Hatchets</button>
-    <button type="button" class="${shopTool === "pick" ? "on" : ""}" data-act="shop-tool" data-arg="pick">Picks</button>
-    <button type="button" class="${shopTool === "rod" ? "on" : ""}" data-act="shop-tool" data-arg="rod">Rods</button>
-  </div>` : "";
-
-  const families = {};
-  list.forEach((o) => {
-    const it = o.item ? CONTENT.items[o.item] : null;
-    const fam = it?.toolSlot ? TOOL_LABEL[it.toolSlot] || it.toolSlot : (shopFilter ? shopGroup(o) : "wares");
-    (families[fam] = families[fam] || []).push(o);
-  });
-
-  const body = Object.keys(families).length === 0
-    ? `<p class="blurb">${shopCat === "cosmetics" ? "No lanterns or veils hung yet — this stall is still a workshop." : "Nothing matches."}</p>`
-    : Object.entries(families).map(([fam, arr]) => `
-        ${shopCat === "tools" || shopFilter ? `<div class="shop-fam">${fam}</div>` : ""}
-        <div class="wares">${arr.map((o) => {
-          const { cost, bought } = offerCost(state, o);
-          const sold = o.max && bought >= o.max;
-          const lvok = !o.reqLevel || skillLevel(state, o.reqSkill) >= o.reqLevel;
-          const why = sold ? "Sold out" : !lvok ? `Need ${skillName(o.reqSkill)} ${o.reqLevel}` : state.coins < cost ? "Short on marks" : "";
-          return `<button type="button" class="ware ${sold || !lvok ? "locked" : ""}" data-act="buy" data-arg="${o.id}" ${sold ? "disabled" : ""}>
-            <strong>${offerName(o)}</strong>
-            <span class="cost">${Math.floor(cost).toLocaleString()} ✦</span>
-            <span class="sub">${o.desc || ""} · owned ${bought}${o.max ? "/" + o.max : ""}${why ? " · " + why : ""}</span>
-          </button>`;
-        }).join("")}</div>`).join("");
-
-  const html = `<div class="shop-head">
-      <div class="tabs">${chips}</div>
-      <input id="shop-search" placeholder="Filter stall" value="${escapeHtml(shopFilter)}" />
-      ${toolChips}
-    </div>${body}`;
+  const deal = quayDeal();
+  const nm = deal.offer ? stallOfferName(deal.offer) : "nothing hung";
+  const html = `<p class="blurb">The stall left the workshop. It lives on the quay.</p>
+    <p class="muted">${escapeHtml(deal.watch)} · lantern: ${escapeHtml(nm)} · hunger: ${deal.hunger}</p>
+    <button type="button" class="primary" data-act="desk" data-arg="stall">Walk the Lantern Quay</button>`;
   fillHtml(document.getElementById("shop"), html);
 }
 

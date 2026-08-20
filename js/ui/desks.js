@@ -4,6 +4,7 @@ import { playerStats, equipItem } from "../engine/combat.js";
 import { silhouetteStyle } from "../scene/models.js";
 import { iconMarkup } from "../scene/icons.js";
 import { escapeHtml } from "../util/text.js";
+import { QUAY_BOOTHS, inferBooth, offerModel, offerName, quayDeal, offerPrice, quayGossip, hungerStacks, pawnRate } from "../engine/market.js";
 
 const SLOTS = [
   { id: "helm", label: "Hood", side: "left", i: 0 },
@@ -26,6 +27,10 @@ export let focusedSlot = "weapon";
 let vaultFilter = "";
 let vaultCat = "held";
 let vaultLens = "items";
+let stallBooth = "tools";
+let stallPick = null;
+let stallFilter = "";
+let stallPacks = 1;
 
 export function setDesk(id) {
   desk = id;
@@ -75,6 +80,7 @@ export function renderDesks(ctx) {
   document.getElementById("layout")?.classList.toggle("away", desk !== "workshop");
   const bankEl = document.getElementById("bank-desk");
   const wandEl = document.getElementById("wander-desk");
+  const stallEl = document.getElementById("stall-desk");
   if (bankEl) {
     bankEl.hidden = desk !== "bank";
     if (desk === "bank") renderVault(ctx);
@@ -83,10 +89,15 @@ export function renderDesks(ctx) {
     wandEl.hidden = desk !== "loadout";
     if (desk === "loadout") renderWanderer(ctx);
   }
+  if (stallEl) {
+    stallEl.hidden = desk !== "stall";
+    if (desk === "stall") renderStall(ctx);
+  }
   document.querySelectorAll("#desk-nav [data-arg]").forEach((b) => {
     b.classList.toggle("on", b.dataset.arg === desk);
     if (!b.querySelector(".pix")) {
-      b.insertAdjacentHTML("afterbegin", `<span class="dico">${iconMarkup({ eid: "tab-" + b.dataset.arg, kind: "forge" }, 28)}</span>`);
+      const kind = b.dataset.arg === "stall" ? "coins" : b.dataset.arg === "bank" ? "pouch" : b.dataset.arg === "loadout" ? "saber" : "forge";
+      b.insertAdjacentHTML("afterbegin", `<span class="dico">${iconMarkup({ eid: "tab-" + b.dataset.arg, kind }, 28)}</span>`);
     }
   });
   ctx.portraits?.sync?.(ctx);
@@ -323,12 +334,95 @@ function slotBtn(state, s) {
   </button>`;
 }
 
+export function renderStall(ctx) {
+  const { state } = ctx;
+  const deal = quayDeal();
+  const booth = QUAY_BOOTHS.find((b) => b.id === stallBooth) || QUAY_BOOTHS[0];
+  stallBooth = booth.id;
+  const search = document.getElementById("stall-search");
+  if (search && document.activeElement !== search) search.value = stallFilter;
+  const meta = document.getElementById("stall-meta");
+  if (meta) meta.textContent = `${Math.floor(state.coins).toLocaleString()} ✦ · ${deal.watch}`;
+  const watch = document.getElementById("stall-watch");
+  if (watch) {
+    const gossip = quayGossip(state).map((l) => `<p>${escapeHtml(l)}</p>`).join("");
+    const hungry = hungerStacks(state, deal.hunger);
+    const pawn = hungry.length
+      ? `<div class="hunger-row">${hungry.slice(0, 6).map((h) => `<button type="button" data-act="quay-pawn" data-arg="${h.id}">Pawn ${escapeHtml(h.it.name)} ×${h.n} @ ${Math.round(pawnRate() * 100)}%</button>`).join("")}</div>`
+      : `<p class="muted">No ${deal.hunger} in the vault for the hunger. Chop, mine, or fish — then the quay pays.</p>`;
+    watch.innerHTML = `<div class="quay-banner">
+      <div><strong>${escapeHtml(deal.watch)}</strong>${deal.offer ? ` · lantern price on <em>${escapeHtml(offerName(deal.offer))}</em> (−${Math.round((1 - deal.mul) * 100)}%)` : ""}</div>
+      ${gossip}
+      <p class="muted">Hunger: they want <strong>${deal.hunger}</strong> this calendar dusk. Vault fence is 40%. The quay pays ${Math.round(pawnRate() * 100)}%.</p>
+      ${pawn}
+    </div>`;
+  }
+  const booths = document.getElementById("stall-booths");
+  if (booths) {
+    booths.innerHTML = QUAY_BOOTHS.map((b) => `<button type="button" class="${b.id === stallBooth ? "on" : ""}" data-act="stall-booth" data-arg="${b.id}">
+      <span class="dico">${iconMarkup({ kind: b.kind, hue: 40, seed: 2 }, 22)}</span>${b.name}
+    </button>`).join("");
+  }
+  let list = CONTENT.shop.filter((o) => inferBooth(o) === stallBooth);
+  if (stallFilter) {
+    const q = stallFilter.toLowerCase();
+    list = CONTENT.shop.filter((o) => `${offerName(o)} ${o.desc || ""}`.toLowerCase().includes(q));
+  }
+  if (!stallPick && list[0]) stallPick = list[0].id;
+  const grid = document.getElementById("stall-grid");
+  if (grid) {
+    grid.innerHTML = list.map((o) => {
+      const { cost, bought, deal: onDeal } = offerPrice(state, o);
+      const sold = o.max && bought >= o.max;
+      const it = o.item ? CONTENT.items[o.item] : null;
+      const qty = o.qty && o.qty > 1 ? `×${o.qty}` : (it ? "×1" : "upgrade");
+      return `<button type="button" class="vtile stall-tile ${stallPick === o.id ? "on" : ""} ${sold ? "locked" : ""} ${onDeal ? "deal" : ""}" data-act="stall-pick" data-arg="${o.id}">
+        <span class="vico">${iconMarkup(offerModel(o), 48)}</span>
+        <span class="vnm">${escapeHtml(offerName(o))}</span>
+        <span class="vqty">${Math.floor(cost).toLocaleString()} ✦ ${qty}${onDeal ? " · dusk" : ""}</span>
+      </button>`;
+    }).join("") || "<p class='blurb'>This keeper has nothing hung.</p>";
+  }
+  const copy = document.getElementById("stall-copy");
+  if (copy) {
+    const o = CONTENT.shop.find((x) => x.id === stallPick) || list[0];
+    if (!o) {
+      copy.innerHTML = `<p class="muted">${booth.keeper}: empty hooks.</p>`;
+      return;
+    }
+    const { cost, bought, deal: onDeal } = offerPrice(state, o);
+    const sold = o.max && bought >= o.max;
+    const lvok = !o.reqLevel || skillLevel(state, o.reqSkill) >= o.reqLevel;
+    const why = sold ? "Sold out this ledger." : !lvok ? `Need ${o.reqSkill} ${o.reqLevel}.` : state.coins < cost ? "Short on veilmarks." : "";
+    const packable = o.repeatable && o.item && !o.effect;
+    copy.innerHTML = `
+      <span class="dico lg">${iconMarkup(offerModel(o), 64)}</span>
+      <h3>${escapeHtml(offerName(o))}</h3>
+      <p class="temper">${escapeHtml(booth.keeper)} · ${escapeHtml(booth.name)}</p>
+      <blockquote>${escapeHtml(booth.line)}</blockquote>
+      <p class="blurb">${escapeHtml(o.desc || "")}</p>
+      <p class="muted">${Math.floor(cost).toLocaleString()} ✦${onDeal ? " dusk bargain" : ""}${o.qty ? ` · ${o.qty} per buy` : ""} · owned ${bought}${o.max ? "/" + o.max : ""}</p>
+      ${why ? `<p class="lock-why">${escapeHtml(why)}</p>` : ""}
+      ${packable ? `<div class="qty-row"><span>Buys</span>
+        ${[1, 5, 10].map((n) => `<button type="button" class="${stallPacks === n ? "on" : ""}" data-act="stall-packs" data-arg="${n}">${n}</button>`).join("")}
+      </div>` : ""}
+      <div class="acts">
+        <button type="button" class="primary" data-act="buy" data-arg="${o.id}" ${sold || !lvok ? "disabled" : ""}>Pay ${Math.floor(cost).toLocaleString()} ✦${packable && stallPacks > 1 ? ` ×${stallPacks}` : ""}</button>
+      </div>`;
+  }
+}
+
 export function onVaultSearch(v) {
   vaultFilter = v.toLowerCase();
 }
 
 export function onVaultCat(v) { vaultCat = v; }
 export function onVaultLens(v) { vaultLens = v; }
+export function onStallSearch(v) { stallFilter = v.toLowerCase(); }
+export function onStallBooth(v) { stallBooth = v; stallPick = null; }
+export function onStallPick(v) { stallPick = v; }
+export function onStallPacks(v) { stallPacks = Math.max(1, Math.min(10, +v || 1)); }
+export function stallPackCount() { return stallPacks; }
 
 export function inspectModelOf() {
   const { kind, id } = vaultPick;
