@@ -8,8 +8,58 @@ export const SKILL_ICON_KIND = {
   vow: "amulet", bounty: "token"
 };
 
+const SHEETS = {
+  skills: { src: "assets/pix/atlas-skills.png", cols: 5, rows: 5 },
+  items: { src: "assets/pix/atlas-items.png", cols: 6, rows: 6 },
+  beasts: { src: "assets/pix/atlas-beasts.png", cols: 6, rows: 6 },
+  gates: { src: "assets/pix/atlas-gates.png", cols: 4, rows: 3 }
+};
+
+/** Painted Grok Imagine atlases. Cell is [sheet, col, row]. */
+const KIND_CELL = {
+  grove: ["skills", 0, 0], tide: ["skills", 1, 0], seam: ["skills", 2, 0], pyre: ["skills", 3, 0], oven: ["skills", 4, 0],
+  forge: ["skills", 0, 1], rack: ["skills", 1, 1], frame: ["skills", 2, 1], circle: ["skills", 3, 1], alembic: ["skills", 4, 1],
+  circuit: ["skills", 0, 2], mark: ["skills", 1, 2], plot: ["skills", 2, 2], pen: ["skills", 3, 2], scope: ["skills", 4, 2],
+  saber: ["skills", 0, 3], shield: ["skills", 1, 3], food: ["skills", 2, 3], bow: ["skills", 3, 3], crozier: ["skills", 4, 3],
+  amulet: ["skills", 0, 4], token: ["skills", 1, 4], compost: ["skills", 2, 4], dust: ["skills", 3, 4], pouch: ["skills", 4, 4],
+  log: ["items", 0, 0], ore: ["items", 1, 0], bar: ["items", 2, 0], fish: ["items", 3, 0],
+  cleaver: ["items", 0, 1], needle: ["items", 1, 1], helm: ["items", 4, 1], body: ["items", 5, 1], hidebody: ["items", 5, 1], robe: ["items", 5, 1],
+  legs: ["items", 0, 2], boots: ["items", 1, 2], gloves: ["items", 2, 2], cape: ["items", 4, 2],
+  ring: ["items", 0, 3], ammo: ["items", 1, 3], axe: ["items", 2, 3], pick: ["items", 3, 3], rod: ["items", 4, 3], potion: ["items", 5, 3],
+  rune: ["items", 0, 4], gem: ["items", 1, 4], herb: ["items", 2, 4], seed: ["items", 3, 4],
+  coins: ["items", 4, 5], currency: ["items", 4, 5], bones: ["items", 5, 5], hide: ["items", 4, 2],
+  ashes: ["items", 5, 4], key: ["items", 4, 4], essence: ["items", 1, 4], material: ["items", 1, 4], fodder: ["skills", 3, 2],
+  "beast-rat": ["beasts", 0, 0], "beast-wolf": ["beasts", 2, 0], "beast-bat": ["beasts", 3, 0], "beast-spider": ["beasts", 4, 0],
+  "beast-knight": ["beasts", 5, 0], "beast-moth": ["beasts", 0, 1], "beast-imp": ["beasts", 1, 1], "beast-crab": ["beasts", 2, 1],
+  "beast-hydra": ["beasts", 3, 1], "beast-ghoul": ["beasts", 4, 1], "beast-troll": ["beasts", 5, 1], "beast-golem": ["beasts", 0, 2],
+  "beast-drake": ["beasts", 1, 2], "beast-serpent": ["beasts", 2, 2], "beast-wraith": ["beasts", 3, 2], "beast-stag": ["beasts", 4, 2],
+  "beast-brute": ["beasts", 5, 2], "beast-might": ["beasts", 0, 3], "beast-mark": ["beasts", 1, 3], "beast-weave": ["beasts", 2, 3],
+  "boss-cultist": ["beasts", 3, 3], "boss-ghoul": ["beasts", 4, 3], "boss-troll": ["beasts", 5, 3], "boss-oath": ["beasts", 0, 4],
+  "boss-codex": ["beasts", 1, 4], "boss-ledger": ["beasts", 2, 4], "boss-crab": ["beasts", 3, 4], "boss-hydra": ["beasts", 4, 4],
+  "boss-drake": ["beasts", 5, 4], "boss-colossus": ["beasts", 0, 5],
+  "gate-vault": ["gates", 0, 0], "gate-sewer": ["gates", 1, 0], "gate-fen": ["gates", 2, 0], "gate-spire": ["gates", 3, 0],
+  "gate-pyre": ["gates", 0, 1], "gate-keep": ["gates", 1, 1], "gate-well": ["gates", 2, 1], "gate-heart": ["gates", 3, 1],
+  "gate-stacks": ["gates", 0, 2], "gate-page": ["gates", 1, 2], gate: ["gates", 2, 2]
+};
+
+function pixCell(kind) {
+  if (KIND_CELL[kind]) return KIND_CELL[kind];
+  if (kind?.startsWith("gate")) return KIND_CELL.gate;
+  if (kind?.startsWith("beast-")) return KIND_CELL["beast-might"];
+  if (kind?.startsWith("boss-")) return KIND_CELL["boss-colossus"];
+  return null;
+}
+
 export function iconMarkup(model = {}, size = 64) {
   const kind = model.kind || "material";
+  const cell = pixCell(kind);
+  if (cell) {
+    const [sheetId, c, r] = cell;
+    const sh = SHEETS[sheetId];
+    const hue = ((model.hue ?? 40) - 40);
+    const rot = kind.startsWith("beast") || kind.startsWith("boss") || kind.startsWith("gate") ? 0 : (hue * 0.35);
+    return `<span class="pix" style="background-image:url('${sh.src}');background-size:${sh.cols * 100}% ${sh.rows * 100}%;background-position:${(c / Math.max(1, sh.cols - 1)) * 100}% ${(r / Math.max(1, sh.rows - 1)) * 100}%;filter:hue-rotate(${rot}deg)"></span>`;
+  }
   const hue = ((model.hue ?? 270) % 360 + 360) % 360;
   const seed = model.seed || 1;
   const fill = `hsl(${hue} 52% 54%)`;

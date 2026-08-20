@@ -247,7 +247,14 @@ select, option {
   justify-content: center;
   overflow: hidden;
 }
-.skico svg, .bico svg, .mico svg, .vico svg { width: 100%; height: 100%; display: block; }
+.mico .pix, .bico .pix, .skico .pix, .vico .pix { width: 100%; height: 100%; }
+.pix {
+  display: inline-block;
+  flex-shrink: 0;
+  background-repeat: no-repeat;
+  border-radius: 7px;
+  image-rendering: auto;
+}
 .vtile .vico { width: 48px; height: 48px; margin-bottom: 6px; border-radius: 8px; border: 1px solid var(--line-soft); }
 #skill-nav .xpmini b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3a8868, var(--ok)); }
 #skill-nav .lv { color: var(--gold); font-variant-numeric: tabular-nums; font-size: 12px; }
@@ -297,7 +304,9 @@ select, option {
 .card {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
   text-align: left; min-height: 0; padding: 9px 10px;
-  background: linear-gradient(180deg, #22162f, #181022);
+  background-image: linear-gradient(180deg, #22162fee, #181022f2), url("../assets/pix/card-frame.png");
+  background-size: cover;
+  background-position: center;
 }
 .card span, .card em { font-size: 11px; color: var(--muted); font-style: normal; }
 .card .io { display: flex; flex-direction: column; gap: 1px; width: 100%; font-size: 11px; }

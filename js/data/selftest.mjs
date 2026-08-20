@@ -51,9 +51,9 @@ if (seedClash > Object.keys(C.items).length * 0.02) throw new Error("too many mo
 
 const mk = new Set(Object.values(C.monsters).map((m) => m.model.kind));
 if (mk.size < 12) throw new Error("monster silhouettes too few: " + [...mk].join(","));
-if (!iconMarkup(C.items["log-0"].model).includes("<svg")) throw new Error("icon markup broken");
-if (!iconUrl(C.items["log-0"].model).includes("url('")) throw new Error("icon data-url quotes would break HTML style attrs");
-if (!iconMarkup(Object.values(C.monsters)[0].model).includes("rect")) throw new Error("monster icon empty");
+if (!iconMarkup(C.items["log-0"].model).includes("atlas-items.png")) throw new Error("painted item atlas missing");
+if (!iconMarkup(Object.values(C.monsters)[0].model).includes("atlas-beasts.png")) throw new Error("painted monster atlas missing");
+if (!iconMarkup(C.dungeons[0].model).includes("atlas-gates.png")) throw new Error("painted gate atlas missing");
 const gates = new Set(C.dungeons.map((d) => d.model.kind));
 if (gates.size < 6) throw new Error("dungeon gates not unique: " + [...gates].join(","));
 
