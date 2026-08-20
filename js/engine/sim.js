@@ -6,6 +6,40 @@ import {
 import { combatTick, startFight, stopFight, playerInterval, consumePotionCharge } from "./combat.js";
 import { checkQuests } from "./quests.js";
 
+function noteGive(state, id, qty, viaStash = false, why = "yield") {
+  if (!id || !(qty > 0)) return true;
+  const before = id === "coins" ? (state.coins || 0) : (state.bank[id] || 0);
+  const ok = viaStash ? stashItem(state, id, qty, why) : addItem(state, id, qty);
+  const after = id === "coins" ? (state.coins || 0) : (state.bank[id] || 0);
+  const got = after - before;
+  if (got > 0) {
+    state._pendingYield = state._pendingYield || [];
+    const row = state._pendingYield.find((x) => x.item === id);
+    if (row) row.n += got;
+    else state._pendingYield.push({ item: id, n: got });
+  }
+  return ok;
+}
+
+function flushYield(state, act, xp) {
+  const items = state._pendingYield || [];
+  state._pendingYield = [];
+  const tag = state._dripTag || null;
+  state._dripTag = null;
+  if (state._offlineSim) return;
+  if (!(xp > 0) && !items.length) return;
+  state._dripSeq = (state._dripSeq || 0) + 1;
+  state.lastDrip = {
+    seq: state._dripSeq,
+    xp: Math.round((xp || 0) * 10) / 10,
+    skill: act.skill,
+    items,
+    tag,
+    t: Date.now()
+  };
+  state._uiDirty = true;
+}
+
 export function startAction(state, actionId) {
   const act = CONTENT.actions[actionId];
   if (!act) return "Unknown action.";
@@ -124,7 +158,8 @@ function completeAction(state, act) {
     let chance = act.burn.chance - (skillLevel(state, "hearth") - act.level) * 0.012 - cb.burnReduce - (ch.burnReduce || 0);
     chance = Math.max(0.005, chance);
     if (Math.random() < chance) {
-      addItem(state, act.burn.item, 1);
+      noteGive(state, act.burn.item, 1);
+      state._dripTag = "burn";
       grantSkillBits(state, act, 0.25);
       log(state, `Burned a ${act.name}.`);
       return;
@@ -136,9 +171,10 @@ function completeAction(state, act) {
     let dumped = false;
     for (const o of act.outputs) {
       const n = Math.round((o.min + Math.floor(Math.random() * (o.max - o.min + 1))) * outMul);
-      if (!addItem(state, o.item, n)) dumped = true;
+      if (!noteGive(state, o.item, n)) dumped = true;
     }
     if (dumped) {
+      state._dripTag = "full";
       const why = state.stackFull
         ? `${state.stackFull} is capped. XP still rolls — sell, cook, or burn to stash more.`
         : `Bank full (${bankUsed(state)}/${bankCap(state)} stacks). XP still rolls — sell or buy slots.`;
@@ -154,7 +190,8 @@ function completeAction(state, act) {
     const rareMul = 1 + (masteryBonus(state, act.masteryId, act.skill).rare || 0) + (guildBonuses(state, act.skill).rare || 0) + (courseBonuses(state).rareMul || 0) + (chartBonuses(state).rare || 0) + (potionStats(state).rareMul ? potionStats(state).rareMul - 1 : 0) + petBonuses(state, act.skill).rare;
     for (const r of act.rare) {
       if (Math.random() < r.chance * rareMul) {
-        stashItem(state, r.item, r.min || 1, "rare drop");
+        noteGive(state, r.item, r.min || 1, true, "rare drop");
+        state._dripTag = state._dripTag || "rare";
         log(state, `Rare: ${CONTENT.items[r.item]?.name || r.item}`);
       }
     }
@@ -190,6 +227,7 @@ function grantSkillBits(state, act, xpMul, xpOverride) {
   }
   state.stats.actions += 1;
   notes.forEach((n) => log(state, `Level up: ${n}`));
+  flushYield(state, act, baseXp * mul * xpMul);
   state._uiDirty = true;
   checkQuests(state);
 }
@@ -207,7 +245,8 @@ function completeThieve(state, act) {
     state.combat.stunUntil = (state.now || 0) + lock;
     if (state.action) state.action.progress = 0;
     const scraps = 1 + Math.floor(Math.random() * (2 + Math.min(6, npc.level / 20)));
-    addItem(state, "coins", scraps);
+    noteGive(state, "coins", scraps);
+    state._dripTag = "caught";
     grantSkillBits(state, act, 0.22);
     log(state, `${npc.name} caught you. Stunned ${Math.round(lock / 1000)}s · heat ${w.heat}. Scrap ${scraps} veilmarks.`);
     return;
@@ -220,7 +259,7 @@ function completeThieve(state, act) {
     if (Math.random() >= l.chance) continue;
     let n = l.min + Math.floor(Math.random() * (l.max - l.min + 1));
     if (l.item === "coins") n = Math.max(1, Math.round(n * spike * (1 + w.streak * 0.03)));
-    stashItem(state, l.item, n, "pickpocket");
+    noteGive(state, l.item, n, true, "pickpocket");
     if (l.item === "coins" && spike > 1) log(state, luck ? `Jackpot steal ×${spike} (${n} veilmarks).` : `Clean lift ×${spike}.`);
   }
   grantSkillBits(state, act, 1);
@@ -238,14 +277,14 @@ function completeLap(state, act) {
   const timeMul = cb.time || 1;
   const lvl = skillLevel(state, "course");
   const xp = (18 + built.length * 10 + lvl * 0.45) * timeMul;
-  grantSkillBits(state, act, 1, xp);
   state.quests.stats.laps += 1;
   const marks = Math.max(1, Math.round((3 + built.length * 4) * timeMul));
-  addItem(state, "coins", marks);
+  noteGive(state, "coins", marks);
   if (timeMul >= 1.2 && Math.random() < 0.12) {
-    addItem(state, "coins", 18 + built.length * 10);
+    noteGive(state, "coins", 18 + built.length * 10);
     log(state, "Greedy circuit paid a purse.");
   }
+  grantSkillBits(state, act, 1, xp);
   rollPet(state, "course");
 }
 
@@ -257,9 +296,9 @@ function completeChartStudy(state, act) {
   const n = state.chart.studied[starId];
   const slotted = isStarSlotted(state, starId);
   const xpMul = slotted ? 1.4 : 1;
-  grantSkillBits(state, act, xpMul);
   const dust = 1 + (slotted && Math.random() < 0.35 ? 1 : 0);
-  stashItem(state, "stardust", dust, "chart study");
+  noteGive(state, "stardust", dust, true, "chart study");
+  grantSkillBits(state, act, xpMul);
   if (slotted) {
     log(state, `Slotted study: ${star?.name || starId} insight ${n}. Stardust +${dust}.`);
   } else {
@@ -330,13 +369,13 @@ export function harvestPlot(state, i) {
   const extra = Math.min(3, Math.floor((p.ripeMs || 0) / Math.max(8000, crop.growMs * 0.55)));
   const compostMul = p.compost ? 1.4 : 1;
   const qty = Math.max(1, Math.round((2 + Math.floor(crop.t / 3) + extra + (Math.random() < 0.35 ? 1 : 0)) * outMul * compostMul));
-  stashItem(state, crop.herb, qty, "harvest");
+  noteGive(state, crop.herb, qty, true, "harvest");
   const seedChance = Math.min(0.82, 0.38 + lvl * 0.004 + crop.t * 0.012);
   let seeds = 0;
   if (Math.random() < seedChance) seeds += 1;
   if (Math.random() < seedChance * 0.35) seeds += 1;
-  if (seeds) stashItem(state, crop.seed, seeds, "harvest seeds");
-  if (crop.log && Math.random() < 0.08 + crop.t * 0.006) stashItem(state, crop.log, 1, "harvest log");
+  if (seeds) noteGive(state, crop.seed, seeds, true, "harvest seeds");
+  if (crop.log && Math.random() < 0.08 + crop.t * 0.006) noteGive(state, crop.log, 1, true, "harvest log");
   state.soil.plots[i] = null;
   state.quests.stats.harvests += 1;
   const act = { id: `soil-${crop.seed}`, skill: "soil", xp: 22 + crop.t * 16, masteryId: `soil-${crop.t}` };
@@ -367,13 +406,13 @@ export function collectPen(state, i) {
   const cycles = Math.max(1, p.cyclesReady || 1);
   const outMul = 1 + (guildBonuses(state, "drove").output || 0) + (courseBonuses(state).outputMul || 0) + (chartBonuses(state).output || 0);
   const qty = Math.max(1, Math.round((p.pending || a.qty * cycles) * outMul * (p.fed ? 1.45 : 1)));
-  stashItem(state, a.produce, qty, "drove collect");
+  noteGive(state, a.produce, qty, true, "drove collect");
   let rares = 0;
   if (a.rare) {
     const rolls = Math.min(cycles, 24);
     for (let n = 0; n < rolls; n++) {
       if (Math.random() < a.rare.chance) {
-        if (stashItem(state, a.rare.item, 1, "drove rare")) rares += 1;
+        if (noteGive(state, a.rare.item, 1, true, "drove rare")) rares += 1;
       }
     }
   }
@@ -524,6 +563,7 @@ export function applyOffline(state, ms) {
   if (sim <= 0) return;
   const beforeActs = state.stats.actions || 0;
   const beforeCounts = { ...(state.actionCounts || {}) };
+  state._offlineSim = true;
   state.stats.offlineMs += sim;
   const saved = state.settings.tickScale;
   state.settings.tickScale = 1;
@@ -566,6 +606,7 @@ export function applyOffline(state, ms) {
   if (left > 0) state.now = (state.now || 0) + left;
 
   state.settings.tickScale = saved;
+  state._offlineSim = false;
   const mins = Math.round(sim / 60000);
   const topJob = Object.entries(state.actionCounts || {}).sort((a, b) => (b[1] - (beforeCounts[a[0]] || 0)) - (a[1] - (beforeCounts[b[0]] || 0)))[0];
   const jobDelta = topJob ? (topJob[1] - (beforeCounts[topJob[0]] || 0)) : 0;

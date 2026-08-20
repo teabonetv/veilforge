@@ -10,6 +10,8 @@ import { iconUrl, SKILL_ICON_KIND } from "../scene/icons.js";
 let forkFn = null;
 let shownLevelKey = "";
 let lastFloater = 0;
+let lastDrip = 0;
+let audioCtx = null;
 let bankFilter = "";
 let bankTab = "All";
 let shopFilter = "";
@@ -352,7 +354,13 @@ function renderTop(ctx) {
       const outId = a?.outputs?.[0]?.item;
       const outN = outId ? bankCount(state, outId) : 0;
       const outNm = outId ? (CONTENT.items[outId]?.name || outId) : "yield";
-      const capNote = state._yieldWarn ? ` · ${state._yieldWarn}` : ` · ${outN} ${outNm}`;
+      const last = state.lastDrip;
+      const lastBits = last?.items?.length
+        ? last.items.map((x) => `+${x.n} ${x.item === "coins" ? "veilmarks" : (CONTENT.items[x.item]?.name || x.item)}`).join(" · ")
+        : "";
+      const xpBits = last?.xp ? `+${last.xp} ${skillName(last.skill)} xp` : "";
+      const dripNote = lastBits || xpBits ? ` · Last ${[lastBits, xpBits].filter(Boolean).join(" · ")}` : "";
+      const capNote = state._yieldWarn ? ` · ${state._yieldWarn}` : ` · ${outN} ${outNm}${dripNote}`;
       commit.innerHTML = `<b>Committed:</b> ${escapeHtml(a?.name || act.id)} (${skillName(act.skill)})${capNote}. Switching jobs asks Halt.`;
       commit.className = state._yieldWarn ? "danger" : "";
     } else {
@@ -377,7 +385,75 @@ function renderTop(ctx) {
       setTimeout(() => el.remove(), 750);
     }
   }
+  spawnYieldDrip(state);
   renderLevelModal(ctx);
+}
+
+function pingYield(rare) {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    audioCtx = audioCtx || new AC();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = "triangle";
+    o.frequency.value = rare ? 784 : 523.25;
+    g.gain.setValueAtTime(0.05, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.14);
+    o.connect(g);
+    g.connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + 0.14);
+  } catch { /* autoplay policy */ }
+}
+
+function spawnYieldDrip(state) {
+  const d = state.lastDrip;
+  if (!d || d.seq === lastDrip) return;
+  lastDrip = d.seq;
+  const host = document.getElementById("yield-hits");
+  const arena = document.getElementById("arena-hits");
+  const wrap = document.getElementById("action-wrap");
+  const itemLine = (d.items || []).map((x) => {
+    const nm = x.item === "coins" ? "veilmarks" : (CONTENT.items[x.item]?.name || x.item);
+    return `+${x.n} ${nm}`;
+  }).join(" · ");
+  const xpLine = d.xp ? `+${d.xp} ${skillName(d.skill)} xp` : "";
+  if (host) {
+    host.replaceChildren();
+    if (xpLine) {
+      const xp = document.createElement("span");
+      xp.className = "drip xp";
+      xp.textContent = xpLine;
+      host.appendChild(xp);
+      setTimeout(() => xp.remove(), 1200);
+    }
+    if (itemLine) {
+      const it = document.createElement("span");
+      it.className = `drip item${d.tag === "rare" ? " rare" : ""}${d.tag === "burn" ? " burn" : ""}`;
+      it.textContent = d.tag === "burn" ? `Burned · ${itemLine}` : itemLine;
+      host.appendChild(it);
+      setTimeout(() => it.remove(), 1200);
+    }
+  }
+  if (arena && itemLine) {
+    const el = document.createElement("span");
+    el.className = "floater you";
+    el.textContent = itemLine.split(" · ")[0];
+    arena.appendChild(el);
+    setTimeout(() => el.remove(), 900);
+  }
+  if (wrap) {
+    wrap.classList.add("pop");
+    setTimeout(() => wrap.classList.remove("pop"), 280);
+  }
+  const skBtn = document.querySelector(`#skill-nav [data-arg="${d.skill}"]`);
+  if (skBtn) {
+    skBtn.classList.add("ding");
+    setTimeout(() => skBtn.classList.remove("ding"), 400);
+  }
+  if (state.settings?.toasts !== false && !state.settings?.reducedMotion) pingYield(d.tag === "rare");
 }
 
 function confirmBusy(ctx, nextId, kind, fn) {
