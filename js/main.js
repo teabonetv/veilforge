@@ -100,7 +100,7 @@ function loop(now) {
     tick(state, dt);
     uiAcc += dt;
     renderTop(ctx);
-    world.frame(state, skillSelect());
+    if (desk === "workshop") world.frame(state, skillSelect());
     if (desk === "bank") vaultPort?.frame();
     if (desk === "loadout") wanderPort?.frame();
     if (uiAcc > 500) {

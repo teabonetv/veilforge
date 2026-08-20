@@ -1,33 +1,29 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-20T14:00:00Z",
-  "wave": 9,
-  "overall": "Review-fix pass: honest offline (18/24h, combat frozen while hidden), vault/loadout item safety, PWA network-first scripts, save sanitization.",
+  "updatedAt": "2026-08-20T14:50:00Z",
+  "wave": 10,
+  "overall": "Live critic: Halt beats Melvor swap. Loop lost to Melvor on invisible sinks. Wave 10 shows the craft tree, locked-board previews, per-grove counts, stall jump, coming ledger pages.",
   "comparison": {
-    "melvorIdle": "latest live critic: Veilforge Halt fork > Melvor instant switch",
-    "melvorIdle2": "earlier critics: MI2 still the content-depth bar",
-    "oursBetter": "split — UX fork yes, encyclopedia no",
-    "biggestGap": "Taste/prose, and MI2-scale mastery/ranching/astro boards we did not fully match"
+    "melvorIdle": "Halt-commit wins; first-hour cascade and shop findability still lose",
+    "melvorIdle2": "unique boards now previewable; still thinner than MI2 astrology/ranching",
+    "runescape": "triangle + food exist; prayers/spells were buried on other tabs — now signed in the fight board",
+    "oursBetter": "halt-commit only, until sinks and unlocks are felt in the first ten minutes",
+    "biggestGap": "artisan sink visibility (builder sent back; in this wave)"
   },
   "pieces": [
-    {"id": "core-loop", "name": "Tick, save, offline, action bars", "status": "wow", "critic": "Halt overlay verified"},
-    {"id": "gathering", "name": "Timber, Trawl, Vein, Ember", "status": "wow", "critic": "cap keeps XP, live banner"},
-    {"id": "artisan", "name": "Hearth, Anvil, Fletch, Loom, Sigil, Vial", "status": "done", "critic": "Anvil lock toast verified"},
-    {"id": "unique-skills", "name": "Course, Whisper, Soil, Drove, Chart", "status": "done", "critic": "gated"},
-    {"id": "combat", "name": "Might, Guard, Vitality, Mark, Weave, Vow, Bounty", "status": "done", "critic": "not the last playtest's focus"},
-    {"id": "guilds", "name": "Mastery + Guild tasks (MI2-inspired)", "status": "done", "critic": "pool checkpoints exist"},
-    {"id": "quests", "name": "Story ledger and side contracts", "status": "done", "critic": "2-minute loop"},
-    {"id": "bank-shop", "name": "Bank, shop, tools, loadouts", "status": "done", "critic": "caps + XP-on-full"},
-    {"id": "threejs", "name": "Citadel scene, combat arena, skill dioramas", "status": "done", "critic": "dioramas"},
-    {"id": "ui-qol", "name": "Nav, toasts, stats, settings, identity", "status": "wow", "critic": "commitment + Halt"},
-    {"id": "pacing", "name": "Economy, drop tables, long-term goals", "status": "done", "critic": "scarcity"},
-    {"id": "coherence", "name": "Whole-game playthrough polish", "status": "done", "critic": "client finally presents the fork"}
+    {"id": "halt-commit", "name": "One job, Halt overlay", "status": "wow", "critic": "live: Veilforge wins vs Melvor instant swap"},
+    {"id": "gathering-groves", "name": "Timber Trawl Vein Ember groves", "status": "building", "critic": "live: Melvor wins — no per-grove count/sinks; adding times+Then lines"},
+    {"id": "artisan-sinks", "name": "Hearth Anvil Fletch Loom Sigil Vial", "status": "building", "critic": "live: RS wins — ash went nowhere; pipeline copy + Then sinks"},
+    {"id": "unique-boards", "name": "Course Whisper Soil Drove Chart", "status": "building", "critic": "live: MI2 wins — locked with no preview; boards now open read-only"},
+    {"id": "combat-triangle", "name": "Fights food triangle specials", "status": "building", "critic": "live: RS wins — auto-resolve, prayers hidden; max hit + Vow/Weave signposts"},
+    {"id": "vault-wanderer", "name": "Vault 3D + Wanderer kit", "status": "open", "critic": "live: MI2 wins — gallery not a tool"},
+    {"id": "stall-ledger", "name": "Shop and quests", "status": "building", "critic": "live: Melvor wins — stall not found; Codex Stall + coming pages"},
+    {"id": "first-hour", "name": "Unlock cascade and goals", "status": "building", "critic": "live: Melvor wins — no ding cascade; upcoming unlocks on skill head"},
+    {"id": "coherence", "name": "Whole-game connective tissue", "status": "open", "critic": "live: MI2 wins — islands; Codex now names the next sink"}
   ],
   "log": [
-    "Review-fix pass: offline hours, frozen hunts, loadout/unequip safety, network-first SW, escaped journal.",
-    "Latest live critic: Halt overlay + Keep/Switch both work; wowed vs Melvor instant swap.",
-    "Earlier critics: Melvor/MI2 win on breadth until the board was actually playable.",
-    "Fixes that unblocked play: app grid, lastFloater, XP-on-cap, body-level Halt."
+    "Wave 10 live critic (fresh browser, not a summary): Halt wow; overall Melvor Idle; biggest gap artisan sink visibility.",
+    "Builder: locked skills still open; Then-sinks; pipeline blurbs; grove ×N; Stall jump; coming quests; fight max hit."
   ]
 }

@@ -1,5 +1,5 @@
 import { escapeHtml } from "../util/text.js";
-import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, addItem, takeItem, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap, stashItem } from "../engine/state.js";
+import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, addItem, takeItem, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap, stashItem, upcomingUnlocks } from "../engine/state.js";
 import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval } from "../engine/combat.js";
 import { questProgress } from "../engine/quests.js";
@@ -79,11 +79,10 @@ function handle(ctx, act, arg, el) {
   const { state } = ctx;
   const err = (m) => { if (m) toast(ctx, m); };
   switch (act) {
-    case "skill": {
-      const lock = skillLocked(state, arg);
-      if (lock) { err(`Locked until ${lock}. That's the fork — train the requirement, or ignore this art.`); break; }
-      selectedSkill = arg; ctx.render(); break;
-    }
+    case "skill":
+      selectedSkill = arg;
+      ctx.render();
+      break;
     case "checkpoint": err(spendCheckpoint(state, arg)); ctx.render(); break;
     case "dismiss-level":
       state.levelUps = (state.levelUps || []).slice(1);
@@ -511,9 +510,13 @@ function renderCodex(ctx) {
     const hintSkill = inferQuestSkill(q);
     if (hintSkill) jump = `<button type="button" data-act="skill" data-arg="${hintSkill}">Open ${skillName(hintSkill)}</button>`;
   }
-  let idle = "Tap a Grove on Timber and leave it running.";
+  let idle = pipelineFor(selectedSkill) || "Tap a Grove on Timber and leave it running.";
   if (state.combat.fighting) idle = "In combat. Halt to leave. Watch food.";
-  else if (state.action) idle = `Idling: ${CONTENT.actions[state.action.id]?.name || state.action.id}.`;
+  else if (state.action) {
+    const act = CONTENT.actions[state.action.id];
+    const sink = (act?.outputs || []).flatMap((o) => sinksOf(o.item))[0];
+    idle = `Idling: ${act?.name || state.action.id}${sink ? ` → ${sink}` : ""}.`;
+  }
   el.innerHTML = `<span class="codex-k">Codex</span>
     <span>${next}</span>
     <span class="muted">${idle}</span>
@@ -521,6 +524,7 @@ function renderCodex(ctx) {
       ${jump}
       <button type="button" data-act="desk" data-arg="bank">Open vault</button>
       <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
+      <button type="button" data-act="panel" data-arg="shop">Stall</button>
       <button type="button" data-act="codex-toggle">Hide</button>
     </div>`;
 }
@@ -549,26 +553,76 @@ function renderCenter(ctx) {
   const guild = state.skills[sk.id].guildRank;
   const gtask = CONTENT.guildTasks[sk.id][guild];
   const lock = skillLocked(state, sk.id);
+  const coming = upcomingUnlocks(state, sk.id);
   let body = "";
-  if (lock) body = `<p class="blurb">Locked until <strong>${lock}</strong>. Train that instead — opportunity cost is the whole game.</p>`;
-  else if (sk.kind === "gather" || sk.kind === "artisan") body = renderActions(ctx, sk.id);
+  if (sk.kind === "gather" || sk.kind === "artisan") body = renderActions(ctx, sk.id);
   else if (sk.id === "course") body = renderCourse(ctx);
   else if (sk.id === "whisper") body = renderActions(ctx, "whisper");
   else if (sk.id === "soil") body = renderSoil(ctx);
   else if (sk.id === "drove") body = renderDrove(ctx);
   else if (sk.id === "chart") body = renderChart(ctx);
   else if (COMBAT_SKILLS.includes(sk.id)) body = renderCombatSkill(ctx, sk.id);
+  const lockBanner = lock
+    ? `<p class="blurb warn">Preview only — locked until <strong>${escapeHtml(lock)}</strong>. Read the board. Train the requirement. That is the fork.</p>`
+    : "";
+  const pipeline = pipelineFor(sk.id);
+  const nextLine = coming.length
+    ? `<p class="muted">Next by ${sk.name} ${Math.min(MAX_LEVEL, lv + 12)}: ${coming.join(" · ")}</p>`
+    : `<p class="muted">No new groves in the next dozen levels — push mastery or a sink.</p>`;
   document.getElementById("center").innerHTML = `
     <div class="skill-head">
       <div>
         <h2>${sk.icon} ${sk.name} <em>${lv}</em></h2>
         <p class="blurb">${sk.blurb}</p>
+        ${pipeline ? `<p class="sink">${pipeline}</p>` : ""}
+        ${nextLine}
       </div>
       <div class="xpbar"><i style="width:${pct}%"></i><span>${Math.floor(xp).toLocaleString()} / ${next.toLocaleString()} xp</span></div>
     </div>
+    ${lockBanner}
     <div class="guild">Pool ${state.skills[sk.id].pool || 0} · spend it on one node, not all of them · Guild ${guild}/10 ${gtask ? `· ${gtask.name}: ${state.skills[sk.id].guildProgress.toLocaleString()} / ${gtask.need.toLocaleString()} · ${gtask.bonus.label}` : "· Maxed"}</div>
     ${body}
   `;
+}
+
+function pipelineFor(skill) {
+  const map = {
+    timber: "Sink: logs → Ember (ash for Sigil) and Fletch (shafts/bows). Do not hoard Drift wood with nowhere to burn or nock.",
+    trawl: "Sink: raw fish → Hearth. Uncooked catch will not keep you alive in Cinder Docks.",
+    vein: "Sink: ore → Anvil bars → sabers you actually swing. Mining without smithing is a full vault.",
+    ember: "Sink: ash → Sigil runes → Weave. Burning with no rune plan is a vanity fire.",
+    hearth: "Sink: food → auto-eat. Combat without a larder is a dare.",
+    anvil: "Sink: bars → weapons/armour. Each special (riposte, shred, bleed, pierce, echo) is a different hunt.",
+    fletch: "Sink: ammo → Mark. A bow with an empty quiver is furniture.",
+    loom: "Sink: hide → Mark armour. Plate is a tax against weavers.",
+    sigil: "Sink: runes → the spell you actually cast. Out of runes, Weave goes silent.",
+    vial: "Sink: draughts → a fight you chose, with a charge count.",
+    course: "Pillars are a loadout. You cannot take every bonus. Time multiplies — greed is slower.",
+    whisper: "Stun is the tax. Heat climbs if you get caught. Pick pockets, not a second job.",
+    soil: "Plots tick while you Halt-lock something else. Plant, then go to war.",
+    drove: "Pens stack produce while you adventure. Collect is the click that pays.",
+    chart: "Two slots. Study arms the bonus — slotted with 0 insight does nothing.",
+    might: "Triangle: Might beats Mark, loses to Weave. Food and style, not a DPS sheet.",
+    mark: "Needs ammo. Beats Weave, loses to Might.",
+    weave: "Needs runes. Beats Might, loses to Mark.",
+    vow: "Two prayers. Drain is real — bury bones or go dark.",
+    bounty: "A contract is opportunity cost: this monster, not that grove."
+  };
+  return map[skill] || "";
+}
+
+function sinksOf(itemId) {
+  if (!itemId) return [];
+  const seen = new Set();
+  const out = [];
+  for (const a of Object.values(CONTENT.actions)) {
+    if (!a.inputs?.some((i) => i.item === itemId)) continue;
+    if (seen.has(a.skill)) continue;
+    seen.add(a.skill);
+    out.push(`${skillName(a.skill)} (${a.name})`);
+    if (out.length >= 3) break;
+  }
+  return out;
 }
 
 function fmtIo(state, list, kind) {
@@ -624,14 +678,18 @@ function renderActions(ctx, skill) {
         const cp = state.skills[skill].checkpoints?.[a.masteryId] || 0;
         const cost = checkpointCost(state, a.id);
         const pool = state.skills[skill].pool || 0;
+        const n = state.actionCounts?.[a.id] || 0;
+        const sinkBits = (a.outputs || []).flatMap((o) => sinksOf(o.item));
+        const sinks = [...new Set(sinkBits)].slice(0, 3).join(" · ");
         return `<div class="cardwrap">
         <button type="button" class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
           <strong>${a.name}</strong>
-          <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · M${ml} · CP${cp}</span>
+          <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · M${ml} · CP${cp} · ×${n} done</span>
           <div class="io">
             ${ins ? `<span class="in">In ${ins}</span>` : `<span class="in">No inputs</span>`}
             ${outs ? `<span class="out">Out ${outs}</span>` : `<span class="out">${a.desc || "No listed outputs"}</span>`}
           </div>
+          ${sinks ? `<span class="sink">Then ${sinks}</span>` : ""}
           ${inv ? `<span class="inv">Bank ${inv}</span>` : ""}
           ${why ? `<em class="lock-why">${why}</em>` : ""}
         </button>
@@ -742,8 +800,9 @@ function renderCombatTheater(ctx) {
       <h4>You</h4>
       <div class="bar hp"><i style="width:${Math.max(0, 100 * state.combat.hp / state.combat.maxHp)}%;display:block;height:100%;background:linear-gradient(90deg,#8e3a58,var(--rose))"></i></div>
       <p class="hint">${Math.ceil(state.combat.hp)} / ${state.combat.maxHp} · next strike ${youSwing.toFixed(0)}%</p>
-      <p class="hint">Style ${st.style} · Acc ${st.acc.toFixed(0)} · Power ${st.power.toFixed(0)} · Def ${st.def.toFixed(0)}</p>
+      <p class="hint">Style ${st.style} · Acc ${st.acc.toFixed(0)} · Power ${st.power.toFixed(0)} · Def ${st.def.toFixed(0)} · max hit ~${Math.max(1, Math.floor(st.power / 4))}${st.tri?.edge && st.tri.edge !== "even" ? ` · triangle ${st.tri.edge}` : ""}</p>
       <p class="hint">Food ${foodN} ${foodId ? itemName(foodId) : "—"} ${foodN <= 3 ? "· running low" : ""}</p>
+      <p class="hint">Special ${Math.floor(state.combat.spec || 0)}% ${(state.combat.useSpec !== false) ? "ON" : "OFF"} · prayers on Vow · spells on Weave</p>
     </div>
     <div>
       <h4>${m.name}</h4>
@@ -962,7 +1021,12 @@ function renderQuests(ctx) {
     if (q.reward?.items) q.reward.items.forEach((it) => reward.push(`${it.qty} ${itemName(it.id)}`));
     return `<div class="q"><strong>${q.name}</strong><p>${q.desc}</p>${prog}${reward.length ? `<p class="muted">Reward: ${reward.join(" · ")}</p>` : ""}</div>`;
   }).join("");
-  document.getElementById("quests").innerHTML = cards + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>`;
+  const coming = CONTENT.quests
+    .filter((q) => !state.quests.done.includes(q.id) && !state.quests.active.includes(q.id))
+    .slice(0, 4)
+    .map((q) => `<p class="muted">Coming: ${q.name} — ${q.desc}</p>`)
+    .join("");
+  document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>`;
 }
 
 function offerName(o) {

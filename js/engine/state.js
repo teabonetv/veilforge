@@ -149,6 +149,11 @@ function collectUnlocks(state, skill, from, to) {
   return out.slice(0, 6);
 }
 
+export function upcomingUnlocks(state, skill) {
+  const lv = skillLevel(state, skill);
+  return collectUnlocks(state, skill, lv, Math.min(MAX_LEVEL, lv + 12));
+}
+
 export function addItem(state, id, qty) {
   if (!id) return false;
   qty = Math.floor(Number(qty) || 0);
