@@ -218,10 +218,45 @@ select, option {
 #layout { display: grid; grid-template-columns: 196px 1fr 372px; min-height: 0; }
 #skill-nav { overflow: auto; border-right: 1px solid var(--line); padding: 8px; background: #120a1acc; }
 #skill-nav .skill {
-  width: 100%; display: grid; grid-template-columns: 28px 1fr auto; gap: 6px;
+  width: 100%; display: grid; grid-template-columns: 28px 1fr auto; grid-template-rows: auto 4px; gap: 4px 6px;
   text-align: left; margin-bottom: 3px; padding: 6px 8px;
   background: #1a1024;
+  align-items: center;
 }
+#skill-nav .skico { grid-row: 1 / 3; }
+#last-yield {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--gold);
+  min-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#skill-nav .xpmini {
+  grid-column: 2 / 4;
+  display: block;
+  height: 5px;
+  background: #0e0816;
+  border-radius: 99px;
+  overflow: hidden;
+}
+.skico, .bico, .mico, .vico {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.mico .pix, .bico .pix, .skico .pix, .vico .pix, .dico .pix, .pet-chip .pix { width: 100%; height: 100%; }
+.pix {
+  display: inline-block;
+  flex-shrink: 0;
+  background-repeat: no-repeat;
+  border-radius: 7px;
+  image-rendering: auto;
+}
+.vtile .vico { width: 48px; height: 48px; margin-bottom: 6px; border-radius: 8px; border: 1px solid var(--line-soft); }
+#skill-nav .xpmini b { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3a8868, var(--ok)); }
 #skill-nav .lv { color: var(--gold); font-variant-numeric: tabular-nums; font-size: 12px; }
 #skill-nav .sn { font-size: 13px; }
 #mid { display: grid; grid-template-rows: 240px 1fr; min-width: 0; min-height: 0; }
@@ -269,7 +304,9 @@ select, option {
 .card {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
   text-align: left; min-height: 0; padding: 9px 10px;
-  background: linear-gradient(180deg, #22162f, #181022);
+  background-image: linear-gradient(180deg, #22162fee, #181022f2), url("../assets/pix/card-frame.png");
+  background-size: cover;
+  background-position: center;
 }
 .card span, .card em { font-size: 11px; color: var(--muted); font-style: normal; }
 .card .io { display: flex; flex-direction: column; gap: 1px; width: 100%; font-size: 11px; }
@@ -424,7 +461,8 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
   border-bottom: 1px solid var(--line);
   background: #140a1cf0;
 }
-#desk-nav button { letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; }
+#desk-nav button { letter-spacing: 0.12em; text-transform: uppercase; font-size: 11px; display: inline-flex; align-items: center; gap: 8px; }
+#desk-nav .dico { width: 22px; height: 22px; display: inline-flex; overflow: hidden; border-radius: 5px; }
 #desk-nav button.on { border-color: var(--gold); color: var(--gold); }
 .desk-tag { margin-left: auto; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--rose); }
 #layout.away { display: none !important; }
@@ -456,7 +494,15 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 .vtile .vnm { font-size: 11px; line-height: 1.25; }
 .vtile .vqty { font-size: 10px; color: var(--gold); }
 .vault-inspect { border-left: 1px solid var(--line); padding: 12px; background: #160e22; }
-#vault-view, #wander-view { width: 100%; height: 320px; display: block; background: #080610; border-radius: 12px; }
+#vault-view, #wander-view {
+  width: 100%;
+  height: 320px;
+  min-height: 320px;
+  display: block;
+  background: #080610;
+  border-radius: 12px;
+  color: transparent;
+}
 #vault-copy h3 { margin: 10px 0 4px; }
 #vault-copy blockquote, #wander-profile blockquote, .wd-card blockquote {
   margin: 8px 0;
@@ -471,14 +517,17 @@ button.tiny { font-size: 11px; padding: 4px 8px; color: var(--gold); }
 #wander-profile, #wander-detail { padding: 16px; overflow: auto; background: #140a1c; }
 .w-name { font-family: "Cormorant Garamond", serif; font-size: 32px; }
 .w-title { color: var(--gold); letter-spacing: 0.14em; text-transform: uppercase; font-size: 11px; }
-.w-stars { color: var(--gold); margin: 6px 0 12px; }
+.pet-row { display: flex; flex-wrap: wrap; gap: 4px; margin: 10px 0 4px; }
+.pet-chip { width: 26px; height: 26px; opacity: 0.28; overflow: hidden; border-radius: 6px; border: 1px solid var(--line-soft); }
+.pet-chip.on { opacity: 1; border-color: var(--gold); }
 .w-lvls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
 .w-lvls em { display: block; font-style: normal; font-size: 28px; color: var(--moon); }
 .w-lvls span { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .wander-mid { display: grid; grid-template-rows: 1fr auto auto; min-width: 0; border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
 .wander-stage { display: grid; grid-template-columns: 150px 1fr 150px; gap: 8px; padding: 12px; min-height: 0; }
 .wcol { display: flex; flex-direction: column; gap: 6px; overflow: auto; }
-.wslot { text-align: left; min-height: 52px; }
+.wslot { text-align: left; min-height: 52px; display: grid; grid-template-columns: 28px 1fr; gap: 4px 8px; align-items: center; }
+.wslot em { grid-column: 1 / -1; }
 .wslot em { display: block; font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold); font-style: normal; }
 .wslot span { font-size: 11px; }
 #wander-view { height: 320px; min-height: 320px; }

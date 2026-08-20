@@ -5,7 +5,7 @@ import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, r
 import { questProgress } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
 import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf } from "./desks.js";
-import { iconUrl, SKILL_ICON_KIND } from "../scene/icons.js";
+import { iconMarkup, SKILL_ICON_KIND } from "../scene/icons.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -245,8 +245,21 @@ function skillName(id) {
   return SKILLS.find((s) => s.id === id)?.name || id;
 }
 
+function xpPct(state, skillId) {
+  const lv = skillLevel(state, skillId);
+  const xp = state.skills[skillId]?.xp || 0;
+  const next = XP_TABLE[Math.min(MAX_LEVEL, lv + 1)];
+  const prev = XP_TABLE[lv] || 0;
+  if (next === prev) return 100;
+  return Math.max(0, Math.min(100, 100 * (xp - prev) / (next - prev)));
+}
+
 function itemName(id) {
   return CONTENT.items[id]?.name || id;
+}
+
+function glyph(model, cls = "mico") {
+  return `<span class="${cls}">${iconMarkup(model || {}, 48)}</span>`;
 }
 
 function shopGroup(o) {
@@ -262,7 +275,9 @@ export function renderShell(ctx) {
     const lv = skillLevel(state, s.id);
     const on = selectedSkill === s.id ? "on" : "";
     const lock = skillLocked(state, s.id);
-    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}><span class="skico" style="background-image:${iconUrl({ kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3 })}"></span><span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : lv}</span></button>`;
+    const pct = lock ? 0 : Math.floor(xpPct(state, s.id));
+    const ico = { kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3, eid: s.id };
+    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}>${glyph(ico, "skico")}<span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : `${lv} · ${pct}%`}</span>${lock ? "" : `<i class="xpmini"><b style="width:${pct}%"></b></i>`}</button>`;
   }).join("");
   root.querySelector("#skill-nav").innerHTML = left;
   renderTop(ctx);
@@ -334,7 +349,9 @@ function renderTop(ctx) {
     if (act) {
       const a = CONTENT.actions[act.id];
       const pct = Math.min(100, 100 * act.progress / (act.duration || 1));
-      lab.textContent = `${skillName(act.skill)} · ${a?.name || act.id}`;
+      const sp = skillLevel(state, act.skill);
+      const into = Math.floor(xpPct(state, act.skill));
+      lab.textContent = `${skillName(act.skill)} ${sp} · ${into}% to next · ${a?.name || act.id}`;
       bar.style.width = pct + "%";
       bar.classList.remove("combat");
     } else {
@@ -368,7 +385,9 @@ function renderTop(ctx) {
       const report = off
         ? ` <button type="button" data-act="offline-ack">Offline: ${off.minutes}m · ${off.job} · ${off.actions} actions${off.huntPaused ? " · hunt paused" : ""} · ${off.plotsReady} plots ready · ${off.pensReady} pens ready — dismiss</button>`
         : "";
-      commit.innerHTML = `<b>Uncommitted.</b> Pick one action. You cannot train 22 skills at once — that was never the game.${report}`;
+      const gq = CONTENT.quests.find((x) => x.id === state.quests.active[0]);
+      const hint = gq ? `${gq.how || gq.desc}` : "Open Timber and click Warding Choir.";
+      commit.innerHTML = `<b>Do this:</b> ${escapeHtml(hint)}${report}`;
       commit.className = off ? "warn" : "idle";
     }
   }
@@ -386,6 +405,15 @@ function renderTop(ctx) {
     }
   }
   spawnYieldDrip(state);
+  const ly = document.getElementById("last-yield");
+  if (ly) {
+    const d = state.lastDrip;
+    if (!d) ly.textContent = "Last yield: —";
+    else {
+      const items = (d.items || []).map((x) => `+${x.n} ${x.item === "coins" ? "veilmarks" : (CONTENT.items[x.item]?.name || x.item)}`).join(" · ");
+      ly.textContent = `Last yield: ${items || "—"}${d.xp ? ` · +${d.xp} ${skillName(d.skill)} xp` : ""}`;
+    }
+  }
   renderLevelModal(ctx);
 }
 
@@ -569,32 +597,35 @@ function renderCodex(ctx) {
   const { state } = ctx;
   if (!codexOpen) {
     el.className = "closed";
-    el.innerHTML = `<span class="codex-k">Codex</span><span class="muted">Hidden — idling continues.</span>
+    el.innerHTML = `<span class="codex-k">Goal</span><span class="muted">Hidden — idling continues.</span>
       <div class="codex-acts"><button type="button" data-act="codex-toggle">Show</button></div>`;
     return;
   }
   el.className = "";
   const qid = state.quests.active[0];
   const q = CONTENT.quests.find((x) => x.id === qid);
-  let next = "The Ledger is quiet.";
+  const upcoming = CONTENT.quests.filter((x) => !state.quests.done.includes(x.id) && x.id !== qid).slice(0, 2);
+  let next = "No current goal — pick Timber and chop.";
   let jump = "";
   if (q) {
     const steps = questProgress(state, q).map((p) => reqView(state, p.r));
     const open = steps.find((s) => !s.ok) || steps[0];
-    next = `<strong>${q.name}</strong> — ${open?.label || q.desc}`;
+    const frac = open ? `${Math.min(open.have, open.need)}/${open.need}` : "";
+    next = `<strong>Do this: ${q.name}</strong> ${frac} — ${q.how || open?.label || q.desc}`;
     const hintSkill = inferQuestSkill(q);
-    if (hintSkill) jump = `<button type="button" data-act="skill" data-arg="${hintSkill}">Open ${skillName(hintSkill)}</button>`;
+    if (hintSkill) jump = `<button type="button" data-act="skill" data-arg="${hintSkill}">Go to ${skillName(hintSkill)}</button>`;
   }
-  let idle = pipelineFor(selectedSkill) || "Tap a Grove on Timber and leave it running.";
+  const then = upcoming.map((x) => x.name).join(" → ");
+  let idle = pipelineFor(selectedSkill) || "Click Warding Choir on Timber and wait.";
   if (state.combat.fighting) idle = "In combat. Halt to leave. Watch food.";
   else if (state.action) {
     const act = CONTENT.actions[state.action.id];
     const sink = (act?.outputs || []).flatMap((o) => sinksOf(o.item))[0];
     idle = `Idling: ${act?.name || state.action.id}${sink ? ` → ${sink}` : ""}.`;
   }
-  el.innerHTML = `<span class="codex-k">Codex</span>
+  el.innerHTML = `<span class="codex-k">Goal</span>
     <span>${next}</span>
-    <span class="muted">${idle}</span>
+    <span class="muted">${then ? `Then: ${then}` : idle}</span>
     <div class="codex-acts">
       ${jump}
       <button type="button" data-act="desk" data-arg="bank">Open vault</button>
@@ -638,7 +669,7 @@ function renderCenter(ctx) {
   else if (sk.id === "chart") body = renderChart(ctx);
   else if (COMBAT_SKILLS.includes(sk.id)) body = renderCombatSkill(ctx, sk.id);
   const lockBanner = lock
-    ? `<p class="blurb warn">Preview only — locked until <strong>${escapeHtml(lock)}</strong>. Read the board. Train the requirement. That is the fork.</p>`
+    ? `<p class="blurb warn">Locked until <strong>${escapeHtml(lock)}</strong> (you are ${skillName(sk.id)} ${lv}). Train the listed skill — this board is a preview.</p>`
     : "";
   const pipeline = pipelineFor(sk.id);
   const nextLine = coming.length
@@ -672,7 +703,7 @@ function renderWhisper(ctx) {
 
 function pipelineFor(skill) {
   const map = {
-    timber: "Sink: logs → Ember (ash for Sigil) and Fletch (shafts/bows). Do not hoard Drift wood with nowhere to burn or nock.",
+    timber: "Chop here. Then Ember (burn) and Fletch (bows) spend the same logs.",
     trawl: "Sink: raw fish → Hearth. Uncooked catch will not keep you alive in Cinder Docks.",
     vein: "Sink: ore → Anvil bars → sabers you actually swing. Mining without smithing is a full vault.",
     ember: "Sink: ash → Sigil runes → Weave. Burning with no rune plan is a vanity fire.",
@@ -772,6 +803,7 @@ function renderActions(ctx, skill) {
         const mast = `M${ml}: +${(mb.speed * 100).toFixed(1)}% speed · +${(mb.preserve * 100).toFixed(1)}% preserve`;
         return `<div class="cardwrap">
         <button type="button" class="card ${on ? "on" : ""} ${lvok ? "" : "locked"}" data-act="start" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
+          ${glyph(a.model)}
           <strong>${a.name}</strong>
           <span>Lv ${a.level} · ${(a.time / 1000).toFixed(1)}s · ${a.xp} xp · ${mast} · CP${cp} · ×${n} done</span>
           <div class="io">
@@ -919,7 +951,7 @@ function renderCombatTheater(ctx) {
     </div>
     <div>
       <h4>${m.name}</h4>
-      <span class="mico lg" style="background-image:${iconUrl(m.model)}"></span>
+      ${glyph(m.model, "mico lg")}
       <div class="bar hp foe"><i style="display:block;height:100%;width:${Math.max(0, 100 * state.combat.monsterHp / m.hp)}%;background:linear-gradient(90deg,#3a2a78,#8b7cff)"></i></div>
       <p class="hint">${Math.max(0, Math.ceil(state.combat.monsterHp))} / ${m.hp} · incoming ${foeSwing.toFixed(0)}%</p>
       <p class="hint">Hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</p>
@@ -977,7 +1009,7 @@ function renderAreas(ctx) {
         const m = CONTENT.monsters[id];
         const on = state.combat.fighting && state.combat.monsterId === id;
         return `<button type="button" class="card ${on ? "on" : ""}" data-act="fight" data-arg="${id}">
-          <span class="mico" style="background-image:${iconUrl(m.model)}"></span>
+          ${glyph(m.model)}
           <strong>${m.name}</strong>
           <span>HP ${m.hp} · hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</span>
           <em>${m.desc}</em>
@@ -988,7 +1020,7 @@ function renderAreas(ctx) {
     const n = (state.combat.dungeonClears || {})[d.id] || 0;
     const on = state.combat.dungeon === d.id;
     return `<button type="button" class="card ${on ? "on" : ""}" data-act="dungeon" data-arg="${d.id}">
-      <span class="mico" style="background-image:${iconUrl(d.model)}"></span>
+      ${glyph(d.model)}
       <strong>${d.name}</strong><span>Req ${d.req} · ${d.sequence.length} floors · clears ${n}</span><em>${d.desc}</em>
     </button>`;
   }).join("")}</div>`;
@@ -1041,7 +1073,7 @@ function renderBank(ctx) {
       const eq = it.category === "equipment" || it.category === "ammo" || it.category === "tool";
       const stackVal = (it.value || 0) * n;
       return `<div class="brow" title="${it.desc || ""}">
-        <span class="bico" style="background-image:${iconUrl(it.model)}"></span>
+        ${glyph(it.model, "bico")}
         <span class="nm">${it.name}</span>
         <span class="qty">${n.toLocaleString()}</span>
         <span class="val">${stackVal.toLocaleString()} ✦ · ${it.category}</span>
@@ -1136,12 +1168,12 @@ function renderQuests(ctx) {
     const reward = [];
     if (q.reward?.coins) reward.push(`${q.reward.coins} ✦`);
     if (q.reward?.items) q.reward.items.forEach((it) => reward.push(`${it.qty} ${itemName(it.id)}`));
-    return `<div class="q"><strong>${q.name}</strong><p>${q.desc}</p>${prog}${reward.length ? `<p class="muted">Reward: ${reward.join(" · ")}</p>` : ""}</div>`;
+    return `<div class="q"><strong>${q.name}</strong><p>${q.how || q.desc}</p>${prog}${reward.length ? `<p class="muted">Reward: ${reward.join(" · ")}</p>` : ""}</div>`;
   }).join("");
   const coming = CONTENT.quests
     .filter((q) => !state.quests.done.includes(q.id) && !state.quests.active.includes(q.id))
     .slice(0, 4)
-    .map((q) => `<p class="muted">Coming: ${q.name} — ${q.desc}</p>`)
+    .map((q) => `<p class="muted">Coming: ${q.name} — ${q.how || q.desc}</p>`)
     .join("");
   document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>`;
 }

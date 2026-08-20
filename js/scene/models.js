@@ -56,27 +56,40 @@ export function makeEntityModel(model = {}, extra = {}) {
   } else if (k === "food" || k === "oven") {
     add(new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.28, 0.18, 10), m), 0, 0.15, 0);
     add(new THREE.Mesh(new THREE.SphereGeometry(0.2, 8, 6), mat(hue + 20, { rough: 0.7 })), 0, 0.32, 0);
+  } else if (k.startsWith("pet-")) {
+    addPetShape(g, k.slice(4), hue, seed, m, m2, gold);
   } else if (k === "saber") {
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.35, 0.04), m2), 0, 0.85, 0);
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.08, 0.12), gold), 0, 0.28, 0);
+    const long = 1.2 + (seed % 9) * 0.05;
+    const thick = 0.08 + (seed % 5) * 0.012;
+    if (bit(seed, 1)) add(new THREE.Mesh(new THREE.BoxGeometry(thick, long, 0.045), m2), 0, 0.85, 0);
+    else add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, thick * 0.7, long, 6), m2), 0, 0.85, 0);
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.28 + (seed % 6) * 0.04, 0.08, 0.12), gold), 0, 0.28, 0);
     add(new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.06, 0.35, 6), dark), 0, 0.08, 0);
+    if (bit(seed, 4)) add(new THREE.Mesh(new THREE.OctahedronGeometry(0.08, 0), gold), 0, 0.28 + long * 0.55, 0);
+    if (bit(seed, 7)) add(new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.02, 6, 10), gold), 0, 0.28, 0, Math.PI / 2, 0, 0);
   } else if (k === "cleaver") {
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.7, 0.08), m2), 0.12, 0.7, 0);
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.7, 6), dark), -0.18, 0.35, 0);
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.45 + (seed % 5) * 0.04, 0.55 + (seed % 4) * 0.06, 0.08), m2), 0.12, 0.7, 0);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.55 + (seed % 5) * 0.05, 6), dark), -0.18, 0.35, 0);
+    if (bit(seed, 3)) add(new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.2, 0.04), gold), 0.28, 0.95, 0);
   } else if (k === "needle") {
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.04, 1.5, 5), m2), 0, 0.85, 0);
-    add(new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), gold), 0, 0.12, 0);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.035 + (seed % 4) * 0.008, 1.35 + (seed % 6) * 0.05, 5), m2), 0, 0.85, 0);
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.06 + (seed % 3) * 0.02, 6, 6), gold), 0, 0.12, 0);
+    if (bit(seed, 5)) add(new THREE.Mesh(new THREE.TorusGeometry(0.09, 0.015, 6, 10), gold), 0, 0.22, 0);
   } else if (k === "bow") {
-    const arc = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.04, 6, 14, Math.PI), m);
+    const rad = 0.48 + (seed % 6) * 0.03;
+    const arc = new THREE.Mesh(new THREE.TorusGeometry(rad, 0.035 + (seed % 3) * 0.008, 6, 14, Math.PI), m);
     arc.rotation.z = -Math.PI / 2;
     add(arc, 0, 0.7, 0);
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.05, 4), gold), 0.25, 0.7, 0);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, rad * 1.9, 4), gold), rad * 0.45, 0.7, 0);
+    if (bit(seed, 2)) add(new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 4), gold), 0, 0.7 + rad, 0);
   } else if (k === "crozier") {
-    add(new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 1.4, 6), m), 0, 0.75, 0);
-    add(new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.04, 6, 12), gold), 0.12, 1.45, 0);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 1.25 + (seed % 5) * 0.06, 6), m), 0, 0.75, 0);
+    add(new THREE.Mesh(new THREE.TorusGeometry(0.12 + (seed % 4) * 0.02, 0.035, 6, 12), gold), 0.12, 1.45, 0);
+    if (bit(seed, 6)) add(new THREE.Mesh(new THREE.OctahedronGeometry(0.09, 0), m2), 0.12, 1.45, 0);
   } else if (k === "helm") {
-    add(new THREE.Mesh(new THREE.SphereGeometry(0.32, 10, 8, 0, Math.PI * 2, 0, Math.PI / 1.6), m2), 0, 0.35, 0);
-    if (bit(seed, 2)) add(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.28, 4), gold), 0, 0.7, 0);
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.3 + (seed % 4) * 0.02, 10, 8, 0, Math.PI * 2, 0, Math.PI / 1.6), m2), 0, 0.35, 0);
+    if (bit(seed, 2)) add(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22 + (seed % 4) * 0.05, 4), gold), 0, 0.7, 0);
+    if (bit(seed, 8)) add(new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.12), gold), 0, 0.42, 0.12);
   } else if (k === "body") {
     add(new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.85, 0.32), m2), 0, 0.5, 0);
     add(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.08), gold), 0, 0.55, 0.18);
@@ -294,7 +307,57 @@ function addBeast(g, k, hue, seed, m, m2, gold) {
   if (bit(seed, 6)) g.scale.y *= 1.1;
 }
 
-export function makeWanderer(equipment = {}, items = {}) {
+function addPetShape(g, skill, hue, seed, m, m2, gold) {
+  const add = (mesh, x, y, z, rx = 0, ry = 0, rz = 0) => {
+    mesh.position.set(x, y, z);
+    mesh.rotation.set(rx, ry, rz);
+    g.add(mesh);
+  };
+  const s = skill.replace(/^pet-/, "");
+  if (s === "timber" || s === "loom") {
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 6, 6), m2), 0, 0.2, 0);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.28), m), -0.22, 0.22, 0);
+    add(new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.28), mat(hue + 40, { rough: 0.8 })), 0.22, 0.22, 0);
+  } else if (s === "trawl" || s === "vial") {
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), m), 0, 0.16, 0);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.22, 5), gold), 0.18, 0.16, 0, 0, 0, -1.2);
+  } else if (s === "vein" || s === "anvil") {
+    add(new THREE.Mesh(new THREE.DodecahedronGeometry(0.16, 0), m2), 0, 0.16, 0);
+  } else if (s === "ember" || s === "vow") {
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), mat(20, { emissive: 0xff6a2a, emi: 0.8 })), 0, 0.18, 0);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.2, 5), mat(30, { emi: 0.6, emissive: 0xff9a4a })), 0, 0.32, 0);
+  } else if (s === "hearth" || s === "vitality") {
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), m), 0, 0.16, 0);
+    add(new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.03, 6, 10), gold), 0, 0.16, 0, Math.PI / 2, 0, 0);
+  } else if (s === "fletch" || s === "mark") {
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.28, 5), m2), 0, 0.18, 0);
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.04, 0.04), gold), 0, 0.18, 0);
+  } else if (s === "sigil" || s === "weave" || s === "chart") {
+    add(new THREE.Mesh(new THREE.OctahedronGeometry(0.14, 0), m2), 0, 0.18, 0);
+    add(new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.02, 6, 12), gold), 0, 0.18, 0, 0.5, 0, 0);
+  } else if (s === "course") {
+    add(new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.18, 4, 8), m), 0, 0.16, 0);
+  } else if (s === "whisper" || s === "bounty") {
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.11, 8, 6), darkMat()), 0, 0.16, 0);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.14, 4), gold), 0, 0.3, 0);
+  } else if (s === "soil" || s === "drove") {
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), m), 0, 0.14, 0);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 4), gold), -0.08, 0.26, 0);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 4), gold), 0.08, 0.26, 0);
+  } else if (s === "might") {
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.14, 0.22), m), 0, 0.14, 0);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 4), gold), -0.06, 0.24, 0.04);
+    add(new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.12, 4), gold), 0.06, 0.24, 0.04);
+  } else if (s === "guard") {
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), m2), 0, 0.14, 0);
+    add(new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.08, 0.16), gold), 0, 0.14, 0.08);
+  } else {
+    add(new THREE.Mesh(new THREE.SphereGeometry(0.12 + (seed % 4) * 0.01, 8, 6), m), 0, 0.16, 0);
+    add(new THREE.Mesh(new THREE.OctahedronGeometry(0.06, 0), gold), 0, 0.28, 0);
+  }
+}
+
+export function makeWanderer(equipment = {}, items = {}, pets = {}) {
   const root = new THREE.Group();
   const cloth = new THREE.MeshStandardMaterial({ color: 0x2a1838, roughness: 0.62, metalness: 0.12 });
   const skin = new THREE.MeshStandardMaterial({ color: 0xc4b4a4, roughness: 0.7, metalness: 0.04 });
@@ -335,9 +398,17 @@ export function makeWanderer(equipment = {}, items = {}) {
   }
 
   if (equipment.cape) {
-    const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.15), mat(items[equipment.cape]?.hue || 280, { rough: 0.8 }));
-    cape.position.set(0, 1.15, -0.28);
-    root.add(cape);
+    const capeM = items[equipment.cape]?.model;
+    if (capeM) {
+      const capeMesh = makeEntityModel(capeM);
+      capeMesh.scale.setScalar(0.55);
+      capeMesh.position.set(0, 1.05, -0.32);
+      root.add(capeMesh);
+    } else {
+      const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 1.15), mat(items[equipment.cape]?.hue || 280, { rough: 0.8 }));
+      cape.position.set(0, 1.15, -0.28);
+      root.add(cape);
+    }
   }
   if (equipment.gloves) {
     const gm = mat(items[equipment.gloves]?.hue || 260, { metal: 0.3, rough: 0.5 });
@@ -380,6 +451,26 @@ export function makeWanderer(equipment = {}, items = {}) {
     sh.position.set(-0.48, 0.95, 0.1);
     root.add(sh);
   }
+  if (items[equipment.body]?.model) {
+    const plate = makeEntityModel(items[equipment.body].model);
+    plate.scale.setScalar(0.22);
+    plate.position.set(0, 1.28, 0.22);
+    root.add(plate);
+  }
+  if (items[equipment.boots]?.model) {
+    const bt = makeEntityModel(items[equipment.boots].model);
+    bt.scale.setScalar(0.22);
+    bt.position.set(0, 0.28, 0.22);
+    root.add(bt);
+  }
+  const ownedPets = Object.entries(pets).filter(([, on]) => on).map(([id]) => id);
+  ownedPets.slice(0, 3).forEach((id, i) => {
+    const skill = id.replace(/^pet-/, "");
+    const companion = makeEntityModel({ kind: `pet-${skill}`, seed: 40 + i * 13, hue: 40 + i * 47, eid: id });
+    companion.scale.setScalar(0.55);
+    companion.position.set(0.38 + i * 0.12, 1.62 + (i % 2) * 0.08, -0.12);
+    root.add(companion);
+  });
   const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1.05, 28), new THREE.MeshBasicMaterial({ color: 0x7b6cff, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.02;

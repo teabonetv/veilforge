@@ -185,7 +185,7 @@ export function createWorld(canvas) {
     eFlash *= 0.82;
 
     const mid = state?.combat?.monsterId || "";
-    const eqKey = JSON.stringify(state?.equipment || {});
+    const eqKey = JSON.stringify(state?.equipment || {}) + JSON.stringify(state?.pets || {});
     if (eqKey !== player.group.userData.eq) {
       player.group.userData.eq = eqKey;
       const oldW = player.group.userData.wander;
@@ -193,7 +193,7 @@ export function createWorld(canvas) {
         player.group.remove(oldW);
         oldW.traverse((c) => { if (c.geometry) c.geometry.dispose(); });
       }
-      const w = makeWanderer(state.equipment, CONTENT.items);
+      const w = makeWanderer(state.equipment, CONTENT.items, state.pets || {});
       w.scale.setScalar(0.82);
       player.group.add(w);
       player.group.userData.wander = w;
