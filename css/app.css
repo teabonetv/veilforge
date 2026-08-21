@@ -645,6 +645,18 @@ select, option {
   background: var(--panel-solid); border: 1px solid var(--gold-dim); border-radius: var(--r-lg);
   padding: 22px 26px; max-width: 440px; box-shadow: var(--shadow);
 }
+#wake-modal {
+  position: fixed; inset: 0; background: #0c0714e6; z-index: 95;
+  display: grid; place-items: center; padding: 16px;
+}
+#wake-modal[hidden] { display: none !important; }
+#wake-modal .sheet {
+  background: var(--panel-solid); border: 1px solid var(--gold-dim); border-radius: var(--r-lg);
+  padding: 26px 30px; max-width: 470px; box-shadow: var(--shadow); text-align: center;
+}
+.wake-sheet h3 { margin: 0 0 10px; letter-spacing: 0.08em; color: var(--gold); }
+.wake-sheet p { color: var(--muted); font-size: 13px; line-height: 1.55; margin: 8px 0; }
+.codex-acts .nudge { border-color: var(--gold-dim); box-shadow: 0 0 12px #d4af3726; }
 .links { font-size: 11px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 .links a { color: var(--gold); }
 .muted { color: var(--muted); font-size: 11px; }

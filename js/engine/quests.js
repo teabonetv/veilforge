@@ -144,6 +144,17 @@ function completeQuest(state, q) {
     for (const [sk, amt] of Object.entries(q.reward.xp)) addXp(state, sk, amt);
   }
   log(state, `Ledger sealed: ${q.name}`);
+  // Transient celebration payload; the shell toasts it once. Underscore keys
+  // never reach the save (persistable strips them).
+  state._sealSeq = (state._sealSeq || 0) + 1;
+  state._seal = {
+    seq: state._sealSeq,
+    id: q.id,
+    name: q.name,
+    coins: q.reward.coins || 0,
+    items: q.reward.items || [],
+    xp: q.reward.xp || null
+  };
 }
 
 export function questProgress(state, q) {
