@@ -89,13 +89,14 @@ button:disabled:not(.locked) {
 .vtile { position: relative; }
 #app {
   display: grid;
-  grid-template-areas: "top" "codex" "commit" "nav" "stage";
-  grid-template-rows: auto auto auto auto 1fr;
+  grid-template-areas: "top" "banner" "codex" "commit" "nav" "stage";
+  grid-template-rows: auto auto auto auto auto 1fr;
   height: 100%;
   min-height: 0;
   overflow: hidden;
 }
 #top { grid-area: top; }
+#eclipse-banner { grid-area: banner; }
 #codex { grid-area: codex; }
 #commit { grid-area: commit; }
 #desk-nav { grid-area: nav; }
@@ -121,6 +122,16 @@ button:disabled:not(.locked) {
   font-size: 9px;
   letter-spacing: 0.22em;
   margin-top: 3px;
+}
+.brand-col .links { margin-top: 7px; gap: 4px; }
+.brand-col .links button,
+.brand-col .links a {
+  background: transparent;
+  border-color: var(--line-soft);
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  padding: 3px 7px;
 }
 .pulse-col { min-width: 0; display: flex; flex-direction: column; gap: 6px; justify-content: center; position: relative; }
 #yield-hits {
@@ -170,6 +181,7 @@ button:disabled:not(.locked) {
 }
 #action-fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #4a3a88, var(--lilac)); }
 #action-fill.combat { background: linear-gradient(90deg, #5a2038, var(--rose)); }
+#action-wrap.quiet { opacity: 0.55; }
 #action-label {
   position: absolute; inset: 0; font-size: 11px;
   display: flex; align-items: center; justify-content: center;
@@ -230,6 +242,7 @@ select, option {
 }
 .bar.swing { height: 5px; margin-top: 3px; border-radius: var(--r-pill); }
 .bar.hp { height: 14px; }
+.bar.hp.foe { background: linear-gradient(90deg, #130b1f, #191029); }
 #hp-fill { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #8e3a58, var(--rose)); }
 #foe-fill { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #3a2a78, #8b7cff); }
 #you-swing, #foe-swing {
@@ -412,7 +425,7 @@ select, option {
   border: 1px solid var(--line-soft);
 }
 .mico.lg { width: 48px; height: 48px; margin: 4px 0; }
-.card .mico { margin-bottom: 4px; }
+.card .mico { width: 34px; height: 34px; margin-bottom: 5px; }
 .card.compact { min-height: 0; gap: 2px; padding: 8px 9px; }
 .card.compact strong { font-size: 13px; line-height: 1.25; }
 .card.compact .io-short { color: var(--lilac); font-size: 11px; }
@@ -498,6 +511,9 @@ select, option {
 .hunger-row button { font-size: 11px; }
 .heat { margin: 0 0 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--r-md); background: #181022; }
 .heat .xpbar { margin: 6px 0; }
+.potions { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0; }
+.acts { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; }
+.w-stars { color: var(--gold); letter-spacing: 0.2em; margin: 4px 0; }
 #commit.warn { color: var(--warn); }
 .blurb.warn { color: var(--warn); }
 .card.on {
@@ -647,6 +663,9 @@ select, option {
 #layout.away { display: none !important; }
 #wander-desk:not([hidden]), #bank-desk:not([hidden]), #stall-desk:not([hidden]) { display: grid; height: 100%; min-height: 0; }
 #bank-desk[hidden], #wander-desk[hidden], #stall-desk[hidden] { display: none !important; }
+#bank-desk { grid-template-rows: auto auto auto minmax(0, 1fr); }
+.vault-layout, .stall-layout { min-height: 0; }
+.vault-layout > *, .stall-layout > * { min-height: 0; }
 .desk-head { display: flex; gap: 12px; align-items: baseline; padding: 12px 16px 4px; }
 .desk-head h2 { margin: 0; font-size: 28px; }
 .desk-head p { color: var(--muted); margin: 0; }
@@ -818,8 +837,8 @@ select, option {
 }
 @media (max-width: 720px) {
   #app {
-    grid-template-areas: "top" "codex" "commit" "stage" "nav";
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-areas: "top" "banner" "codex" "commit" "stage" "nav";
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
   }
   #top {
     padding: 6px 10px 8px;
@@ -836,7 +855,8 @@ select, option {
     align-items: center;
   }
   .status-col #stop-all { display: none; }
-  .tempo-row { margin-left: auto; }
+  .tempo-row { margin-left: 0; }
+  #scale { max-width: 108px; }
   #food-chip, #spec-chip { max-width: 46%; font-size: 11px; min-height: 36px; }
   #desk-nav {
     flex-wrap: nowrap;
@@ -950,4 +970,119 @@ select, option {
 @media (prefers-reduced-motion: reduce) {
   .fight-board.telegraph { animation: none; }
   #yield-hits .drip.dusk { animation: none; }
+}
+
+/* --- Presentation polish: motion, focus, rarity rings, feedback --- */
+button, .card, .vtile, .ware, .comm, .pet-cell, .codex-cell, #skill-nav .skill {
+  transition: border-color 0.15s ease, background-color 0.15s ease,
+    box-shadow 0.15s ease, transform 0.15s ease, filter 0.15s ease, opacity 0.15s ease;
+}
+button:active:not(:disabled) { transform: translateY(1px); }
+button:focus-visible, .card:focus-visible, .vtile:focus-visible, .ware:focus-visible,
+summary:focus-visible, a:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+input:focus, select:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 2px #9b8cff2e;
+}
+@media (hover: hover) and (pointer: fine) {
+  .card:not(.locked):hover {
+    transform: translateY(-2px);
+    border-color: var(--lilac);
+    box-shadow: 0 10px 22px #05020c73;
+  }
+  .card:not(.locked):hover .pix { filter: brightness(1.16) saturate(1.12); }
+  .vtile:not(.locked):hover, .stall-tile:not(.locked):hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px #05020c73;
+  }
+  .vtile:hover .pix, .stall-tile:hover .pix { filter: brightness(1.16) saturate(1.12); }
+  .ware:not(.locked):not(:disabled):hover { border-color: var(--lilac); transform: translateX(2px); }
+  #skill-nav .skill:not(.locked):hover { background: #211533; }
+  #desk-nav button:hover { filter: brightness(1.14); }
+  .codex-cell:not(.found):hover { border-color: var(--line); }
+}
+#skill-nav .skill.on { background: #231537; }
+#desk-nav button.on { box-shadow: inset 0 -2px 0 var(--gold), 0 0 14px #e8c9a02b; }
+.card .pix, .vtile .pix, .ware .pix { filter: saturate(1.05) brightness(1.06); }
+
+/* Rarity rings — uniques and tiers read apart even at 28px. */
+.rar-glow.rare { box-shadow: 0 0 8px #8eb4ff3d; }
+.rar-glow.exotic { box-shadow: 0 0 9px #e8b86d4d; }
+.rar-glow.dusk { box-shadow: 0 0 11px #f0b7ff59; }
+
+/* Teaching "sink" lines deserve their own voice. */
+.sink {
+  border-left: 2px solid #4a3a78;
+  padding-left: 7px;
+  color: var(--lilac);
+}
+.guild b { color: var(--moon); font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.job-dock.idle {
+  border-style: dashed;
+  text-align: center;
+  align-items: center;
+  color: var(--muted);
+}
+
+#toast {
+  z-index: 120;
+  max-width: min(92vw, 520px);
+  text-align: center;
+}
+
+/* Coin feedback floats off the purse chip. */
+.chip.marks { position: relative; }
+.coindrip {
+  position: absolute;
+  left: 50%;
+  top: -4px;
+  transform: translateX(-50%);
+  pointer-events: none;
+  white-space: nowrap;
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--gold);
+  text-shadow: 0 2px 8px #05020c;
+  animation: drip-up 1.05s ease-out forwards;
+  z-index: 8;
+}
+.coindrip.neg { color: var(--rose); }
+
+#arena-hits .floater {
+  text-shadow: 0 1px 0 #05020c, 0 2px 10px #05020ccc;
+  will-change: transform, opacity;
+}
+
+/* Painted atlas cell as the skill heading mark. */
+.skill-head h2 { display: flex; align-items: center; gap: 10px; }
+.hico {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  overflow: hidden;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  flex-shrink: 0;
+  background: #120a1c;
+}
+.hico .pix { width: 100%; height: 100%; }
+
+.codex-cell.found { border-color: var(--gold-dim); }
+.codex-cell.found .dico.found { filter: drop-shadow(0 0 6px #e8c9a033); }
+
+* { scrollbar-width: thin; scrollbar-color: #2a1b3a transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #2a1b3a; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  .coindrip { animation: none; opacity: 0; }
+  button, .card, .vtile, .ware, .comm, .pet-cell, .codex-cell, #skill-nav .skill { transition: none; }
+  .card:not(.locked):hover, .vtile:not(.locked):hover, .stall-tile:not(.locked):hover { transform: none; }
 }
