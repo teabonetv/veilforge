@@ -111,10 +111,9 @@ export function renderDesks(ctx) {
   }
   document.querySelectorAll("#desk-nav [data-arg]").forEach((b) => {
     b.classList.toggle("on", b.dataset.arg === desk);
-    if (!b.querySelector(".pix")) {
-      const kind = b.dataset.arg === "stall" ? "coins" : b.dataset.arg === "bank" ? "pouch" : b.dataset.arg === "loadout" ? "saber" : b.dataset.arg === "codex" ? "tome" : "forge";
-      b.insertAdjacentHTML("afterbegin", `<span class="dico">${iconMarkup({ eid: "tab-" + b.dataset.arg, kind }, 28)}</span>`);
-    }
+    if (b.querySelector(".dico")) return;
+    const kind = b.dataset.arg === "stall" ? "coins" : b.dataset.arg === "bank" ? "pouch" : b.dataset.arg === "loadout" ? "saber" : b.dataset.arg === "codex" ? "tome" : "forge";
+    b.insertAdjacentHTML("afterbegin", `<span class="dico">${iconMarkup({ eid: "tab-" + b.dataset.arg, kind }, 28)}</span>`);
   });
   ctx.portraits?.sync?.(ctx);
 }

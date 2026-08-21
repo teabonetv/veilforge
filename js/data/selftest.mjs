@@ -757,6 +757,14 @@ test("C7 achievements table", () => {
   if (ACHIEVEMENTS.length < 100) throw new Error("need ~100 diaries: " + ACHIEVEMENTS.length);
 });
 
+test("desk icons paint pix once", () => {
+  const kinds = ["forge", "pouch", "coins", "saber", "tome"];
+  for (const kind of kinds) {
+    const html = iconMarkup({ kind }, 28);
+    if (!html.includes("class=\"pix")) throw new Error("desk kind " + kind + " fell back to SVG and would stack in #desk-nav");
+  }
+});
+
 test("F3 import does not patch Math.random", () => {
   const href = new URL("../engine/state.js", import.meta.url).href;
   const r = spawnSync(process.execPath, ["--input-type=module", "-e", `

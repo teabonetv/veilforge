@@ -37,7 +37,7 @@ const KIND_CELL = {
   "beast-drake": ["beasts", 1, 2], "beast-serpent": ["beasts", 2, 2], "beast-wraith": ["beasts", 3, 2], "beast-stag": ["beasts", 4, 2],
   "beast-brute": ["beasts", 5, 2], "beast-might": ["beasts", 0, 3], "beast-mark": ["beasts", 1, 3], "beast-weave": ["beasts", 2, 3],
   "boss-cultist": ["beasts", 3, 3], "boss-ghoul": ["beasts", 4, 3], "boss-troll": ["beasts", 5, 3], "boss-oath": ["beasts", 0, 4],
-  "boss-codex": ["beasts", 1, 4], "boss-ledger": ["beasts", 2, 4], "boss-crab": ["beasts", 3, 4], "boss-hydra": ["beasts", 4, 4],
+  "boss-codex": ["beasts", 1, 4], tome: ["beasts", 1, 4], "boss-ledger": ["beasts", 2, 4], "boss-crab": ["beasts", 3, 4], "boss-hydra": ["beasts", 4, 4],
   "boss-drake": ["beasts", 5, 4], "boss-colossus": ["beasts", 0, 5],
   "gate-vault": ["gates", 0, 0], "gate-sewer": ["gates", 1, 0], "gate-fen": ["gates", 2, 0], "gate-spire": ["gates", 3, 0],
   "gate-pyre": ["gates", 0, 1], "gate-keep": ["gates", 1, 1], "gate-well": ["gates", 2, 1], "gate-heart": ["gates", 3, 1],
@@ -253,6 +253,7 @@ function drawKind(kind, seed, fill, deep, gold) {
     case "boss-oath":
       return bg + `<rect x="20" y="16" width="24" height="36" fill="${fill}"/><path d="M32 8 L40 20 L24 20 Z" fill="${gold}"/>`;
     case "boss-codex":
+    case "tome":
       return bg + `<rect x="16" y="14" width="32" height="40" fill="${gold}"/><rect x="20" y="18" width="24" height="32" fill="${fill}"/>`;
     case "boss-ledger":
       return bg + `<rect x="12" y="16" width="40" height="36" fill="${fill}"/><line x1="18" y1="26" x2="46" y2="26" stroke="${gold}" stroke-width="3"/><line x1="18" y1="36" x2="46" y2="36" stroke="${gold}" stroke-width="3"/>`;
