@@ -50,10 +50,10 @@ export const XP_TABLE = Array.from({ length: 121 }, (_, i) => xpForLevel(i));
 export const MAX_LEVEL = 120;
 
 export const MASTERY_MILESTONES = {
-  25: { label: "Practised", batchBonus: 1 },
-  50: { label: "Seasoned", speed: 0.04 },
-  75: { label: "Master", preserve: 0.03 },
-  100: { label: "Legend", rare: 0.05 }
+  25: { label: "Practised", xp: 0.01 },
+  50: { label: "Seasoned", speed: 0.04, xp: 0.02 },
+  75: { label: "Master", preserve: 0.03, xp: 0.03 },
+  100: { label: "Legend", rare: 0.05, xp: 0.05 }
 };
 
 export function echoMonster(depth) {

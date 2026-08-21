@@ -2,10 +2,11 @@ import { CONTENT, masteryLevel } from "./state.js";
 import { logbookStats, ensureLogbook } from "./logbook.js";
 
 export const STANDING_TIERS = [
-  { pct: 25, allXp: 0.02, label: "Citadel Page" },
-  { pct: 50, rare: 0.03, label: "Citadel Scribe" },
-  { pct: 75, speed: 0.03, label: "Citadel Warden" },
-  { pct: 100, allXp: 0.05, rare: 0.05, label: "Last Standard" }
+  { pct: 10, pawn: 0.02, label: "Citadel Errand" },
+  { pct: 25, allXp: 0.02, pawn: 0.02, label: "Citadel Page" },
+  { pct: 50, rare: 0.03, pawn: 0.03, label: "Citadel Scribe" },
+  { pct: 75, speed: 0.03, pawn: 0.03, label: "Citadel Warden" },
+  { pct: 100, allXp: 0.05, rare: 0.05, pawn: 0.05, offHours: 1, label: "Last Standard" }
 ];
 
 export function collectUniqueIds(content = CONTENT) {
@@ -75,12 +76,14 @@ export function standingRank(state) {
 
 export function standingBonuses(state) {
   const pct = ledgerStats(state).completionPct;
-  const acc = { allXp: 0, rare: 0, speed: 0, label: "Unremembered" };
+  const acc = { allXp: 0, rare: 0, speed: 0, pawn: 0, offHours: 0, label: "Unremembered" };
   for (const t of STANDING_TIERS) {
     if (pct >= t.pct) {
       acc.allXp += t.allXp || 0;
       acc.rare += t.rare || 0;
       acc.speed += t.speed || 0;
+      acc.pawn += t.pawn || 0;
+      acc.offHours += t.offHours || 0;
       acc.label = t.label;
     }
   }

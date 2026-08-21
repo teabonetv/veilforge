@@ -7,7 +7,7 @@ import { needsWelcome, toolNudge, beatWhy, sealCopy } from "../engine/onboard.js
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
 import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf, onStallSearch, onStallBooth, onStallPick, onStallPacks, stallPackCount, currentStallBooth, currentStallFilter, onCodexTab } from "./desks.js";
 import { iconMarkup, SKILL_ICON_KIND } from "../scene/icons.js";
-import { QUAY_BOOTHS, inferBooth, offerModel, quayDeal, offerName as stallOfferName, offerPrice, pawnRate, quayCommissions, vaultFenceRate } from "../engine/market.js";
+import { QUAY_BOOTHS, inferBooth, offerModel, quayDeal, offerName as stallOfferName, offerPrice, pawnRate, isHungerItem, plainStock, quayCommissions, vaultFenceRate } from "../engine/market.js";
 import { ledgerStats, standingBonuses } from "../engine/ledger.js";
 import { weeklyEclipse } from "../engine/eclipse.js";
 import { standingCopy, ensureOrders } from "../engine/orders.js";
@@ -209,13 +209,12 @@ function handle(ctx, act, arg, el) {
     case "sell": { const c0 = state.coins; sellItems(state, arg, 1); coinDrip(state.coins - c0); ctx.render(); break; }
     case "sell-all": { const c0 = state.coins; sellItems(state, arg, "all"); coinDrip(state.coins - c0); ctx.render(); break; }
     case "quay-pawn": {
-      const deal = quayDeal();
       const it = CONTENT.items[arg];
-      if (!it || (it.category !== deal.hunger && it.id !== deal.hunger)) {
-        toast(ctx, "The quay is not hungry for that this watch.");
+      if (!it || !bankCount(state, arg)) {
+        toast(ctx, "Nothing on that hook.");
         break;
       }
-      { const c0 = state.coins; err(sellItems(state, arg, "all", { rate: pawnRate(), quay: true })); coinDrip(state.coins - c0); }
+      { const c0 = state.coins; const rate = state.rules?.mode === "iron" ? 0.4 : pawnRate(state, it); err(sellItems(state, arg, "all", { rate, quay: true })); coinDrip(state.coins - c0); }
       ctx.render();
       break;
     }
@@ -1021,12 +1020,18 @@ function renderDawn(ctx) {
   if (shownDawn === key && !el.hidden) return;
   shownDawn = key;
   el.hidden = false;
+  const rareTxt = (off.rares || []).map((r) => `${escapeHtml(r.name)}${r.n > 1 ? ` ×${r.n}` : ""}`).join(" · ");
+  const goals = (off.goals || []).map((g) => `${escapeHtml(g.name)} (${Math.round(g.cost).toLocaleString()})`).join(" · ");
   el.innerHTML = `<div class="sheet dawn-sheet">
     <h3>Dawn over the workshop</h3>
     <p>The citadel kept the fire. You were gone ${off.minutes || 0} minutes.</p>
     <p><strong>${escapeHtml(off.job || "no committed job")}</strong></p>
-    <p class="muted">${off.actions || 0} actions · ${off.kills || 0} kills · food used ${off.foodUsed || 0}${off.huntPaused ? " · hunt paused" : ""}${off.truncated ? " · remainder bulk-settled" : ""}</p>
+    <p class="muted">${off.actions || 0} actions · ${off.kills || 0} kills · food used ${off.foodUsed || 0}${off.coins ? ` · +${Number(off.coins).toLocaleString()} veilmarks` : ""}${off.huntPaused ? " · hunt paused" : ""}${off.truncated ? " · remainder bulk-settled" : ""}</p>
+    ${rareTxt ? `<p class="muted">Overnight rares: ${rareTxt}</p>` : ""}
+    ${off.capped ? `<p class="lock-why">The dusk kept only its share of the night. Deep Rest and Citadel standing extend the window.</p>` : ""}
+    ${off.halt ? `<p class="lock-why">${escapeHtml(off.halt)}</p>` : ""}
     <p class="muted">Plots ready ${off.plotsReady || 0} · pens ready ${off.pensReady || 0}</p>
+    ${goals ? `<p class="blurb">Next purse goals: ${goals}</p>` : ""}
     <button type="button" data-act="dawn-ack">Take the ledger</button>
   </div>`;
   trapModal(el);
@@ -1357,7 +1362,7 @@ function renderJobDock(ctx, a) {
       ${ins ? `<span class="in">In ${ins}</span>` : `<span class="in">No inputs — this is an idle node.</span>`}
       ${outs ? `<span class="out">Out ${outs}</span>` : ""}
     </div>
-    <span>Mastery ${ml} · +${(mb.speed * 100).toFixed(1)}% speed · +${(mb.preserve * 100).toFixed(1)}% preserve · checkpoint ${cp} · ×${n} done${mileLine ? ` · ${mileLine}` : ""}</span>
+    <span>Mastery ${ml} · +${(mb.speed * 100).toFixed(1)}% speed · +${(mb.preserve * 100).toFixed(1)}% preserve${mb.xp ? ` · +${(mb.xp * 100).toFixed(1)}% xp` : ""} · checkpoint ${cp} · ×${n} done${mileLine ? ` · ${mileLine}` : ""}</span>
     <div class="mode-row">${modeRow}</div>
     ${canRenew ? `<button type="button" class="primary" data-act="rite" data-arg="${a.skill}">Vow Renewal — reset levels, keep mastery</button>` : ""}
     <div class="orders-row">${orderRow}</div>
@@ -1805,7 +1810,8 @@ function renderQuests(ctx) {
       </button>`;
     }).join("")}</div>
   </div>`;
-  document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length} · ${escapeHtml(standingBonuses(state).label)} · LOG ${ls.log.totalPct}%</p>${petGrid}`;
+  const sb = standingBonuses(state);
+  document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length} · ${escapeHtml(sb.label)}${sb.pawn ? ` · quay favour +${Math.round(sb.pawn * 100)}%` : ""}${sb.offHours ? ` · +${sb.offHours}h rest` : ""} · LOG ${ls.log.totalPct}%</p>${petGrid}`;
   const badge = document.getElementById("ledger-count");
   if (badge) badge.textContent = `${ls.completionPct}%`;
 }

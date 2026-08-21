@@ -718,12 +718,20 @@ function kill(state, m) {
       const rar = rarityOf(CONTENT.items[d.item] || d);
       state._pendingYield = state._pendingYield || [];
       state._dripTag = rar.id === "common" ? state._dripTag : rar.id;
+      if (state._offlineSim && rar.id !== "common") {
+        const tally = state._offRares || (state._offRares = {});
+        tally[d.item] = (tally[d.item] || 0) + qty;
+      }
     }
   }
   if (m.unique && Math.random() < m.unique.chance) {
     stashItem(state, m.unique.item, 1, "unique drop");
     log(state, `Unique: ${CONTENT.items[m.unique.item]?.name}`);
     state._dripTag = rarityOf(CONTENT.items[m.unique.item] || { rarity: "exotic" }).id;
+    if (state._offlineSim) {
+      const tally = state._offRares || (state._offRares = {});
+      tally[m.unique.item] = (tally[m.unique.item] || 0) + 1;
+    }
   }
   noteMonster(state, m.id);
   gradeKill(state, m, {

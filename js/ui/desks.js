@@ -4,7 +4,7 @@ import { playerStats, equipItem, gearSetInfo } from "../engine/combat.js";
 import { silhouetteStyle } from "../scene/models.js";
 import { iconMarkup } from "../scene/icons.js";
 import { escapeHtml } from "../util/text.js";
-import { QUAY_BOOTHS, inferBooth, offerModel, offerName, quayDeal, offerPrice, quayGossip, hungerStacks, pawnRate, quayCommissions } from "../engine/market.js";
+import { QUAY_BOOTHS, inferBooth, offerModel, offerName, quayDeal, offerPrice, quayGossip, hungerStacks, plainStock, pawnRate, isHungerItem, quayCommissions } from "../engine/market.js";
 import { glyphMarks, glyphLock } from "./glyphs.js";
 import { ledgerStats, collectUniqueIds } from "../engine/ledger.js";
 import { logbookStats } from "../engine/logbook.js";
@@ -13,6 +13,7 @@ import { currentCommission } from "../engine/commissions.js";
 import { fetchScores } from "../engine/scores.js";
 import { rarityOf } from "../content/rarity.js";
 import { deedMedals } from "../engine/deeds.js";
+import { weeklyEclipse } from "../engine/eclipse.js";
 
 const SLOTS = [
   { id: "helm", label: "Hood", side: "left", i: 0 },
@@ -388,14 +389,20 @@ export function renderStall(ctx) {
   if (watch) {
     const gossip = quayGossip(state).map((l) => `<p>${escapeHtml(l)}</p>`).join("");
     const hungry = hungerStacks(state, deal.hunger);
-    const pawn = hungry.length
-      ? `<div class="hunger-row">${hungry.slice(0, 6).map((h) => `<button type="button" data-act="quay-pawn" data-arg="${h.id}">Pawn ${escapeHtml(h.it.name)} ×${h.n} @ ${Math.round(pawnRate() * 100)}%</button>`).join("")}</div>`
+    const plain = plainStock(state, deal.hunger);
+    const hungerRow = hungry.length
+      ? `<div class="hunger-row">${hungry.slice(0, 6).map((h) => `<button type="button" data-act="quay-pawn" data-arg="${h.id}">Pawn ${escapeHtml(h.it.name)} ×${h.n} @ ${Math.round(pawnRate(state, h.it) * 100)}%</button>`).join("")}</div>`
       : `<p class="muted">No ${deal.hunger} in the vault for the hunger. Chop, mine, or fish — then the quay pays.</p>`;
+    const plainRow = plain.length
+      ? `<div class="hunger-row">${plain.map((h) => `<button type="button" data-act="quay-pawn" data-arg="${h.id}">Pawn ${escapeHtml(h.it.name)} ×${h.n} @ ${Math.round(pawnRate(state, h.it) * 100)}%</button>`).join("")}</div>`
+      : "";
+    const dearNote = deal.dear ? `<span> · also on the lantern: <em>${escapeHtml(offerName(deal.dear))}</em></span>` : "";
     watch.innerHTML = `<div class="quay-banner">
-      <div><strong>${escapeHtml(deal.watch)}</strong>${deal.offer ? ` · lantern price on <em>${escapeHtml(offerName(deal.offer))}</em> (−${Math.round((1 - deal.mul) * 100)}%)` : ""}</div>
+      <div><strong>${escapeHtml(deal.watch)}</strong>${deal.offer ? ` · lantern price on <em>${escapeHtml(offerName(deal.offer))}</em> (−${Math.round((1 - deal.mul * (weeklyEclipse().quayMul || 1)) * 100)}%)` : ""}${dearNote}</div>
       ${gossip}
-      <p class="muted">Hunger: they want <strong>${deal.hunger}</strong> this calendar dusk. Vault fence starts at 40% and falls on high-tier junk. The quay pays ${Math.round(pawnRate() * 100)}%.</p>
-      ${pawn}
+      <p class="muted">Hunger: they want <strong>${deal.hunger}</strong> this calendar dusk and pay a premium for it. Vault fence starts at 40% and falls on high-tier junk; the quay never pays less than ${Math.round(pawnRate(state) * 100)}%.</p>
+      ${hungerRow}
+      ${plainRow}
       ${commissionRow(state)}
       ${workshopBoard(state)}
     </div>`;
@@ -493,7 +500,7 @@ export function inspectModelOf() {
 }
 
 function commissionRow(state) {
-  const jobs = quayCommissions();
+  const jobs = quayCommissions(state);
   const rows = jobs.map((j) => {
     const done = !!state.shopBought?.[j.id];
     const have = state.bank[j.need.item] || 0;
@@ -504,7 +511,7 @@ function commissionRow(state) {
       <span>${j.need.qty} ${escapeHtml(it?.name || j.need.item)} (have ${have}) · underwrite ${glyphMarks(11)} ${j.cost.toLocaleString()} · purse ${j.pay.toLocaleString()}</span>
     </button>`;
   }).join("");
-  return `<div class="commissions"><h4>Dusk commissions</h4><p class="muted">Rotating indentures. Pay the underwrite, deliver the goods, take the purse.</p>${rows}</div>`;
+  return `<div class="commissions"><h4>Dusk commissions</h4><p class="muted">Rotating indentures — deeper acts unlock richer hulls. Pay the underwrite, deliver the goods, take the purse.</p>${rows}</div>`;
 }
 
 function workshopBoard(state) {
@@ -512,9 +519,11 @@ function workshopBoard(state) {
   const lines = c.requires.map((r) => `${bankCount(state, r.item)}/${r.qty} ${escapeHtml(CONTENT.items[r.item]?.name || r.item)}`).join(" · ");
   const ready = c.requires.every((r) => bankCount(state, r.item) >= r.qty);
   const done = state.commissions?.lastDay === c.day;
+  const streak = state.commissions?.streak || 0;
   return `<div class="commissions"><h4>Workshop indenture</h4>
     <p>${escapeHtml(c.name)} · ${c.pays.toLocaleString()} veilmarks</p>
     <p class="muted">${lines}</p>
+    ${!done && streak > 0 ? `<p class="muted">Streak ${streak} — deliver again tomorrow for +${Math.min(40, streak * 10)}%.</p>` : ""}
     <button type="button" class="primary" data-act="workshop" ${ready && !done ? "" : "disabled"}>${done ? "Delivered today" : "Deliver"}</button>
   </div>`;
 }
