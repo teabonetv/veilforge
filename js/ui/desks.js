@@ -143,7 +143,7 @@ function renderVault(ctx) {
       : held.map(([id]) => CONTENT.items[id]).filter(Boolean);
     if (vaultCat !== "held" && vaultCat !== "all") list = list.filter((it) => catOf(it) === vaultCat || it.category === vaultCat);
     if (vaultFilter) list = list.filter((it) => `${it.name} ${it.voice}`.toLowerCase().includes(vaultFilter));
-    tiles = list.map((it) => tile("item", it.id, it.name, bankCount(state, it.id), it.model)).join("");
+    tiles = list.map((it) => tile("item", it.id, it.name, bankCount(state, it.id), it.model, "", `var(${rarityOf(it).token})`)).join("");
   } else if (vaultLens === "monsters") {
     let list = Object.values(CONTENT.monsters);
     if (vaultFilter) list = list.filter((m) => `${m.name} ${m.area}`.toLowerCase().includes(vaultFilter));
@@ -157,7 +157,7 @@ function renderVault(ctx) {
     tiles = ids.map((id) => {
       const it = CONTENT.items[id];
       const found = !!(ctx.state.logbook?.items?.[id] || bankCount(ctx.state, id));
-      return tile("item", id, found ? (it?.name || id) : "????", found ? (bankCount(ctx.state, id) || 1) : 0, it?.model, found ? "" : "locked logslot");
+      return tile("item", id, found ? (it?.name || id) : "????", found ? (bankCount(ctx.state, id) || 1) : 0, it?.model, found ? "" : "locked logslot", found && it ? `var(${rarityOf(it).token})` : "");
     }).join("");
   } else if (vaultLens === "quests") {
     tiles = CONTENT.quests.map((q) => {
@@ -186,10 +186,10 @@ function renderVault(ctx) {
   renderInspect(ctx);
 }
 
-function tile(kind, id, name, qty, model, extra = "") {
+function tile(kind, id, name, qty, model, extra = "", rarToken = "") {
   const st = silhouetteStyle(model || {});
   const on = vaultPick.kind === kind && vaultPick.id === id ? "on" : "";
-  return `<button type="button" class="vtile ${on} ${extra}" data-act="vault-pick" data-kind="${kind}" data-arg="${id}" style="background-color:#12081a;border-color:${st.borderColor}">
+  return `<button type="button" class="vtile ${on} ${extra}" data-act="vault-pick" data-kind="${kind}" data-arg="${id}" style="background-color:#12081a;border-color:${rarToken || st.borderColor}">
     <span class="vico">${iconMarkup(model || {}, 48)}</span>
     ${extra.includes("locked") ? `<span class="lock-corner">${glyphLock(10)}</span>` : ""}
     <span class="vqty">${qty ? qty.toLocaleString() : ""}</span>
@@ -209,7 +209,7 @@ function renderInspect(ctx) {
       <p class="temper">${it.temper} · ${it.catalogName || ""}</p>
       <blockquote>${it.voice}</blockquote>
       <p class="blurb">${it.desc || ""}</p>
-      <p class="muted">${it.category}${it.slot ? " · " + it.slot : ""} · ${n.toLocaleString()} held · ${glyphMarks(11)} ${it.value || 0} · ${rarityOf(it).name}</p>
+      <p class="muted">${it.category}${it.slot ? " · " + it.slot : ""} · ${n.toLocaleString()} held · ${glyphMarks(11)} ${it.value || 0} · <span style="color:var(${rarityOf(it).token})">${rarityOf(it).name}</span></p>
       ${it.stats ? `<p class="muted">Acc ${it.stats.acc || 0} · Str ${it.stats.str || 0} · Ranged ${it.stats.ranged || 0} · Magic ${it.stats.magic || 0} · Def ${it.stats.def || 0} · HP ${it.stats.hp || 0}</p>` : ""}
       ${it.heal ? `<p class="muted">Heals ${it.heal}</p>` : ""}
       ${it.special ? `<p class="muted">Special ${it.special}</p>` : ""}
@@ -402,8 +402,8 @@ export function renderStall(ctx) {
   }
   const booths = document.getElementById("stall-booths");
   if (booths) {
-    booths.innerHTML = QUAY_BOOTHS.map((b) => `<button type="button" class="${b.id === stallBooth ? "on" : ""}" data-act="stall-booth" data-arg="${b.id}">
-      <span class="dico">${iconMarkup({ kind: b.kind, hue: 40, seed: 2 }, 22)}</span>${b.name}
+    booths.innerHTML = QUAY_BOOTHS.map((b, i) => `<button type="button" class="${b.id === stallBooth ? "on" : ""}" data-act="stall-booth" data-arg="${b.id}">
+      <span class="dico">${iconMarkup({ kind: b.kind, hue: (40 + i * 47) % 360, seed: 2 + i }, 22)}</span>${b.name}
     </button>`).join("");
   }
   let list = CONTENT.shop.filter((o) => inferBooth(o) === stallBooth);

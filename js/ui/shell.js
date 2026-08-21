@@ -16,7 +16,7 @@ import { wearTitle } from "../engine/achievements.js";
 import { rarityOf } from "../content/rarity.js";
 import { mechanicOf } from "../content/mechanics.js";
 import { deedMedals } from "../engine/deeds.js";
-import { glyphLock, glyphMarks } from "./glyphs.js";
+import { glyphLock, glyphMarks, glyphBowl } from "./glyphs.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -165,10 +165,13 @@ function handle(ctx, act, arg, el) {
       state._deathSheet = null;
       ctx.render();
       break;
-    case "commission":
+    case "commission": {
+      const c0 = state.coins;
       err(fulfillCommission(state, arg));
+      coinDrip(state.coins - c0);
       ctx.render();
       break;
+    }
     case "compost":
       setUseCompost(state, !!el.checked);
       ctx.render();
@@ -199,9 +202,9 @@ function handle(ctx, act, arg, el) {
     case "feed": err(feedPen(state, +arg)); ctx.render(); break;
     case "bounty": err(rollBounty(state)); ctx.render(); break;
     case "bury": err(buryBones(state)); ctx.render(); break;
-    case "buy": err(buyShop(state, arg, stallPackCount())); ctx.render(); break;
-    case "sell": sellItems(state, arg, 1); ctx.render(); break;
-    case "sell-all": sellItems(state, arg, "all"); ctx.render(); break;
+    case "buy": { const c0 = state.coins; err(buyShop(state, arg, stallPackCount())); coinDrip(state.coins - c0); ctx.render(); break; }
+    case "sell": { const c0 = state.coins; sellItems(state, arg, 1); coinDrip(state.coins - c0); ctx.render(); break; }
+    case "sell-all": { const c0 = state.coins; sellItems(state, arg, "all"); coinDrip(state.coins - c0); ctx.render(); break; }
     case "quay-pawn": {
       const deal = quayDeal();
       const it = CONTENT.items[arg];
@@ -209,7 +212,7 @@ function handle(ctx, act, arg, el) {
         toast(ctx, "The quay is not hungry for that this watch.");
         break;
       }
-      err(sellItems(state, arg, "all", { rate: pawnRate(), quay: true }));
+      { const c0 = state.coins; err(sellItems(state, arg, "all", { rate: pawnRate(), quay: true })); coinDrip(state.coins - c0); }
       ctx.render();
       break;
     }
@@ -306,10 +309,13 @@ function handle(ctx, act, arg, el) {
       err(setActionMode(state, selectedSkill, arg));
       ctx.render();
       break;
-    case "workshop":
+    case "workshop": {
+      const c0 = state.coins;
       err(deliverCommission(state));
+      coinDrip(state.coins - c0);
       ctx.render();
       break;
+    }
     case "wear-title":
       err(wearTitle(state, arg));
       ctx.render();
@@ -432,6 +438,23 @@ function glyph(model, cls = "mico") {
   return `<span class="${cls}">${iconMarkup(model || {}, 48)}</span>`;
 }
 
+function glyphRar(it, cls = "mico") {
+  const rar = rarityOf(it);
+  const glow = ["rare", "exotic", "dusk"].includes(rar.id) ? ` rar-glow ${rar.id}` : "";
+  return `<span class="${cls}${glow}" style="border-color:var(${rar.token})">${iconMarkup(it?.model || {}, 48)}</span>`;
+}
+
+function coinDrip(delta) {
+  const chip = document.querySelector(".status-col .chip.marks");
+  if (!chip || !delta) return;
+  const el = document.createElement("span");
+  el.className = `coindrip${delta < 0 ? " neg" : ""}`;
+  const n = Math.abs(Math.round(delta)).toLocaleString();
+  el.innerHTML = `${delta > 0 ? "+" : "−"}${n} ${glyphMarks(11)}`;
+  chip.appendChild(el);
+  setTimeout(() => el.remove(), 1100);
+}
+
 export function renderShell(ctx) {
   const { state, root } = ctx;
   const left = SKILLS.map((s) => {
@@ -502,7 +525,7 @@ function renderTop(ctx) {
   if (foodEl) {
     const nm = CONTENT.items[foodId]?.name || "No food";
     const heal = CONTENT.items[foodId]?.heal;
-    foodEl.textContent = foodId ? `🍽 ${foodN} ${nm}${heal ? ` +${heal}` : ""}` : "🍽 No food set";
+    foodEl.innerHTML = `${glyphBowl(12)} <span>${foodId ? `${foodN} ${escapeHtml(nm)}${heal ? ` +${heal}` : ""}` : "No food set"}</span>`;
     foodEl.style.color = foodN <= 3 ? "var(--rose)" : "";
   }
 
@@ -518,9 +541,11 @@ function renderTop(ctx) {
   const act = state.action;
   const bar = document.getElementById("action-fill");
   const lab = document.getElementById("action-label");
+  const wrapEl = document.getElementById("action-wrap");
   const m = state.combat.fighting && CONTENT.monsters[state.combat.monsterId];
 
   if (m) {
+    wrapEl?.classList.remove("quiet");
     duel?.classList.remove("idle");
     if (state._killFlash && Date.now() - state._killFlash < 900) duel?.classList.add("kill");
     else duel?.classList.remove("kill");
@@ -537,6 +562,7 @@ function renderTop(ctx) {
     bar.style.width = `${duelSwing(now, state.combat.nextHitAt, playerInterval(state))}%`;
     bar.classList.add("combat");
   } else {
+    wrapEl?.classList.toggle("quiet", !act);
     duel?.classList.add("idle");
     duel?.classList.toggle("kill", !!(state._killFlash && Date.now() - state._killFlash < 900));
     document.getElementById("foe-tag").textContent = "No foe";
@@ -553,7 +579,7 @@ function renderTop(ctx) {
       bar.style.width = pct + "%";
       bar.classList.remove("combat");
     } else {
-      lab.textContent = "Idle — one craft or one war. Halt to change.";
+      lab.textContent = "Idle — pick a job, or Halt to switch.";
       bar.style.width = "0%";
       bar.classList.remove("combat");
     }
@@ -587,9 +613,14 @@ function renderTop(ctx) {
       const report = off
         ? ` <button type="button" data-act="offline-ack">Offline: ${off.minutes}m · ${off.job} · ${off.actions} actions${off.huntPaused ? " · hunt paused" : ""} · ${off.plotsReady} plots ready · ${off.pensReady} pens ready — dismiss</button>`
         : "";
-      const gq = firstHourBeat(state)?.q || CONTENT.quests.find((x) => x.id === state.quests.active[0]);
-      const hint = gq ? `${gq.how || gq.desc}` : "Select Timber, pick the first grove, then press Idle this job.";
-      commit.innerHTML = `<b>Do this:</b> ${escapeHtml(hint)}${report}`;
+      const goalVisible = codexOpen;
+      if (goalVisible) {
+        commit.innerHTML = `<b>Workshop quiet.</b> One craft or one war. Soil and Drove still tick.${report}`;
+      } else {
+        const gq = firstHourBeat(state)?.q || CONTENT.quests.find((x) => x.id === state.quests.active[0]);
+        const hint = gq ? `${gq.how || gq.desc}` : "Select Timber, pick the first grove, then press Idle this job.";
+        commit.innerHTML = `<b>Do this:</b> ${escapeHtml(hint)}${report}`;
+      }
       commit.className = off ? "warn" : "idle";
     }
   }
@@ -601,6 +632,9 @@ function renderTop(ctx) {
     if (f) {
       const el = document.createElement("span");
       el.className = `floater ${f.foe ? "foe" : "you"}`;
+      el.style.left = `${(f.foe ? 58 : 28) + (Math.random() * 10 - 5)}%`;
+      el.style.top = `calc(${(f.foe ? 38 : 42) + (Math.random() * 8 - 4)}% + ${(Math.random() * 14 - 7) | 0}px)`;
+      el.style.fontSize = `${18 + Math.min(16, Math.floor((f.n || 0) / 4))}px`;
       el.textContent = `${f.foe ? "-" : "+"}${f.n}`;
       hits.appendChild(el);
       setTimeout(() => el.remove(), 750);
@@ -1036,7 +1070,7 @@ function renderCenter(ctx) {
   document.getElementById("center").innerHTML = `
     <div class="skill-head">
       <div>
-        <h2>${sk.icon} ${sk.name} <em>${lv}</em></h2>
+        <h2><span class="hico">${iconMarkup({ kind: SKILL_ICON_KIND[sk.id] || "material", hue: 40 + SKILLS.indexOf(sk) * 17, seed: SKILLS.indexOf(sk) + 3 }, 34)}</span><span>${sk.name}</span> <em>${lv}</em></h2>
         <p class="blurb">${sk.blurb}</p>
         ${pipeline ? `<p class="sink">${pipeline}</p>` : ""}
         ${nextLine}
@@ -1044,7 +1078,7 @@ function renderCenter(ctx) {
       <div class="xpbar"><i style="width:${pct}%"></i><span>${Math.floor(xp).toLocaleString()} / ${next.toLocaleString()} xp</span></div>
     </div>
     ${lockBanner}
-    <div class="guild">Pool ${state.skills[sk.id].pool || 0} · spend it on one node, not all of them · Guild ${guild}/10 ${gtask ? `· ${gtask.name}: ${state.skills[sk.id].guildProgress.toLocaleString()} / ${gtask.need.toLocaleString()} · ${gtask.bonus.label}` : "· Maxed"}</div>
+    <div class="guild">Pool <b>${state.skills[sk.id].pool || 0}</b> · spend it on one node, not all of them · Guild <b>${guild}/10</b> ${gtask ? `· ${gtask.name}: <b>${state.skills[sk.id].guildProgress.toLocaleString()} / ${gtask.need.toLocaleString()}</b> · ${gtask.bonus.label}` : "· Maxed"}</div>
     ${body}
   `;
 }
@@ -1598,7 +1632,7 @@ function renderBank(ctx) {
       const eq = it.category === "equipment" || it.category === "ammo" || it.category === "tool";
       const stackVal = (it.value || 0) * n;
       return `<div class="brow" title="${it.desc || ""}">
-        ${glyph(it.model, "bico")}
+        ${glyphRar(it, "bico")}
         <span class="nm">${it.name}</span>
         <span class="qty">${n.toLocaleString()}</span>
         <span class="val">${glyphMarks(11)} ${stackVal.toLocaleString()} · ${it.category}</span>

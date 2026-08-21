@@ -11,6 +11,11 @@ export function glyphVs(size = 18) {
   return `<svg class="gly vs" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
 
+/** Bowl for the food chip — replaces the emoji, stays on-glyph. */
+export function glyphBowl(size = 12) {
+  return `<svg class="gly bowl" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true"><path d="M2.2 8.4h11.6a5.8 5.8 0 0 1-11.6 0Z" fill="currentColor"/><path d="M6.4 6.2V4.9A1.7 1.7 0 0 1 8.1 3.2h1" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+}
+
 export function marksLabel(n) {
   return `${glyphMarks(11)} ${Math.floor(n).toLocaleString()}`;
 }
