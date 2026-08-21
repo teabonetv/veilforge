@@ -1,10 +1,11 @@
-import { wandererRanks, gearSet, weightKg } from "../engine/wanderer.js";
+import { wandererRanks, weightKg } from "../engine/wanderer.js";
 import { CONTENT, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, bankCap, bankUsed, bankValue } from "../engine/state.js";
-import { playerStats, equipItem } from "../engine/combat.js";
+import { playerStats, equipItem, gearSetInfo } from "../engine/combat.js";
 import { silhouetteStyle } from "../scene/models.js";
 import { iconMarkup } from "../scene/icons.js";
 import { escapeHtml } from "../util/text.js";
-import { QUAY_BOOTHS, inferBooth, offerModel, offerName, quayDeal, offerPrice, quayGossip, hungerStacks, pawnRate } from "../engine/market.js";
+import { QUAY_BOOTHS, inferBooth, offerModel, offerName, quayDeal, offerPrice, quayGossip, hungerStacks, pawnRate, quayCommissions } from "../engine/market.js";
+import { glyphMarks, glyphLock } from "./glyphs.js";
 
 const SLOTS = [
   { id: "helm", label: "Hood", side: "left", i: 0 },
@@ -138,9 +139,15 @@ function renderVault(ctx) {
       .filter((d) => !vaultFilter || d.name.toLowerCase().includes(vaultFilter))
       .map((d) => tile("dungeon", d.id, d.name, (state.combat.dungeonClears || {})[d.id] || 0, d.model)).join("");
   } else if (vaultLens === "pets") {
-    tiles = CONTENT.pets
-      .filter((p) => !vaultFilter || p.name.toLowerCase().includes(vaultFilter))
-      .map((p) => tile("pet", p.id, p.name, state.pets?.[p.id] ? 1 : 0, p.model)).join("");
+    const owned = CONTENT.pets.filter((p) => state.pets?.[p.id]).length;
+    tiles = `<p class="pet-head">${owned} / ${CONTENT.pets.length} companions</p>` + CONTENT.pets
+      .filter((p) => !vaultFilter || p.name.toLowerCase().includes(vaultFilter) || p.skill.includes(vaultFilter.toLowerCase()))
+      .map((p) => {
+        const on = !!state.pets?.[p.id];
+        const label = on ? p.name : "????";
+        const qty = on ? 1 : 0;
+        return tile("pet", p.id, label, qty, p.model, on ? "" : "locked");
+      }).join("");
   } else {
     let list = Object.values(CONTENT.actions);
     if (vaultFilter) list = list.filter((a) => a.name.toLowerCase().includes(vaultFilter));
@@ -149,15 +156,16 @@ function renderVault(ctx) {
 
   document.getElementById("vault-chips").innerHTML = `<div class="tabs">${lens}</div><div class="tabs">${chips}</div>`;
   document.getElementById("vault-grid").innerHTML = tiles || "<p class='blurb'>Nothing in this drawer.</p>";
-  document.getElementById("vault-meta").textContent = `${held.length}/${bankCap(state)} unique stacks · ${bankValue(state).toLocaleString()} ✦`;
+  document.getElementById("vault-meta").innerHTML = `${held.length}/${bankCap(state)} unique stacks · ${glyphMarks(11)} ${bankValue(state).toLocaleString()}`;
   renderInspect(ctx);
 }
 
-function tile(kind, id, name, qty, model) {
+function tile(kind, id, name, qty, model, extra = "") {
   const st = silhouetteStyle(model || {});
   const on = vaultPick.kind === kind && vaultPick.id === id ? "on" : "";
-  return `<button type="button" class="vtile ${on}" data-act="vault-pick" data-kind="${kind}" data-arg="${id}" style="background-color:#12081a;border-color:${st.borderColor}">
+  return `<button type="button" class="vtile ${on} ${extra}" data-act="vault-pick" data-kind="${kind}" data-arg="${id}" style="background-color:#12081a;border-color:${st.borderColor}">
     <span class="vico">${iconMarkup(model || {}, 48)}</span>
+    ${extra.includes("locked") ? `<span class="lock-corner">${glyphLock(10)}</span>` : ""}
     <span class="vqty">${qty ? qty.toLocaleString() : ""}</span>
     <span class="vnm">${escapeHtml(name)}</span>
   </button>`;
@@ -175,7 +183,7 @@ function renderInspect(ctx) {
       <p class="temper">${it.temper} · ${it.catalogName || ""}</p>
       <blockquote>${it.voice}</blockquote>
       <p class="blurb">${it.desc || ""}</p>
-      <p class="muted">${it.category}${it.slot ? " · " + it.slot : ""} · ${n.toLocaleString()} held · ${it.value || 0} ✦</p>
+      <p class="muted">${it.category}${it.slot ? " · " + it.slot : ""} · ${n.toLocaleString()} held · ${glyphMarks(11)} ${it.value || 0}</p>
       ${it.stats ? `<p class="muted">Acc ${it.stats.acc || 0} · Str ${it.stats.str || 0} · Ranged ${it.stats.ranged || 0} · Magic ${it.stats.magic || 0} · Def ${it.stats.def || 0} · HP ${it.stats.hp || 0}</p>` : ""}
       ${it.heal ? `<p class="muted">Heals ${it.heal}</p>` : ""}
       ${it.special ? `<p class="muted">Special ${it.special}</p>` : ""}
@@ -208,7 +216,7 @@ function renderInspect(ctx) {
     el.innerHTML = `<h3>${p.name}</h3>
       <p class="temper">${owned ? "perched" : "still wild"} · ${p.skill}</p>
       <p class="blurb">${p.desc || ""}</p>
-      <p class="muted">A shoulder companion. Drops rarely from ${p.skill}.</p>`;
+      <p class="muted">${owned ? `Bonus: +${Math.round((p.bonus?.xp || 0) * 100)}% ${p.skill} XP, +${Math.round((p.bonus?.rare || 0) * 100)}% rares.` : `Still wild. Train ${p.skill} — about 0.035% per action. Timber's companion is Splinter.`}</p>`;
   } else {
     const a = CONTENT.actions[id];
     if (!a) return;
@@ -235,7 +243,7 @@ export function renderWanderer(ctx) {
 function renderWandererBody(ctx, state) {
   const r = wandererRanks(state);
   const st = playerStats(state);
-  const set = gearSet(state);
+  const setInfo = gearSetInfo(state);
   const w = weightKg(state);
   const pct = Math.min(100, 100 * w.kg / w.cap);
   const stars = "★".repeat(r.stars) + "☆".repeat(5 - r.stars);
@@ -312,9 +320,9 @@ function renderWandererBody(ctx, state) {
       ${candidates.length ? candidates.map((it) => `<button type="button" data-act="equip" data-arg="${it.id}">${it.name} · a${it.stats?.acc || 0} s${it.stats?.str || 0} (${bankCount(state, it.id)})</button>`).join("") : "<p class='muted'>Nothing in the vault for this slot.</p>"}
     </section>
     <section class="wd-card">
-      <h4>Dusk set</h4>
-      <p>${set ? `${set.n}/6 ${CONTENT.items[state.equipment.body]?.catalogName || "pieces"}` : "No matching set."}</p>
-      <p class="blurb">${set?.bonus ? `Damage during committed hunts +${Math.round(set.bonus * 100)}%.` : "Wear three pieces of one tier to wake a set."}</p>
+      <h4>Set bonus</h4>
+      <p>${escapeHtml(setInfo.label)}</p>
+      <p class="blurb">${setInfo.pct ? "Matching tiers stack. Mixed kits leave power on the table." : "Wear three pieces of one tier to wake a set (8% / 15% / 20%)."}</p>
     </section>
     <section class="wd-card">
       <h4>Carried weight</h4>
@@ -342,7 +350,7 @@ export function renderStall(ctx) {
   const search = document.getElementById("stall-search");
   if (search && document.activeElement !== search) search.value = stallFilter;
   const meta = document.getElementById("stall-meta");
-  if (meta) meta.textContent = `${Math.floor(state.coins).toLocaleString()} ✦ · ${deal.watch}`;
+  if (meta) meta.innerHTML = `${glyphMarks(11)} ${Math.floor(state.coins).toLocaleString()} · ${deal.watch}`;
   const watch = document.getElementById("stall-watch");
   if (watch) {
     const gossip = quayGossip(state).map((l) => `<p>${escapeHtml(l)}</p>`).join("");
@@ -353,8 +361,9 @@ export function renderStall(ctx) {
     watch.innerHTML = `<div class="quay-banner">
       <div><strong>${escapeHtml(deal.watch)}</strong>${deal.offer ? ` · lantern price on <em>${escapeHtml(offerName(deal.offer))}</em> (−${Math.round((1 - deal.mul) * 100)}%)` : ""}</div>
       ${gossip}
-      <p class="muted">Hunger: they want <strong>${deal.hunger}</strong> this calendar dusk. Vault fence is 40%. The quay pays ${Math.round(pawnRate() * 100)}%.</p>
+      <p class="muted">Hunger: they want <strong>${deal.hunger}</strong> this calendar dusk. Vault fence starts at 40% and falls on high-tier junk. The quay pays ${Math.round(pawnRate() * 100)}%.</p>
       ${pawn}
+      ${commissionRow(state)}
     </div>`;
   }
   const booths = document.getElementById("stall-booths");
@@ -375,11 +384,13 @@ export function renderStall(ctx) {
       const { cost, bought, deal: onDeal } = offerPrice(state, o);
       const sold = o.max && bought >= o.max;
       const it = o.item ? CONTENT.items[o.item] : null;
+      const lvok = !o.reqLevel || skillLevel(state, o.reqSkill) >= o.reqLevel;
       const qty = o.qty && o.qty > 1 ? `×${o.qty}` : (it ? "×1" : "upgrade");
-      return `<button type="button" class="vtile stall-tile ${stallPick === o.id ? "on" : ""} ${sold ? "locked" : ""} ${onDeal ? "deal" : ""}" data-act="stall-pick" data-arg="${o.id}">
+      return `<button type="button" class="vtile stall-tile ${stallPick === o.id ? "on" : ""} ${!lvok ? "locked" : ""} ${sold ? "sold" : ""} ${onDeal ? "deal" : ""}" data-act="stall-pick" data-arg="${o.id}">
         <span class="vico">${iconMarkup(offerModel(o), 48)}</span>
+        ${!lvok ? `<span class="lock-corner">${glyphLock(10)}</span>` : ""}
         <span class="vnm">${escapeHtml(offerName(o))}</span>
-        <span class="vqty">${Math.floor(cost).toLocaleString()} ✦ ${qty}${onDeal ? " · dusk" : ""}</span>
+        <span class="vqty">${glyphMarks(11)} ${Math.floor(cost).toLocaleString()} ${qty}${onDeal ? " · dusk" : ""}</span>
       </button>`;
     }).join("") || "<p class='blurb'>This keeper has nothing hung.</p>";
   }
@@ -401,13 +412,13 @@ export function renderStall(ctx) {
       <p class="temper">${escapeHtml(booth.keeper)} · ${escapeHtml(booth.name)}</p>
       <blockquote>${escapeHtml(booth.line)}</blockquote>
       <p class="blurb">${escapeHtml(o.desc || "")}</p>
-      <p class="muted">${Math.floor(cost).toLocaleString()} ✦${onDeal ? " dusk bargain" : ""}${o.qty ? ` · ${o.qty} per buy` : ""} · owned ${bought}${o.max ? "/" + o.max : ""}</p>
-      ${why ? `<p class="lock-why">${escapeHtml(why)}</p>` : ""}
+      <p class="muted">${glyphMarks(11)} ${Math.floor(cost).toLocaleString()}${onDeal ? " dusk bargain" : ""}${o.qty ? ` · ${o.qty} per buy` : ""} · owned ${bought}${o.max ? "/" + o.max : ""}</p>
+      ${why ? `<p class="lock-why">${!lvok ? glyphLock(11) : ""}${escapeHtml(why)}</p>` : ""}
       ${packable ? `<div class="qty-row"><span>Buys</span>
         ${[1, 5, 10].map((n) => `<button type="button" class="${stallPacks === n ? "on" : ""}" data-act="stall-packs" data-arg="${n}">${n}</button>`).join("")}
       </div>` : ""}
       <div class="acts">
-        <button type="button" class="primary" data-act="buy" data-arg="${o.id}" ${sold || !lvok ? "disabled" : ""}>Pay ${Math.floor(cost).toLocaleString()} ✦${packable && stallPacks > 1 ? ` ×${stallPacks}` : ""}</button>
+        <button type="button" class="primary" data-act="buy" data-arg="${o.id}" ${sold || !lvok ? "disabled" : ""}>Pay ${glyphMarks(11)} ${Math.floor(cost).toLocaleString()}${packable && stallPacks > 1 ? ` ×${stallPacks}` : ""}</button>
       </div>`;
   }
 }
@@ -418,6 +429,8 @@ export function onVaultSearch(v) {
 
 export function onVaultCat(v) { vaultCat = v; }
 export function onVaultLens(v) { vaultLens = v; }
+export function currentStallBooth() { return stallBooth; }
+export function currentStallFilter() { return stallFilter; }
 export function onStallSearch(v) { stallFilter = v.toLowerCase(); }
 export function onStallBooth(v) { stallBooth = v; stallPick = null; }
 export function onStallPick(v) { stallPick = v; }
@@ -432,4 +445,19 @@ export function inspectModelOf() {
   if (kind === "action") return CONTENT.actions[id]?.model;
   if (kind === "pet") return CONTENT.pets.find((p) => p.id === id)?.model;
   return null;
+}
+
+function commissionRow(state) {
+  const jobs = quayCommissions();
+  const rows = jobs.map((j) => {
+    const done = !!state.shopBought?.[j.id];
+    const have = state.bank[j.need.item] || 0;
+    const it = CONTENT.items[j.need.item];
+    const ready = !done && have >= j.need.qty && (state.coins || 0) >= j.cost;
+    return `<button type="button" class="comm ${done ? "sold" : ""} ${ready ? "on" : ""}" data-act="commission" data-arg="${j.id}" ${done ? "disabled" : ""}>
+      <strong>${escapeHtml(j.name)}</strong>
+      <span>${j.need.qty} ${escapeHtml(it?.name || j.need.item)} (have ${have}) · underwrite ${glyphMarks(11)} ${j.cost.toLocaleString()} · purse ${j.pay.toLocaleString()}</span>
+    </button>`;
+  }).join("");
+  return `<div class="commissions"><h4>Dusk commissions</h4><p class="muted">Rotating indentures. Pay the underwrite, deliver the goods, take the purse.</p>${rows}</div>`;
 }

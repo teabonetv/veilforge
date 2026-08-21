@@ -1,10 +1,11 @@
 import {
   CONTENT, TICK_MS, skillLevel, addXp, addItem, takeItem, bankCount, log,
   masteryBonus, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses,
-  recalcHp, sumGear, masteryLevel, skillLocked, bankUsed, bankCap, stashItem
+  recalcHp, sumGear, masteryLevel, skillLocked, lockMessage, bankUsed, bankCap, stashItem
 } from "./state.js";
 import { combatTick, startFight, stopFight, playerInterval, consumePotionCharge } from "./combat.js";
 import { checkQuests } from "./quests.js";
+import { quayCommissions, vaultFenceRate } from "./market.js";
 
 function noteGive(state, id, qty, viaStash = false, why = "yield") {
   if (!id || !(qty > 0)) return true;
@@ -44,7 +45,7 @@ export function startAction(state, actionId, opts = {}) {
   const act = CONTENT.actions[actionId];
   if (!act) return "Unknown action.";
   const lock = skillLocked(state, act.skill);
-  if (lock) return `Locked until ${lock}.`;
+  if (lock) return lockMessage(lock);
   if (skillLevel(state, act.skill) < act.level) return `Requires ${act.skill} ${act.level}.`;
   if (act.skill === "course" && act.id === "course-lap") {
     const built = Object.keys(state.course?.built || {}).filter((k) => state.course.built[k]);
@@ -99,7 +100,8 @@ export function actionDuration(state, act) {
     t = (act.time || 8000) * (slotted ? 0.72 : 1.08);
   }
   const speed = 1 + mb.speed + gb.speed + cb.skillSpeed + (ch.speed || 0) + tool + ((pot.speedMul || 1) - 1);
-  return Math.max(2200, t / speed);
+  const floor = Math.min(2200, Math.max(200, act.time || 2200));
+  return Math.max(floor, t / speed);
 }
 
 function isStarSlotted(state, starId) {
@@ -201,9 +203,23 @@ function completeAction(state, act) {
     }
     if (dumped) {
       state._dripTag = "full";
-      const why = state.stackFull
-        ? `${state.stackFull} is capped. XP still rolls — sell, cook, or burn to stash more.`
-        : `Bank full (${bankUsed(state)}/${bankCap(state)} stacks). XP still rolls — sell or buy slots.`;
+      const blocker = state.stackFull
+        ? `${state.stackFull} is capped`
+        : `Bank full (${bankUsed(state)}/${bankCap(state)} stacks)`;
+      if (!act.inputs) {
+        const why = `Halted ${act.name}: ${blocker}. ${gatherSinkHint(act)}`;
+        log(state, why);
+        state._haltReason = why;
+        state.stackFull = null;
+        state._yieldWarn = null;
+        grantSkillBits(state, act, 1);
+        rollPet(state, act.skill);
+        consumePotionCharge(state, "action");
+        state.action = null;
+        state._uiDirty = true;
+        return;
+      }
+      const why = `${blocker}. XP still rolls — sell, cook, or burn to stash more.`;
       if (state._yieldWarn !== why) log(state, why);
       state._yieldWarn = why;
       state.stackFull = null;
@@ -225,6 +241,15 @@ function completeAction(state, act) {
   grantSkillBits(state, act, 1);
   rollPet(state, act.skill);
   consumePotionCharge(state, "action");
+}
+
+function gatherSinkHint(act) {
+  const id = act.outputs?.[0]?.item;
+  const cat = CONTENT.items[id]?.category;
+  if (cat === "log" || act.skill === "timber") return "Ember burns logs.";
+  if (cat === "ore" || act.skill === "vein") return "Smelt at the Anvil.";
+  if (cat === "fish" || act.skill === "trawl") return "Cook at Hearth.";
+  return "Sell at the Quay or buy vault slots.";
 }
 
 function grantSkillBits(state, act, xpMul, xpOverride) {
@@ -260,24 +285,28 @@ function grantSkillBits(state, act, xpMul, xpOverride) {
 
 function completeThieve(state, act) {
   const npc = act.npc;
-  const w = state.whisper || (state.whisper = { heat: 0, streak: 0 });
+  const w = state.whisper || (state.whisper = { heat: 0, streak: 0, heatByMark: {} });
+  w.heatByMark = w.heatByMark || {};
   const lvl = skillLevel(state, "whisper");
-  const heat = w.heat || 0;
-  const stunChance = Math.min(0.72, npc.stun + heat * 0.035 - Math.max(0, lvl - npc.level) * 0.004);
+  const markId = npc.id;
+  const heat = w.heatByMark[markId] || 0;
+  const stunChance = thieveStunChance(state, npc);
   if (Math.random() < stunChance) {
-    w.heat = Math.min(14, heat + 1);
+    w.heatByMark[markId] = Math.min(14, heat + 1);
+    w.heat = w.heatByMark[markId];
     w.streak = 0;
-    const lock = Math.round(npc.stunMs * (1 + w.heat * 0.1));
+    const lock = Math.round(npc.stunMs * (1 + w.heatByMark[markId] * 0.1));
     state.combat.stunUntil = (state.now || 0) + lock;
     if (state.action) state.action.progress = 0;
     const scraps = 1 + Math.floor(Math.random() * (2 + Math.min(6, npc.level / 20)));
     noteGive(state, "coins", scraps);
     state._dripTag = "caught";
     grantSkillBits(state, act, 0.22);
-    log(state, `${npc.name} caught you. Stunned ${Math.round(lock / 1000)}s · heat ${w.heat}. Scrap ${scraps} veilmarks.`);
+    log(state, `${npc.name} caught you. Stunned ${Math.round(lock / 1000)}s · heat ${w.heatByMark[markId]} on this mark. Scrap ${scraps} veilmarks.`);
     return;
   }
-  w.heat = Math.max(0, heat - 1);
+  w.heatByMark[markId] = Math.max(0, heat - 1);
+  w.heat = w.heatByMark[markId];
   w.streak = (w.streak || 0) + 1;
   const luck = w.streak >= 8 && Math.random() < 0.12;
   const spike = luck ? 3 + Math.floor(Math.random() * 4) : (w.streak >= 4 && Math.random() < 0.18 ? 2 : 1);
@@ -290,6 +319,16 @@ function completeThieve(state, act) {
   }
   grantSkillBits(state, act, 1);
   rollPet(state, "whisper");
+}
+
+export function markHeat(state, npcId) {
+  return state.whisper?.heatByMark?.[npcId] || 0;
+}
+
+export function thieveStunChance(state, npc) {
+  const lvl = skillLevel(state, "whisper");
+  const heat = markHeat(state, npc.id);
+  return Math.min(0.72, npc.stun + heat * 0.035 - Math.max(0, lvl - npc.level) * 0.004);
 }
 
 function completeLap(state, act) {
@@ -410,6 +449,11 @@ export function harvestPlot(state, i) {
   checkQuests(state);
 }
 
+function optsCompost(state) {
+  if (!state.soil.useCompost) return false;
+  return takeItem(state, "compost", 1);
+}
+
 export function plantPlot(state, i, seed) {
   if (state.soil.plots[i]) return "Plot occupied.";
   const crop = CONTENT.crops.find((c) => c.seed === seed);
@@ -422,11 +466,6 @@ export function plantPlot(state, i, seed) {
   state.soil.plots[i] = { seed, left: grow, ready: false, ripeMs: 0, compost: !!compost };
   if (compost) log(state, "Compost worked in — faster grow, fatter harvest.");
   return null;
-}
-
-function optsCompost(state) {
-  if (!state.soil.useCompost) return false;
-  return takeItem(state, "compost", 1);
 }
 
 export function setUseCompost(state, on) {
@@ -535,10 +574,26 @@ export function sellItems(state, id, qty, opts = {}) {
   const n = qty === "all" ? have : Math.max(1, Math.min(have, qty | 0));
   if (!it || n <= 0) return "Nothing to sell.";
   takeItem(state, id, n);
-  const rate = opts.rate != null ? opts.rate : 0.4;
+  const rate = opts.rate != null ? opts.rate : vaultFenceRate(it);
   const gp = Math.max(1, Math.floor((it.value || 1) * rate * n));
   addItem(state, "coins", gp);
   log(state, `${opts.quay ? "Quay pawned" : "Sold"} ${it.name} ×${n} for ${gp} veilmarks.`);
+  return null;
+}
+
+export function fulfillCommission(state, id) {
+  const job = quayCommissions().find((j) => j.id === id);
+  if (!job) return "That indenture has sailed.";
+  if (state.shopBought?.[job.id]) return "Already delivered this dusk.";
+  if ((state.bank[job.need.item] || 0) < job.need.qty) {
+    return `Need ${job.need.qty} ${CONTENT.items[job.need.item]?.name || job.need.item}.`;
+  }
+  if ((state.coins || 0) < job.cost) return `Need ${job.cost} veilmarks to underwrite.`;
+  takeItem(state, job.need.item, job.need.qty);
+  takeItem(state, "coins", job.cost);
+  addItem(state, "coins", job.pay);
+  state.shopBought[job.id] = 1;
+  log(state, `Delivered ${job.name}: −${job.cost} underwrite, +${job.pay} purse.`);
   return null;
 }
 
@@ -567,14 +622,34 @@ export function offlineCapMs(state) {
   return hours * 3600000;
 }
 
-function shiftCombatClocks(state, ms) {
-  const c = state.combat;
-  if (!c) return;
-  if (c.nextHitAt != null) c.nextHitAt += ms;
-  if (c.enemyNextAt != null) c.enemyNextAt += ms;
-  if (c.nextBleedAt) c.nextBleedAt += ms;
-  if (c.nextPoisonAt) c.nextPoisonAt += ms;
-  if (c.dryUntil) c.dryUntil += ms;
+function resolveOfflineHunt(state, ms) {
+  let left = ms;
+  let steps = 0;
+  while (left > 0 && state.combat.fighting && steps++ < 400000) {
+    const now = state.now || 0;
+    const candidates = [now + 80, state.combat.nextHitAt || now, state.combat.enemyNextAt || now];
+    if (state.combat.nextBleedAt) candidates.push(state.combat.nextBleedAt);
+    if (state.combat.nextPoisonAt) candidates.push(state.combat.nextPoisonAt);
+    const next = Math.min(...candidates.filter((t) => t >= now));
+    const dt = Math.min(left, Math.max(50, (next - now) || 50));
+    state.now = now + dt;
+    combatTick(state, dt);
+    left -= dt;
+  }
+  return left;
+}
+
+function grantOfflineBatch(state, act, n) {
+  const capN = Math.min(Math.max(0, n), 400000);
+  let done = 0;
+  for (let i = 0; i < capN; i++) {
+    if (!state.action || state.action.id !== act.id) break;
+    completeAction(state, act);
+    restartAction(state, act);
+    done += 1;
+    if (!state.action) break;
+  }
+  return done;
 }
 
 function restartAction(state, act) {
@@ -605,13 +680,17 @@ export function applyOffline(state, ms) {
   const saved = state.settings.tickScale;
   state.settings.tickScale = 1;
   const hunting = !!state.combat.fighting;
-  if (hunting) shiftCombatClocks(state, sim);
+  const killsBefore = state.stats.kills || 0;
+  const deathsBefore = state.stats.deaths || 0;
+  const foodBefore = bankCount(state, state.combat.foodId) + bankCount(state, state.combat.foodId2);
+  if (hunting) resolveOfflineHunt(state, sim);
 
   tickPlots(state, sim);
   tickDrove(state, sim);
 
-  let left = sim;
+  let left = hunting ? 0 : sim;
   let steps = 0;
+  let truncated = false;
   while (left > 0 && state.action && steps++ < 80000) {
     const act = CONTENT.actions[state.action.id];
     if (!act) {
@@ -640,6 +719,23 @@ export function applyOffline(state, ms) {
     completeAction(state, act);
     restartAction(state, act);
   }
+  if (steps >= 80000 && left > 0 && state.action) {
+    truncated = true;
+    const act = CONTENT.actions[state.action.id];
+    if (act) {
+      const dur = Math.max(1, actionDuration(state, act));
+      const n = Math.floor(left / dur);
+      if (n > 0) {
+        const done = grantOfflineBatch(state, act, n);
+        left -= done * dur;
+      }
+      if (left > 0 && state.action) {
+        state.action.progress = (state.action.progress || 0) + left;
+        state.now = (state.now || 0) + left;
+        left = 0;
+      }
+    }
+  }
   if (left > 0) state.now = (state.now || 0) + left;
 
   state.settings.tickScale = saved;
@@ -649,17 +745,25 @@ export function applyOffline(state, ms) {
   const jobDelta = topJob ? (topJob[1] - (beforeCounts[topJob[0]] || 0)) : 0;
   const harvestNow = (state.soil?.plots || []).filter((p) => p?.ready).length;
   const droveNow = (state.drove?.pens || []).filter((p) => p?.ready).length;
+  const huntKills = (state.stats.kills || 0) - killsBefore;
+  const huntDied = (state.stats.deaths || 0) > deathsBefore || (hunting && !state.combat.fighting);
+  const foodUsed = foodBefore - (bankCount(state, state.combat.foodId) + bankCount(state, state.combat.foodId2));
   state.lastOffline = {
     minutes: mins,
     actions: (state.stats.actions || 0) - beforeActs,
-    job: topJob && jobDelta > 0 ? `${CONTENT.actions[topJob[0]]?.name || topJob[0]} ×${jobDelta}` : "no committed job",
+    job: topJob && jobDelta > 0 ? `${CONTENT.actions[topJob[0]]?.name || topJob[0]} ×${jobDelta}` : (hunting ? `hunt ×${huntKills}` : "no committed job"),
     plotsReady: harvestNow,
     pensReady: droveNow,
-    huntPaused: hunting,
+    huntPaused: hunting && huntDied,
+    kills: huntKills,
+    foodUsed: Math.max(0, foodUsed),
+    truncated,
+    halt: state._haltReason || null,
     t: Date.now()
   };
-  const huntNote = hunting ? " Hunt paused at the last blow." : "";
-  log(state, `Offline report: ${mins} min · ${state.lastOffline.actions} actions · ${state.lastOffline.job}.${huntNote}`);
+  const huntNote = hunting ? (huntDied ? " Hunt ended on death." : ` Hunt resolved · ${huntKills} kills.`) : "";
+  const truncNote = truncated ? " Remainder settled in bulk." : "";
+  log(state, `Offline report: ${mins} min · ${state.lastOffline.actions} actions · ${state.lastOffline.job}.${huntNote}${truncNote}`);
 }
 
 export { startFight, stopFight, playerInterval, masteryLevel };
