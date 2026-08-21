@@ -1,4 +1,5 @@
 import { CONTENT, skillLevel, bankCount, bankUsed, bankCap } from "./state.js";
+import { weeklyEclipse } from "./eclipse.js";
 
 export const QUAY_BOOTHS = [
   { id: "tools", name: "Hatchet Yard", keeper: "Noll the Notch", kind: "axe", line: "Faster tools are a fork, not a free lunch." },
@@ -49,9 +50,15 @@ export function quayDeal() {
 export function offerPrice(state, o) {
   const bought = state.shopBought[o.id] || 0;
   let cost = o.cost;
-  if (o.repeatable) cost = Math.floor(cost * Math.pow(1.45, bought));
+  if (o.effect === "endow") cost = Math.floor(5000 * Math.pow(1.6, bought));
+  else if (o.repeatable) cost = Math.floor(cost * Math.pow(o.effect === "slots" ? 1.35 : 1.45, bought));
+  if (o.tokens) return { cost, bought, deal: false, token: true };
   const deal = quayDeal();
-  if (deal.offer?.id === o.id) cost = Math.max(1, Math.floor(cost * deal.mul));
+  if (deal.offer?.id === o.id) {
+    const eclipse = weeklyEclipse();
+    const extra = eclipse.quayMul || 1;
+    cost = Math.max(1, Math.floor(cost * deal.mul * extra));
+  }
   return { cost, bought, deal: deal.offer?.id === o.id };
 }
 

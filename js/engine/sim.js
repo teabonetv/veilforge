@@ -6,6 +6,10 @@ import {
 import { combatTick, startFight, stopFight, playerInterval, consumePotionCharge } from "./combat.js";
 import { checkQuests } from "./quests.js";
 import { quayCommissions, vaultFenceRate } from "./market.js";
+import { standingBonuses } from "./ledger.js";
+import { stacksToAutoSell, autoEatFinest } from "./orders.js";
+import { weeklyEclipse } from "./eclipse.js";
+import { notePet } from "./logbook.js";
 
 function noteGive(state, id, qty, viaStash = false, why = "yield") {
   if (!id || !(qty > 0)) return true;
@@ -39,6 +43,20 @@ function flushYield(state, act, xp) {
     t: Date.now()
   };
   state._uiDirty = true;
+}
+
+function trainingMode(state, skill) {
+  const id = state.actionMode?.[skill] || "steady";
+  if (id === "focused") return { id, time: 0.85, output: 0.75, rare: 1 };
+  if (id === "meditative") return { id, time: 1.3, output: 1.3, rare: 0.5 };
+  return { id: "steady", time: 1, output: 1, rare: 1 };
+}
+
+export function setActionMode(state, skill, mode) {
+  if (!["focused", "steady", "meditative"].includes(mode)) return "Unknown cadence.";
+  state.actionMode = state.actionMode || {};
+  state.actionMode[skill] = mode;
+  return null;
 }
 
 export function startAction(state, actionId, opts = {}) {
@@ -82,7 +100,16 @@ export function stopAction(state) {
 }
 
 export function actionDuration(state, act) {
-  let t = act.time;
+  const eclipse = weeklyEclipse(state.now || Date.now());
+  const stand = standingBonuses(state);
+  const mode = trainingMode(state, act.skill);
+  let t = act.time * mode.time;
+  if (eclipse.artisanSpeed && ["anvil", "ember", "hearth", "fletch", "loom", "sigil", "vial"].includes(act.skill)) {
+    t /= (1 + eclipse.artisanSpeed);
+  }
+  if (eclipse.gatherSpeed && ["timber", "trawl", "vein"].includes(act.skill)) {
+    t /= (1 + eclipse.gatherSpeed);
+  }
   const mb = masteryBonus(state, act.masteryId, act.skill);
   const gb = guildBonuses(state, act.skill);
   const cb = courseBonuses(state);
@@ -99,7 +126,7 @@ export function actionDuration(state, act) {
     const slotted = isStarSlotted(state, starId);
     t = (act.time || 8000) * (slotted ? 0.72 : 1.08);
   }
-  const speed = 1 + mb.speed + gb.speed + cb.skillSpeed + (ch.speed || 0) + tool + ((pot.speedMul || 1) - 1);
+  const speed = 1 + mb.speed + gb.speed + cb.skillSpeed + (ch.speed || 0) + tool + ((pot.speedMul || 1) - 1) + (stand.speed || 0);
   const floor = Math.min(2200, Math.max(200, act.time || 2200));
   return Math.max(floor, t / speed);
 }
@@ -194,7 +221,7 @@ function completeAction(state, act) {
     }
   }
 
-  const outMul = 1 + (masteryBonus(state, act.masteryId, act.skill).output || 0) + (guildBonuses(state, act.skill).output || 0) + (courseBonuses(state).outputMul || 0) + (chartBonuses(state).output || 0);
+  const outMul = (1 + (masteryBonus(state, act.masteryId, act.skill).output || 0) + (guildBonuses(state, act.skill).output || 0) + (courseBonuses(state).outputMul || 0) + (chartBonuses(state).output || 0)) * trainingMode(state, act.skill).output * (1 + (weeklyEclipse(state.now || Date.now()).outputMul || 0));
   if (act.outputs) {
     let dumped = false;
     for (const o of act.outputs) {
@@ -215,6 +242,9 @@ function completeAction(state, act) {
         grantSkillBits(state, act, 1);
         rollPet(state, act.skill);
         consumePotionCharge(state, "action");
+        const sold = stacksToAutoSell(state);
+        for (const row of sold) sellItems(state, row.id, row.qty);
+        if (sold.length) log(state, "Standing order sold commons to unstick the vault.");
         state.action = null;
         state._uiDirty = true;
         return;
@@ -229,7 +259,7 @@ function completeAction(state, act) {
     }
   }
   if (act.rare) {
-    const rareMul = 1 + (masteryBonus(state, act.masteryId, act.skill).rare || 0) + (guildBonuses(state, act.skill).rare || 0) + (courseBonuses(state).rareMul || 0) + (chartBonuses(state).rare || 0) + (act.skill === "vein" ? (chartBonuses(state).gem || 0) : 0) + (potionStats(state).rareMul ? potionStats(state).rareMul - 1 : 0) + petBonuses(state, act.skill).rare;
+    const rareMul = (1 + (masteryBonus(state, act.masteryId, act.skill).rare || 0) + (guildBonuses(state, act.skill).rare || 0) + (courseBonuses(state).rareMul || 0) + (chartBonuses(state).rare || 0) + (act.skill === "vein" ? (chartBonuses(state).gem || 0) : 0) + (potionStats(state).rareMul ? potionStats(state).rareMul - 1 : 0) + petBonuses(state, act.skill).rare + (standingBonuses(state).rare || 0) + (weeklyEclipse(state.now || Date.now()).rareMul || 0)) * trainingMode(state, act.skill).rare;
     for (const r of act.rare) {
       if (Math.random() < r.chance * rareMul) {
         noteGive(state, r.item, r.min || 1, true, "rare drop");
@@ -257,7 +287,7 @@ function grantSkillBits(state, act, xpMul, xpOverride) {
   const cb = courseBonuses(state);
   const ch = chartBonuses(state);
   const pet = petBonuses(state, act.skill);
-  let mul = 1 + (gb.xp || 0) + (cb.allXp || 0) + (cb.xpMul || 0) + (ch.allXp || 0) + (ch.xp || 0) + pet.xp;
+  let mul = 1 + (gb.xp || 0) + (cb.allXp || 0) + (cb.xpMul || 0) + (ch.allXp || 0) + (ch.xp || 0) + pet.xp + (standingBonuses(state).allXp || 0);
   if (act.skill === "chart") mul += cb.chartXp || 0;
   const baseXp = xpOverride != null ? xpOverride : act.xp;
   const notes = addXp(state, act.skill, baseXp * mul * xpMul);
@@ -378,6 +408,7 @@ function rollPet(state, skill) {
   const luck = 1 + (chartBonuses(state).rare || 0);
   if (Math.random() < pet.chance * luck) {
     state.pets[pet.id] = true;
+    notePet(state, pet.id);
     log(state, `Pet found: ${pet.name}`);
   }
 }
@@ -574,7 +605,7 @@ export function sellItems(state, id, qty, opts = {}) {
   const n = qty === "all" ? have : Math.max(1, Math.min(have, qty | 0));
   if (!it || n <= 0) return "Nothing to sell.";
   takeItem(state, id, n);
-  const rate = opts.rate != null ? opts.rate : vaultFenceRate(it);
+  const rate = opts.rate != null ? opts.rate : (state.rules?.mode === "iron" ? 0.4 : vaultFenceRate(it));
   const gp = Math.max(1, Math.floor((it.value || 1) * rate * n));
   addItem(state, "coins", gp);
   log(state, `${opts.quay ? "Quay pawned" : "Sold"} ${it.name} ×${n} for ${gp} veilmarks.`);
@@ -764,6 +795,7 @@ export function applyOffline(state, ms) {
   const huntNote = hunting ? (huntDied ? " Hunt ended on death." : ` Hunt resolved · ${huntKills} kills.`) : "";
   const truncNote = truncated ? " Remainder settled in bulk." : "";
   log(state, `Offline report: ${mins} min · ${state.lastOffline.actions} actions · ${state.lastOffline.job}.${huntNote}${truncNote}`);
+  if (mins > 0) state._dawn = true;
 }
 
 export { startFight, stopFight, playerInterval, masteryLevel };

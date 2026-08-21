@@ -18,10 +18,11 @@ function trySteam() {
 
 function gameIndex() {
   const packed = path.join(__dirname, "..", "www", "index.html");
-  const live = path.join(__dirname, "..", "index.html");
   const fs = require("fs");
-  if (fs.existsSync(packed)) return packed;
-  return live;
+  if (!fs.existsSync(packed)) {
+    throw new Error("www/index.html missing. Run npm run pack before launching Electron.");
+  }
+  return packed;
 }
 
 function createWindow() {

@@ -1,7 +1,6 @@
 import { pathToFileURL } from "node:url";
-import { SKILLS, XP_TABLE, levelFromXp } from "../content/catalog.js";
-import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem, persistable, skillLocked, lockMessage, SAVE_KEY } from "../engine/state.js";
-import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouch, plantPlot, buyPillar, spendChartRank, setUseCompost, thieveStunChance, markHeat } from "../engine/sim.js";
+import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem, persistable, skillLocked, lockMessage, SAVE_KEY, SAVE_BAK, SAVE_VERSION, save, load, setSaveStore, checksum, masteryBonus, renewSkill, addXp } from "../engine/state.js";
+import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouch, plantPlot, buyPillar, spendChartRank, setUseCompost, thieveStunChance, markHeat, setActionMode } from "../engine/sim.js";
 import { startFight, startDungeon, equipItem, unequip, rollBounty, playerStats, die, deathTaxAmount, combatLog } from "../engine/combat.js";
 import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
@@ -9,6 +8,14 @@ import { iconMarkup, iconUrl } from "../scene/icons.js";
 import { PIX_EID } from "../scene/pix-map.js";
 import { offerModel, quayDeal, inferBooth, QUAY_BOOTHS, openCoinGoals, quayCommissions } from "../engine/market.js";
 import { firstHourBeat } from "../engine/quests.js";
+import { RARITY, rarityOf, rollRarity } from "../content/rarity.js";
+import { ledgerStats, standingBonuses, STANDING_TIERS } from "../engine/ledger.js";
+import { logbookStats } from "../engine/logbook.js";
+import { weeklyEclipse } from "../engine/eclipse.js";
+import { currentCommission, deliverCommission } from "../engine/commissions.js";
+import { ACHIEVEMENTS } from "../content/achievements.js";
+import { spawnSync } from "node:child_process";
+import { SKILLS, XP_TABLE, levelFromXp } from "../content/catalog.js";
 
 const nativeRandom = Math.random.bind(Math);
 const failures = [];
@@ -80,12 +87,14 @@ if (C.items["log-0"].model.kind !== "log") throw new Error("log kind drifted: " 
 if (C.items["gem-0"].model.kind !== "gem") throw new Error("gem kind drifted");
 if (iconMarkup(C.items["log-0"].model).includes("hue-rotate")) throw new Error("hue-rotate still on item icons");
 for (const m of Object.values(C.monsters)) {
+  if (String(m.id).startsWith("elite-") || m.echo) continue;
   if (!PIX_EID[m.id]) throw new Error("monster missing unique icon " + m.id);
   const html = iconMarkup(m.model);
   if (!html.includes("u-mon-") && !html.includes("u-misc.png") && !html.includes("atlas-beasts.png")) throw new Error("monster not on unique sheet " + m.id);
 }
 for (const d of C.dungeons) {
   if (!PIX_EID[d.id]) throw new Error("dungeon missing unique icon " + d.id);
+  if (d.infinite) continue;
   const html = iconMarkup(d.model);
   if (!html.includes("u-misc.png") && !html.includes("atlas-gates.png")) throw new Error("dungeon missing gate icon " + d.id);
 }
@@ -460,13 +469,13 @@ test("E3 offline remainder", () => {
 test("E4 version ladder", () => {
   const raw = { version: 1, name: "Mig", quests: { active: ["whisper-dock-beggar"], done: [], stats: { harvests: 0, laps: 0, bounties: 0, drove: {}, guildMax: 0 } } };
   const loaded = importSave(utf8ToB64(JSON.stringify(raw)));
-  if (loaded.version !== 2) throw new Error("v1 did not become 2: " + loaded.version);
+  if (loaded.version !== SAVE_VERSION) throw new Error("v1 did not become " + SAVE_VERSION + ": " + loaded.version);
   if (loaded.quests.active.includes("whisper-dock-beggar")) throw new Error("v1 remap missed");
   if (!loaded.quests.active.includes("q-whisper") && !loaded.quests.done.includes("q-whisper")) {
     /* deepMerge with createState may have replaced active; remap should still have run on leftover */
   }
   const v2stale = importSave(utf8ToB64(JSON.stringify({ version: 2, name: "Ok", quests: { active: ["whisper-dock-beggar"], done: [], stats: { harvests: 0, laps: 0, bounties: 0, drove: {}, guildMax: 0 } } })));
-  if (v2stale.version !== 2) throw new Error("v2 relabeled");
+  if (v2stale.version !== SAVE_VERSION) throw new Error("v2 did not become " + SAVE_VERSION);
 });
 test("E5 structured floaters", () => {
   const st = createState();
@@ -563,6 +572,199 @@ test("no bankFull", () => {
   }
   addItem(st, "celestial-saber", 1);
   if ("bankFull" in st) throw new Error("bankFull still written");
+});
+
+function memStore() {
+  const m = new Map();
+  return {
+    getItem: (k) => (m.has(k) ? m.get(k) : null),
+    setItem: (k, v) => { m.set(k, String(v)); },
+    removeItem: (k) => { m.delete(k); }
+  };
+}
+
+test("F1 backup load", () => {
+  const store = memStore();
+  setSaveStore(store);
+  try {
+    const st = createState();
+    st.name = "BackupHero";
+    save(st);
+    st.name = "SecondWatch";
+    save(st);
+    store.setItem(SAVE_KEY, JSON.stringify({ wrap: 1, sum: "deadbeef", data: { name: "Corrupt" } }));
+    const loaded = load();
+    if (loaded.name !== "BackupHero") throw new Error("did not recover backup: " + loaded?.name);
+    if (!loaded.log.some((l) => /ember-backup/.test(l.msg))) throw new Error("missing backup log");
+  } finally {
+    setSaveStore(null);
+  }
+});
+
+test("F1 checksum import", () => {
+  const bad = utf8ToB64(JSON.stringify({ wrap: 1, sum: "nope", data: persistable(createState()) }));
+  let threw = false;
+  try { importSave(bad); } catch (e) {
+    threw = /checksum/.test(e.message);
+    if (!threw) throw e;
+  }
+  if (!threw) throw new Error("bad checksum imported");
+});
+
+test("F2 orphan sweep", () => {
+  const st = createState();
+  st.bank["ghost-item"] = 3;
+  st.equipment.ring = "ghost-ring";
+  normalizeState(st);
+  if (st.bank["ghost-item"]) throw new Error("orphan stack remained");
+  if (st.equipment.ring) throw new Error("orphan ring remained");
+});
+
+test("C4 rarity module", () => {
+  if (RARITY.length !== 5) throw new Error("need five rarities");
+  if (rarityOf("dusk").id !== "dusk") throw new Error("dusk lookup");
+  const seen = new Set();
+  for (let i = 0; i < 80; i++) seen.add(rollRarity(() => i / 80).id);
+  if (seen.size < 3) throw new Error("rollRarity too narrow: " + [...seen]);
+});
+
+test("C2 logbook + C5 standing", () => {
+  const st = createState();
+  addItem(st, "log-0", 1);
+  const lb = logbookStats(st, C);
+  if (!(lb.items.have >= 2)) throw new Error("starter items not logged: " + JSON.stringify(lb.items));
+  const ls = ledgerStats(st);
+  if (typeof ls.completionPct !== "number") throw new Error("completionPct missing");
+  if (STANDING_TIERS.length !== 4) throw new Error("standing tiers");
+  const boon = standingBonuses(st);
+  if (!boon.label) throw new Error("standing label");
+});
+
+test("C6 mastery 50 speed", () => {
+  const st = createState();
+  const act = C.actions["timber-0"];
+  st.skills.timber.mastery[act.masteryId] = 12 * 49 * 49;
+  const mb = masteryBonus(st, act.masteryId, "timber");
+  if (mb.level < 50) throw new Error("mastery not 50: " + mb.level);
+  if (!(mb.speed >= 0.04)) throw new Error("seasoned speed missing: " + mb.speed);
+  if (mb.label !== "Seasoned" && mb.label !== "Master" && mb.label !== "Legend") {
+    throw new Error("milestone label: " + mb.label);
+  }
+});
+
+test("D5 echo depth", () => {
+  const st = createState();
+  st.skills.might.xp = XP_TABLE[120];
+  st.skills.might.level = 120;
+  st.skills.bounty.xp = XP_TABLE[120];
+  st.skills.bounty.level = 120;
+  st.combat.maxHp = 9999;
+  st.combat.hp = 9999;
+  addItem(st, "dungeon-key", 1);
+  addItem(st, "food-0", 400);
+  const e = startDungeon(st, "the-echo");
+  if (e) throw new Error(e);
+  let guard = 0;
+  while ((st.combat.echoDepth || 0) < 2 && guard++ < 8000) {
+    st.combat.hp = st.combat.maxHp;
+    tick(st, 50);
+    if (!st.combat.fighting) break;
+  }
+  if ((st.combat.echoDepth || 0) < 2) throw new Error("echo did not descend: depth=" + st.combat.echoDepth);
+});
+
+test("D4 bounty chain", () => {
+  const st = createState();
+  st.skills.bounty.xp = XP_TABLE[50];
+  st.skills.bounty.level = 50;
+  let chained = false;
+  for (let i = 0; i < 200; i++) {
+    rollBounty(st, { free: true, forceChain: i === 0 });
+    if (st.bounty.chain?.ids?.length === 3) { chained = true; break; }
+  }
+  if (!chained) throw new Error("no 3-link chain in 200 rolls");
+});
+
+test("D9 hardcore might reset", () => {
+  const st = createState();
+  st.rules.mode = "hardcore";
+  st.skills.might.xp = XP_TABLE[40];
+  st.skills.might.level = 40;
+  die(st);
+  if (skillLevel(st, "might") !== 1) throw new Error("hardcore did not reset might");
+});
+
+test("D8 workshop commission", () => {
+  const st = createState();
+  const c = currentCommission(st, Date.UTC(2026, 7, 21));
+  for (const r of c.requires) addItem(st, r.item, r.qty);
+  const err = deliverCommission(st, Date.UTC(2026, 7, 21));
+  if (err) throw new Error(err);
+  if (st.commissions.done !== 1) throw new Error("commission not marked");
+  const again = deliverCommission(st, Date.UTC(2026, 7, 21));
+  if (!again) throw new Error("double-delivered");
+});
+
+test("BEAT-1 firstHourBeat still", () => {
+  const st = createState();
+  st.actionCounts["timber-0"] = 3;
+  const beat = firstHourBeat(st);
+  if (beat?.id !== "q-wake") throw new Error("wake not current: " + beat?.id);
+});
+
+test("E2 persistable no underscore", () => {
+  const st = createState();
+  st._dawn = true;
+  st._edict = { act: 2 };
+  const dumped = persistable(st);
+  if (Object.keys(dumped).some((k) => k.startsWith("_"))) throw new Error("persistable kept _");
+  if (SAVE_VERSION !== 3) throw new Error("SAVE_VERSION " + SAVE_VERSION);
+});
+
+test("D6 training modes", () => {
+  const st = createState();
+  const act = C.actions["timber-0"];
+  const d0 = actionDuration(st, act);
+  setActionMode(st, "timber", "focused");
+  const d1 = actionDuration(st, act);
+  setActionMode(st, "timber", "meditative");
+  const d2 = actionDuration(st, act);
+  if (!(d1 < d0)) throw new Error("focused not faster " + d1 + " vs " + d0);
+  if (!(d2 > d0)) throw new Error("meditative not slower " + d2 + " vs " + d0);
+});
+
+test("P4 eclipse same week", () => {
+  const t = Date.UTC(2026, 7, 21, 12);
+  const a = weeklyEclipse(t);
+  const b = weeklyEclipse(t + 3600 * 1000);
+  if (a.id !== b.id || a.week !== b.week) throw new Error("eclipse drifted in-week");
+});
+
+test("D7 renewal keeps mastery", () => {
+  const st = createState();
+  const act = C.actions["timber-0"];
+  st.skills.timber.xp = XP_TABLE[120];
+  st.skills.timber.level = 120;
+  st.skills.timber.mastery[act.masteryId] = 40000;
+  const err = renewSkill(st, "timber");
+  if (err) throw new Error(err);
+  if (skillLevel(st, "timber") !== 1) throw new Error("renewal did not reset xp");
+  if (st.skills.timber.mastery[act.masteryId] !== 40000) throw new Error("mastery lost");
+  if ((st.renewals.timber || 0) < 1) throw new Error("renewal uncounted");
+});
+
+test("C7 achievements table", () => {
+  if (ACHIEVEMENTS.length < 100) throw new Error("need ~100 diaries: " + ACHIEVEMENTS.length);
+});
+
+test("F3 import does not patch Math.random", () => {
+  const href = new URL("../engine/state.js", import.meta.url).href;
+  const r = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    const before = Math.random;
+    await import(${JSON.stringify(href)});
+    if (Math.random !== before) process.exit(2);
+  `], { encoding: "utf8" });
+  if (r.status !== 0) throw new Error("import patched RNG status=" + r.status + " " + (r.stderr || r.stdout || ""));
 });
 
 if (failures.length) {

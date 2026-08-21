@@ -1,12 +1,20 @@
 import { escapeHtml } from "../util/text.js";
-import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, log, masteryLevel, recalcHp, skillLocked, lockMessage, bankUsed, bankCap, stashItem, upcomingUnlocks, bankValue, masteryBonus, lastSaveFail } from "../engine/state.js";
-import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems, setUseCompost, maxAffordable, fulfillCommission, markHeat } from "../engine/sim.js";
+import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, log, masteryLevel, recalcHp, skillLocked, lockMessage, bankUsed, bankCap, stashItem, upcomingUnlocks, bankValue, masteryBonus, lastSaveFail, takeItem, renewSkill, MASTERY_MILESTONES } from "../engine/state.js";
+import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems, setUseCompost, maxAffordable, fulfillCommission, markHeat, setActionMode } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval, swapWeaponStyle, gearSetInfo } from "../engine/combat.js";
-import { questProgress, firstHourBeat } from "../engine/quests.js";
+import { questProgress, firstHourBeat, currentBeat, actOf } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
-import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf, onStallSearch, onStallBooth, onStallPick, onStallPacks, stallPackCount, currentStallBooth, currentStallFilter } from "./desks.js";
+import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf, onStallSearch, onStallBooth, onStallPick, onStallPacks, stallPackCount, currentStallBooth, currentStallFilter, onCodexTab } from "./desks.js";
 import { iconMarkup, SKILL_ICON_KIND } from "../scene/icons.js";
 import { QUAY_BOOTHS, inferBooth, offerModel, quayDeal, offerName as stallOfferName, offerPrice, pawnRate, quayCommissions, vaultFenceRate } from "../engine/market.js";
+import { ledgerStats, standingBonuses } from "../engine/ledger.js";
+import { weeklyEclipse } from "../engine/eclipse.js";
+import { standingCopy, ensureOrders } from "../engine/orders.js";
+import { currentCommission, deliverCommission } from "../engine/commissions.js";
+import { ACHIEVEMENTS } from "../content/achievements.js";
+import { wearTitle } from "../engine/achievements.js";
+import { rarityOf } from "../content/rarity.js";
+import { deedMedals } from "../engine/deeds.js";
 import { glyphLock, glyphMarks } from "./glyphs.js";
 
 let forkFn = null;
@@ -80,6 +88,7 @@ export function bindUI(ctx) {
     if (e.target.dataset.act === "set-motion") state.settings.reducedMotion = e.target.checked;
     if (e.target.dataset.act === "set-clog") state.settings.showCombatLog = e.target.checked;
     if (e.target.dataset.act === "compost") setUseCompost(state, e.target.checked);
+    if (e.target.dataset.act === "set-hiscores") state.settings.hiscores = e.target.checked;
     if (e.target.dataset.act === "tab-name") {
       state.bankTabs[+e.target.dataset.i] = e.target.value;
     }
@@ -237,11 +246,12 @@ function handle(ctx, act, arg, el) {
       ctx.render();
       ctx.portraits?.resize?.();
       requestAnimationFrame(() => window.dispatchEvent(new Event("resize")));
-      ["layout", "bank-desk", "wander-desk", "stall-desk", "center"].forEach((id) => {
+      ["layout", "bank-desk", "wander-desk", "stall-desk", "codex-desk", "center"].forEach((id) => {
         document.getElementById(id)?.scrollTo?.(0, 0);
       });
       break;
     case "vault-pick": setVaultPick(el.dataset.kind || "item", arg); renderDesks(ctx); break;
+    case "codex-tab": onCodexTab(arg); renderDesks(ctx); break;
     case "vault-cat": onVaultCat(arg); renderDesks(ctx); break;
     case "vault-lens": onVaultLens(arg); renderDesks(ctx); break;
     case "kit": applyKit(state, arg); ctx.render(); break;
@@ -282,7 +292,56 @@ function handle(ctx, act, arg, el) {
       }
       break;
     }
-    case "wipe": if (confirm("Reset Veilforge?")) ctx.wipe(); break;
+    case "wipe": showNewGame(ctx); break;
+    case "new-game":
+      hideFork();
+      ctx.wipe(arg || "standard");
+      break;
+    case "renew":
+      err(renewSkill(state, arg || selectedSkill));
+      ctx.render();
+      break;
+    case "action-mode":
+      err(setActionMode(state, selectedSkill, arg));
+      ctx.render();
+      break;
+    case "workshop":
+      err(deliverCommission(state));
+      ctx.render();
+      break;
+    case "wear-title":
+      err(wearTitle(state, arg));
+      ctx.render();
+      break;
+    case "edict-ack":
+      state._edict = null;
+      releaseModal();
+      ctx.render();
+      break;
+    case "dawn-ack":
+      state._dawn = false;
+      releaseModal();
+      ctx.render();
+      break;
+    case "order-bank":
+      ensureOrders(state).bank = !state.orders.bank;
+      ctx.render();
+      break;
+    case "order-eat":
+      ensureOrders(state).eat = !state.orders.eat;
+      ctx.render();
+      break;
+    case "order-sell":
+      ensureOrders(state).sell = !state.orders.sell;
+      ctx.render();
+      break;
+    case "order-floor":
+      ensureOrders(state).sellFloor = arg;
+      ctx.render();
+      break;
+    case "rite":
+      showRite(ctx, arg || selectedSkill);
+      break;
     case "panel":
       if (arg === "shop") { setDesk("stall"); ctx.render(); ctx.portraits?.resize?.(); break; }
       document.getElementById(arg)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -306,13 +365,19 @@ function togglePrayer(state, id) {
 function buyShop(state, id, packs = 1) {
   const offer = CONTENT.shop.find((s) => s.id === id);
   if (!offer) return "Unknown wares.";
+  if (state.rules?.mode === "iron" && !offer.tokens) return "Wanderer's Path: the quay will not sell. Fence at 40%.";
   const times = offer.repeatable && offer.item && !offer.effect ? Math.max(1, Math.min(10, packs || 1)) : 1;
   for (let i = 0; i < times; i++) {
-    const { cost, bought } = offerPrice(state, offer);
+    const { cost, bought, token } = offerPrice(state, offer);
     if (offer.max && bought >= offer.max) return i ? null : "Sold out.";
     if (offer.reqLevel && skillLevel(state, offer.reqSkill) < offer.reqLevel) return `Need ${offer.reqSkill} ${offer.reqLevel}.`;
-    if (state.coins < cost) return i ? null : "Not enough veilmarks.";
-    state.coins -= cost;
+    if (token) {
+      if (bankCount(state, "bounty-token") < cost) return i ? null : "Not enough bounty tokens.";
+      takeItem(state, "bounty-token", cost);
+    } else {
+      if (state.coins < cost) return i ? null : "Not enough veilmarks.";
+      state.coins -= cost;
+    }
     state.shopBought[id] = bought + 1;
     if (offer.item) stashItem(state, offer.item, offer.qty || 1, "quay");
     if (offer.effect === "bankTab") state.bankTabs.push("Tab " + state.bankTabs.length);
@@ -323,6 +388,7 @@ function buyShop(state, id, packs = 1) {
     if (offer.effect === "loadout") state.loadouts.push({ name: "Set " + state.loadouts.length, equipment: { ...state.equipment } });
     if (offer.effect === "chartSlot") state.chart.slots = Math.max(state.chart.slots, 3);
     if (offer.effect === "offlineHours") state.offlineHours = 24;
+    if (offer.effect === "endow") state.endow = (state.endow || 0) + 1;
   }
   return null;
 }
@@ -373,7 +439,7 @@ export function renderShell(ctx) {
     const lock = skillLocked(state, s.id);
     const pct = lock ? 0 : Math.floor(xpPct(state, s.id));
     const ico = { kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3, eid: s.id };
-    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="${escapeHtml(lockMessage(lock))}"` : ""}>${glyph(ico, "skico")}<span class="sn">${s.name}</span><span class="lv">${lock ? glyphLock(12) : `${lv} · ${pct}%`}</span>${lock ? "" : `<i class="xpmini"><b style="width:${pct}%"></b></i>`}</button>`;
+    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""} ${(state.renewals?.[s.id] || 0) ? "renewed" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="${escapeHtml(lockMessage(lock))}"` : ""}>${glyph(ico, "skico")}<span class="sn">${s.name}</span><span class="lv">${lock ? glyphLock(12) : `${lv} · ${pct}%`}</span>${lock ? "" : `<i class="xpmini"><b style="width:${pct}%"></b></i>`}</button>`;
   }).join("");
   root.querySelector("#skill-nav").innerHTML = left;
   renderTop(ctx);
@@ -383,6 +449,8 @@ export function renderShell(ctx) {
   renderLevelModal(ctx);
   renderDeathModal(ctx);
   renderDesks(ctx);
+  renderEdict(ctx);
+  renderDawn(ctx);
 }
 
 function duelSwing(now, nextAt, interval) {
@@ -395,7 +463,26 @@ function renderTop(ctx) {
   const { state } = ctx;
   const hp = state.combat.hp;
   const max = state.combat.maxHp;
-  document.getElementById("coins").textContent = Math.floor(state.coins).toLocaleString();
+  const logEl = document.getElementById("log-badge");
+  if (logEl) {
+    const pct = ledgerStats(state).log.totalPct;
+    logEl.textContent = `LOG ${pct}%`;
+  }
+  const eclEl = document.getElementById("eclipse-banner");
+  if (eclEl) {
+    const e = weeklyEclipse();
+    eclEl.textContent = `Eclipse: ${e.name}`;
+    eclEl.title = e.desc;
+    eclEl.hidden = false;
+  }
+  const modeEl = document.getElementById("mode-chip");
+  if (modeEl) {
+    const mode = state.rules?.mode || "standard";
+    modeEl.hidden = mode === "standard";
+    modeEl.textContent = mode === "hardcore" ? "Hardcore" : mode === "iron" ? "Wanderer's Path" : "";
+  }
+  const titleEl = document.getElementById("active-title");
+  if (titleEl) titleEl.textContent = state.activeTitle || "";
   const fail = lastSaveFail();
   const failEl = document.getElementById("save-fail");
   if (failEl) {
@@ -500,7 +587,7 @@ function renderTop(ctx) {
         ? ` <button type="button" data-act="offline-ack">Offline: ${off.minutes}m · ${off.job} · ${off.actions} actions${off.huntPaused ? " · hunt paused" : ""} · ${off.plotsReady} plots ready · ${off.pensReady} pens ready — dismiss</button>`
         : "";
       const gq = firstHourBeat(state)?.q || CONTENT.quests.find((x) => x.id === state.quests.active[0]);
-      const hint = gq ? `${gq.how || gq.desc}` : "Open Timber and click Warding Choir.";
+      const hint = gq ? `${gq.how || gq.desc}` : "Select Timber, pick the first grove, then press Idle this job.";
       commit.innerHTML = `<b>Do this:</b> ${escapeHtml(hint)}${report}`;
       commit.className = off ? "warn" : "idle";
     }
@@ -573,7 +660,7 @@ function spawnYieldDrip(state) {
     }
     if (itemLine) {
       const it = document.createElement("span");
-      it.className = `drip item${d.tag === "rare" ? " rare" : ""}${d.tag === "burn" ? " burn" : ""}`;
+      it.className = `drip item${d.tag && d.tag !== "burn" ? " " + d.tag : ""}${d.tag === "burn" ? " burn" : ""}`;
       it.textContent = d.tag === "burn" ? `Burned · ${itemLine}` : itemLine;
       host.appendChild(it);
       setTimeout(() => it.remove(), 1200);
@@ -647,6 +734,41 @@ function confirmHalt(ctx) {
   trapModal(el);
 }
 
+function showRite(ctx, skill) {
+  const { state } = ctx;
+  const el = document.getElementById("fork-modal");
+  if (!el) return;
+  forkFn = () => {
+    const err = renewSkill(state, skill);
+    if (err) toast(ctx, err);
+    ctx.render();
+  };
+  const n = (state.renewals?.[skill] || 0) + 1;
+  el.hidden = false;
+  el.classList.add("open");
+  el.innerHTML = `<div class="sheet"><h3>Vow Renewal</h3>
+    <p>Reset ${escapeHtml(skillName(skill))} to 1. Mastery, checkpoints, and guild stay. This is rite ${n}.</p>
+    <p class="blurb">XP from this craft gains a dusk multiplier. Halt is still Halt.</p>
+    <button type="button" class="primary" data-act="fork-yes">Renew the vow</button>
+    <button type="button" data-act="fork-no">Keep this climb</button></div>`;
+  trapModal(el);
+}
+
+function showNewGame(ctx) {
+  const el = document.getElementById("fork-modal");
+  if (!el) return;
+  forkFn = null;
+  el.hidden = false;
+  el.classList.add("open");
+  el.innerHTML = `<div class="sheet"><h3>A new wanderer</h3>
+    <p class="blurb">This wipes the local forge. Export first if you care.</p>
+    <button type="button" class="primary" data-act="new-game" data-arg="standard">Standard dusk</button>
+    <button type="button" data-act="new-game" data-arg="hardcore">Hardcore — combat arts reset on death</button>
+    <button type="button" data-act="new-game" data-arg="iron">Wanderer's Path — no quay buys, 40% fence</button>
+    <button type="button" data-act="fork-no">Keep this save</button></div>`;
+  trapModal(el);
+}
+
 function showSettings(ctx) {
   const { state } = ctx;
   const el = document.getElementById("fork-modal");
@@ -659,7 +781,9 @@ function showSettings(ctx) {
     <label><input type="checkbox" data-act="set-toasts" ${state.settings?.toasts !== false ? "checked" : ""} /> Yield toasts</label>
     <label><input type="checkbox" data-act="set-motion" ${state.settings?.reducedMotion ? "checked" : ""} /> Reduce motion</label>
     <label><input type="checkbox" data-act="set-clog" ${state.settings?.showCombatLog !== false ? "checked" : ""} /> Combat log</label>
-    <p class="blurb">One job at a time. Halt to switch. Save is local to this browser (and the export file).</p>
+    <label><input type="checkbox" data-act="set-hiscores" ${state.settings?.hiscores ? "checked" : ""} /> Opt into hiscores (client contract only)</label>
+    <p class="blurb">Mode: ${escapeHtml(state.rules?.mode || "standard")}. One job at a time. Halt to switch.</p>
+    ${state.titles?.length ? `<p>Wear a name ${state.titles.map((t) => `<button type="button" data-act="wear-title" data-arg="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join("")}<button type="button" data-act="wear-title" data-arg="">none</button></p>` : ""}
     <div class="acts">
       <button type="button" data-act="export">Export save</button>
       <button type="button" data-act="import">Import save</button>
@@ -761,8 +885,62 @@ function renderDeathModal(ctx) {
     <p>${escapeHtml(sheet.foe)} on ${where}.</p>
     <p><strong>${escapeHtml(sheet.blow || "hit")}</strong>${sheet.dmg != null ? ` · ${sheet.dmg} damage` : ""}${sheet.triangle && sheet.triangle !== "even" ? ` · triangle ${escapeHtml(sheet.triangle)}` : ""} · food ${sheet.food ?? 0}</p>
     <p class="blurb">${escapeHtml(sheet.tip || "")}</p>
+    ${sheet.echo != null ? `<p class="muted">Echo depth ${sheet.echo}. The climb resets.</p>` : ""}
     <button type="button" data-act="death-ack">Rise</button>
   </div>`;
+}
+
+let shownEdict = "";
+function renderEdict(ctx) {
+  const el = document.getElementById("edict-modal");
+  if (!el) return;
+  const e = ctx.state._edict;
+  if (!e || ctx.state._deathSheet) {
+    if (!e) {
+      shownEdict = "";
+      el.hidden = true;
+      el.innerHTML = "";
+    }
+    return;
+  }
+  const key = `${e.act}:${e.t || ""}`;
+  if (shownEdict === key && !el.hidden) return;
+  shownEdict = key;
+  el.hidden = false;
+  el.innerHTML = `<div class="sheet edict-sheet">
+    <h3>Act ${e.act}: ${escapeHtml(e.name || "")}</h3>
+    <p>${escapeHtml(e.story || "The dusk endures.")}</p>
+    <button type="button" data-act="edict-ack">The dusk endures</button>
+  </div>`;
+  trapModal(el);
+}
+
+let shownDawn = "";
+function renderDawn(ctx) {
+  const el = document.getElementById("dawn-modal");
+  if (!el) return;
+  if (!ctx.state._dawn || ctx.state._deathSheet || ctx.state._edict) {
+    if (!ctx.state._dawn) {
+      shownDawn = "";
+      el.hidden = true;
+      el.innerHTML = "";
+    }
+    return;
+  }
+  const off = ctx.state.lastOffline || {};
+  const key = String(off.t || off.minutes || "dawn");
+  if (shownDawn === key && !el.hidden) return;
+  shownDawn = key;
+  el.hidden = false;
+  el.innerHTML = `<div class="sheet dawn-sheet">
+    <h3>Dawn over the workshop</h3>
+    <p>The citadel kept the fire. You were gone ${off.minutes || 0} minutes.</p>
+    <p><strong>${escapeHtml(off.job || "no committed job")}</strong></p>
+    <p class="muted">${off.actions || 0} actions · ${off.kills || 0} kills · food used ${off.foodUsed || 0}${off.huntPaused ? " · hunt paused" : ""}${off.truncated ? " · remainder bulk-settled" : ""}</p>
+    <p class="muted">Plots ready ${off.plotsReady || 0} · pens ready ${off.pensReady || 0}</p>
+    <button type="button" data-act="dawn-ack">Take the ledger</button>
+  </div>`;
+  trapModal(el);
 }
 
 function renderCodex(ctx) {
@@ -776,10 +954,10 @@ function renderCodex(ctx) {
     return;
   }
   el.className = "";
-  const beat = firstHourBeat(state);
+  const beat = currentBeat(state) || firstHourBeat(state);
   const q = beat?.q;
   const upcoming = CONTENT.quests.filter((x) => !state.quests.done.includes(x.id) && x.id !== q?.id).slice(0, 2);
-  let next = "No current goal — pick Timber and chop.";
+  let next = "No current goal — pick Timber and press Idle this job.";
   let jump = "";
   if (q) {
     const steps = questProgress(state, q).map((p) => reqView(state, p.r));
@@ -788,9 +966,12 @@ function renderCodex(ctx) {
     next = `<strong>Do this: ${q.name}</strong> ${frac} — ${q.how || open?.label || q.desc}`;
     const hintSkill = beat?.skill || inferQuestSkill(q);
     if (hintSkill) jump = `<button type="button" data-act="skill" data-arg="${hintSkill}">Go to ${skillName(hintSkill)}</button>`;
+  } else if (beat?.how) {
+    next = `<strong>${escapeHtml(beat.actName || "Next")}</strong> — ${escapeHtml(beat.how)}`;
+    if (beat.skill) jump = `<button type="button" data-act="skill" data-arg="${beat.skill}">Go to ${skillName(beat.skill)}</button>`;
   }
   const then = upcoming.map((x) => x.name).join(" → ");
-  let idle = pipelineFor(selectedSkill) || "Click Warding Choir on Timber and wait.";
+  let idle = pipelineFor(selectedSkill) || "Select Timber, pick the first grove, then press Idle this job.";
   if (state.combat.fighting) idle = "In combat. Halt to leave. Watch food.";
   else if (state.action) {
     const act = CONTENT.actions[state.action.id];
@@ -1037,6 +1218,26 @@ function renderJobDock(ctx, a) {
   const n = state.actionCounts?.[a.id] || 0;
   const sinks = [...new Set((a.outputs || []).flatMap((o) => sinksOf(o.item)))].slice(0, 3).join(" · ");
   const mb = masteryBonus(state, a.masteryId, a.skill);
+  const mileKeys = Object.keys(MASTERY_MILESTONES).map(Number).sort((x, y) => x - y);
+  const nextMile = mileKeys.find((k) => ml < k);
+  const mileLine = mb.label
+    ? `${mb.label}${nextMile ? ` · next ${MASTERY_MILESTONES[nextMile].label} at ${nextMile}` : ""}`
+    : (nextMile ? `Next ${MASTERY_MILESTONES[nextMile].label} at mastery ${nextMile}` : "");
+  const mode = state.actionMode?.[a.skill] || "steady";
+  const modeRow = ["focused", "steady", "meditative"].map((id) => {
+    const lab = id === "focused" ? "Focused (−time, −yield)" : id === "meditative" ? "Meditative (+time, +yield, −rare)" : "Steady";
+    return `<button type="button" class="${mode === id ? "on" : ""}" data-act="action-mode" data-arg="${id}">${lab}</button>`;
+  }).join("");
+  const orders = standingCopy(state);
+  const o = ensureOrders(state);
+  const orderRow = orders.map((t) => {
+    if (t.id === "eat") return `<button type="button" class="${o.eat !== false ? "on" : ""}" data-act="order-eat" ${t.open ? "" : "disabled"}>Auto-eat ${t.open ? "" : "(locked)"}</button>`;
+    if (t.id === "bank") return `<button type="button" class="${o.bank ? "on" : ""}" data-act="order-bank" ${t.open ? "" : "disabled"}>Sell commons on dump ${t.open ? "" : "(1 renewal)"}</button>`;
+    if (t.id === "sell") return `<button type="button" class="${o.sell ? "on" : ""}" data-act="order-sell" ${t.open ? "" : "disabled"}>Sell floor ${t.open ? "" : "(2 renewals)"}</button>`;
+    return "";
+  }).join("");
+  const floors = ["common", "uncommon", "rare"].map((id) => `<button type="button" class="${o.sellFloor === id ? "on" : ""}" data-act="order-floor" data-arg="${id}">${id}</button>`).join("");
+  const canRenew = skillLevel(state, a.skill) >= MAX_LEVEL;
   const rares = (a.rare || []).map((r) => `${Math.round(r.chance * 1000) / 10}% ${itemName(r.item)}`).join(", ");
   const burn = a.burn ? `Burn ${Math.round(a.burn.chance * 100)}% → ashes` : "";
   const can = maxAffordable(state, a);
@@ -1062,7 +1263,11 @@ function renderJobDock(ctx, a) {
       ${ins ? `<span class="in">In ${ins}</span>` : `<span class="in">No inputs — this is an idle node.</span>`}
       ${outs ? `<span class="out">Out ${outs}</span>` : ""}
     </div>
-    <span>Mastery ${ml} · +${(mb.speed * 100).toFixed(1)}% speed · +${(mb.preserve * 100).toFixed(1)}% preserve · checkpoint ${cp} · ×${n} done</span>
+    <span>Mastery ${ml} · +${(mb.speed * 100).toFixed(1)}% speed · +${(mb.preserve * 100).toFixed(1)}% preserve · checkpoint ${cp} · ×${n} done${mileLine ? ` · ${mileLine}` : ""}</span>
+    <div class="mode-row">${modeRow}</div>
+    ${canRenew ? `<button type="button" class="primary" data-act="rite" data-arg="${a.skill}">Vow Renewal — reset levels, keep mastery</button>` : ""}
+    <div class="orders-row">${orderRow}</div>
+    ${o.sell || o.bank ? `<div class="orders-row"><span class="muted">Sell at or below</span>${floors}</div>` : ""}
     ${rares ? `<span class="sink">Rare ${rares}</span>` : ""}
     ${burn ? `<span class="in">${burn}</span>` : ""}
     ${sinks ? `<span class="sink">Then ${sinks}</span>` : ""}
@@ -1189,7 +1394,11 @@ function renderCombatTheater(ctx) {
   const youSwing = duelSwing(now, state.combat.nextHitAt, playerInterval(state));
   const foeSwing = duelSwing(now, state.combat.enemyNextAt, m.interval);
   const dun = state.combat.dungeon ? CONTENT.dungeons.find((d) => d.id === state.combat.dungeon) : null;
-  return `<div class="fight-board">
+  const medals = deedMedals(state, m.id).filter((d) => d.have).map((d) => d.id).join(" · ");
+  const tell = state.combat.telegraph
+    ? `<p class="hint">Telegraph: ${escapeHtml(String(state.combat.telegraph))}${m.mechanic?.counter ? ` · counter ${escapeHtml(m.mechanic.counter)}` : ""}</p>`
+    : "";
+  return `<div class="fight-board${state.combat.telegraph ? " telegraph" : ""}">
     <div>
       <h4>You</h4>
       <div class="bar hp"><i style="width:${Math.max(0, 100 * state.combat.hp / state.combat.maxHp)}%;display:block;height:100%;background:linear-gradient(90deg,#8e3a58,var(--rose))"></i></div>
@@ -1209,8 +1418,11 @@ function renderCombatTheater(ctx) {
       ${glyph(m.model, "mico lg")}
       <div class="bar hp foe"><i style="display:block;height:100%;width:${Math.max(0, 100 * state.combat.monsterHp / (state.combat.monsterMaxHp || m.hp))}%;background:linear-gradient(90deg,#3a2a78,#8b7cff)"></i></div>
       <p class="hint">${Math.max(0, Math.ceil(state.combat.monsterHp))} / ${state.combat.monsterMaxHp || m.hp} · incoming ${foeSwing.toFixed(0)}%</p>
-      <p class="hint">Hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}</p>
-      <p class="hint">${dun ? `${dun.name} floor ${(state.combat.dungeonIndex || 0) + 1}/${dun.sequence.length}` : m.area}</p>
+      <p class="hint">Hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}${m.mechanic?.type ? ` · ${m.mechanic.type}` : ""}</p>
+      ${tell}
+      ${medals ? `<p class="deed-row">${escapeHtml(medals)}</p>` : ""}
+      <p class="hint">${dun ? (dun.infinite ? `${dun.name} depth ${state.combat.echoDepth || 0} (best ${state.combat.echoBest || 0})` : `${dun.name} floor ${(state.combat.dungeonIndex || 0) + 1}/${dun.sequence.length}`) : m.area}</p>
+      <p class="hint sink">${dropLine(m)}</p>
     </div>
   </div>`;
 }
@@ -1246,10 +1458,12 @@ function renderCombatSkill(ctx, id) {
   if (id === "bounty") {
     const b = state.bounty;
     const m = CONTENT.monsters[b.monsterId];
+    const chain = b.chain;
+    const roman = ["I", "II", "III", "IV"][chain?.step || 0] || String((chain?.step || 0) + 1);
     return theater + `<div class="panel">
-      <p>${m ? `Hunt <strong>${m.name}</strong> in ${m.area}: ${b.have}/${b.need} · streak ${b.streak}` : "No contract."}</p>
+      <p>${m ? `Hunt <strong>${m.name}</strong> in ${m.area}: ${b.have}/${b.need} · streak ${b.streak}` : "No contract."}${chain ? ` · Chain ${roman}/${chain.ids.length}` : ""}</p>
       <button type="button" class="primary" data-act="bounty">${m ? "Reroll (1 token)" : "Take a contract (free)"}</button>
-      <p>Tokens: ${bankCount(state, "bounty-token")}. Live rerolls cost a token and block the last targets.</p>
+      <p>Tokens: ${bankCount(state, "bounty-token")}. Live rerolls cost a token, break the chain, and block the last targets.</p>
     </div>${renderAreas(ctx)}`;
   }
   return theater + renderAreas(ctx);
@@ -1264,9 +1478,17 @@ function fmtBonus(bonus) {
   }).join(" · ");
 }
 
+function dropOdds(p) {
+  const n = Number(p);
+  if (!(n > 0)) return "never";
+  if (n >= 0.995) return "always";
+  const denom = Math.max(2, Math.round(1 / n));
+  return `1/${denom}`;
+}
+
 function dropLine(m) {
-  const bits = (m.drops || []).slice(0, 6).map((d) => `${Math.round(d.chance * 100)}% ${itemName(d.item)}`);
-  if (m.unique) bits.push(`unique ${Math.round(m.unique.chance * 100)}% ${itemName(m.unique.item)}`);
+  const bits = (m.drops || []).slice(0, 8).map((d) => `${dropOdds(d.chance)} ${itemName(d.item)}`);
+  if (m.unique) bits.push(`unique ${dropOdds(m.unique.chance)} ${itemName(m.unique.item)}`);
   return bits.join(" · ");
 }
 
@@ -1289,7 +1511,14 @@ function renderAreas(ctx) {
         </button>`;
       }).join("")}</div>
     </details>`).join("");
-  const duns = `<h3 class="grp">Dungeons</h3><div class="grid">${CONTENT.dungeons.map((d) => {
+  const echo = CONTENT.dungeons.find((d) => d.infinite);
+  const echoCard = echo ? `<button type="button" class="card echo-card ${state.combat.dungeon === echo.id ? "on" : ""}" data-act="dungeon" data-arg="${echo.id}">
+      ${glyph(echo.model)}
+      <strong>${echo.name}</strong>
+      <span>Best depth ${state.combat.echoBest || 0} · req ${echo.req}</span>
+      <em>Descend. Death resets the climb. Halt is still Halt.</em>
+    </button>` : "";
+  const duns = `<h3 class="grp">Dungeons</h3><div class="grid">${echoCard}${CONTENT.dungeons.filter((d) => !d.infinite).map((d) => {
     const n = (state.combat.dungeonClears || {})[d.id] || 0;
     const on = state.combat.dungeon === d.id;
     return `<button type="button" class="card ${on ? "on" : ""}" data-act="dungeon" data-arg="${d.id}">
@@ -1431,6 +1660,7 @@ function reqView(state, r) {
 
 function renderQuests(ctx) {
   const { state } = ctx;
+  const ls = ledgerStats(state);
   const cards = state.quests.active.map((id) => {
     const q = CONTENT.quests.find((x) => x.id === id);
     if (!q) return "";
@@ -1463,9 +1693,9 @@ function renderQuests(ctx) {
       </button>`;
     }).join("")}</div>
   </div>`;
-  document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>${petGrid}`;
+  document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length} · ${escapeHtml(standingBonuses(state).label)} · LOG ${ls.log.totalPct}%</p>${petGrid}`;
   const badge = document.getElementById("ledger-count");
-  if (badge) badge.textContent = String(state.quests.active.length);
+  if (badge) badge.textContent = `${ls.completionPct}%`;
 }
 
 function renderShop(ctx) {
@@ -1502,7 +1732,11 @@ function renderShop(ctx) {
 }
 
 function renderLog(ctx) {
-  document.getElementById("journal").innerHTML = ctx.state.log.slice(0, 14).map((l) => `<div>${escapeHtml(l.msg)}</div>`).join("");
+  const e = weeklyEclipse();
+  const ls = ledgerStats(ctx.state);
+  const ambient = `Eclipse: ${e.name}. The ledger whispers ${ls.completionPct}% remembered.`;
+  document.getElementById("journal").innerHTML = [`<div class="muted">${escapeHtml(ambient)}</div>`]
+    .concat(ctx.state.log.slice(0, 14).map((l) => `<div>${escapeHtml(l.msg)}</div>`)).join("");
 }
 
 function toast(ctx, msg) {

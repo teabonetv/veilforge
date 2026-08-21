@@ -74,4 +74,37 @@ function letterbox(w, h) {
 
 writeFileSync(join(branding, "splash-2732.png"), letterbox(2732, 2732));
 writeFileSync(join(branding, "splash-portrait.png"), letterbox(1242, 2688));
+
+function writeIco(path, sizes) {
+  const pngs = sizes.map((s) => nearest(s));
+  const count = pngs.length;
+  let offset = 6 + 16 * count;
+  const dir = [];
+  for (let i = 0; i < count; i++) {
+    dir.push({ size: sizes[i], bytes: pngs[i].length, offset });
+    offset += pngs[i].length;
+  }
+  const buf = Buffer.alloc(offset);
+  buf.writeUInt16LE(0, 0);
+  buf.writeUInt16LE(1, 2);
+  buf.writeUInt16LE(count, 4);
+  let o = 6;
+  for (const e of dir) {
+    buf.writeUInt8(e.size >= 256 ? 0 : e.size, o);
+    buf.writeUInt8(e.size >= 256 ? 0 : e.size, o + 1);
+    buf.writeUInt8(0, o + 2);
+    buf.writeUInt8(0, o + 3);
+    buf.writeUInt16LE(1, o + 4);
+    buf.writeUInt16LE(32, o + 6);
+    buf.writeUInt32LE(e.bytes, o + 8);
+    buf.writeUInt32LE(e.offset, o + 12);
+    o += 16;
+  }
+  for (const png of pngs) {
+    png.copy(buf, o);
+    o += png.length;
+  }
+  writeFileSync(path, buf);
+}
+writeIco(join(branding, "icon.ico"), [16, 32, 48, 256]);
 console.log("Wrote branding icons from", src.width, "x", src.height);

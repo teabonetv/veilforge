@@ -1,4 +1,5 @@
 import { monsterKindFor, dungeonKindFor } from "../scene/icons.js";
+import { registerMissingPix } from "../scene/pix-extra.js";
 
 export function hash32(s) {
   let h = 2166136261;
@@ -200,12 +201,14 @@ export function imprintContent(content) {
 
   const actName = (id) => content.actions[id]?.name || id;
   for (const q of content.quests || []) {
-    if (q.id === "q-wake") q.how = `Open Timber. Click ${actName("timber-0")}. Wait until 3/3.`;
-    if (q.id === "q-fire") q.how = `Open Ember. Click ${actName("ember-0")}. Wait until 3/3.`;
-    if (q.id === "q-fish") q.how = `Open Trawl. Click ${actName("trawl-0")}.`;
-    if (q.id === "q-cook") q.how = `Open Hearth. Click ${actName("cook-0")}.`;
+    if (q.id === "q-wake") q.how = `Select Timber, pick ${actName("timber-0")}, then press Idle this job. Wait until 3/3.`;
+    if (q.id === "q-fire") q.how = `Select Ember, pick ${actName("ember-0")}, then press Idle this job. Wait until 3/3.`;
+    if (q.id === "q-fish") q.how = `Select Trawl, pick ${actName("trawl-0")}, then press Idle this job.`;
+    if (q.id === "q-cook") q.how = `Select Hearth, pick ${actName("cook-0")}, then press Idle this job.`;
     if (q.id === "q-anvil") q.how = `Vein 2 unlocks Anvil. Mine ${actName("vein-0")}, smelt, then forge the Drift saber.`;
+    if (q.id === "q-blood") q.how = `Select Might. Hunt Ash Mite in Cinder Docks. Food is already equipped.`;
   }
 
+  registerMissingPix(content);
   return content;
 }

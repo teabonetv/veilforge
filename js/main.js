@@ -1,4 +1,4 @@
-import { createState, load, save, exportSave, importSave, CONTENT, recalcHp, SAVE_KEY } from "./engine/state.js";
+import { createState, load, save, exportSave, importSave, CONTENT, recalcHp, SAVE_KEY, wipeSaves } from "./engine/state.js";
 import { tick, applyOffline } from "./engine/sim.js";
 import { bindUI, renderShell, renderTop, renderRight } from "./ui/shell.js";
 import { createWorld } from "./scene/world.js";
@@ -45,9 +45,13 @@ const ctx = {
     ctx.state = state;
     renderShell(ctx);
   },
-  wipe: () => {
-    localStorage.removeItem(SAVE_KEY);
+  wipe: (mode = "standard") => {
+    wipeSaves();
+    try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ }
+    try { window.Capacitor?.Plugins?.Preferences?.remove?.({ key: SAVE_KEY }).catch?.(() => {}); } catch { /* ignore */ }
     state = createState();
+    const allowed = ["standard", "hardcore", "iron"];
+    state.rules.mode = allowed.includes(mode) ? mode : "standard";
     ctx.state = state;
     recalcHp(state);
     save(state);
