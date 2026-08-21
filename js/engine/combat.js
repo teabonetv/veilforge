@@ -1,5 +1,12 @@
-import { CONTENT, skillLevel, addXp, addItem, takeItem, bankCount, log, sumGear, recalcHp, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses, stashItem, skillLocked, lockMessage } from "./state.js";
+import { CONTENT, skillLevel, addXp, addItem, takeItem, bankCount, log, sumGear, recalcHp, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses, stashItem, skillLocked, lockMessage, XP_TABLE } from "./state.js";
 import { checkQuests } from "./quests.js";
+import { noteMonster, noteDungeon, notePet } from "./logbook.js";
+import { mechanicOf } from "../content/mechanics.js";
+import { gradeKill } from "./deeds.js";
+import { echoMonster } from "../content/catalog.js";
+import { rarityOf } from "../content/rarity.js";
+import { weeklyEclipse } from "./eclipse.js";
+import { autoEatFinest, ensureOrders, orderUnlocked } from "./orders.js";
 
 const PRAYER_CAP = 2;
 const MAX_VOW_CAP = 260;
@@ -11,7 +18,11 @@ const DRY_LOG_MS = 2500;
 const STYLE_BEATS = { might: "mark", mark: "weave", weave: "might" };
 
 export function startFight(state, monsterId, opts = {}) {
-  const m = CONTENT.monsters[monsterId];
+  let m = CONTENT.monsters[monsterId];
+  if (!m && String(monsterId).startsWith("echo-")) {
+    const depth = Number(String(monsterId).slice(5)) || 0;
+    m = stampEcho(state, depth);
+  }
   if (!m) return "No such foe.";
   if (m.dungeonOnly && !opts.dungeon) return "That closer only exists inside its dungeon.";
   if (!state.equipment.weapon) return "Equip a weapon.";
@@ -57,6 +68,14 @@ export function startFight(state, monsterId, opts = {}) {
     state.combat.nextPoisonAt = 0;
   }
   if (!opts.chain && !opts.respawn) {
+    state.combat.fightStarted = now;
+    state.combat.foodUsed = 0;
+    state.combat.phased = false;
+    state.combat.enraged = false;
+    state.combat.curse = 0;
+    state.combat.guardUntil = 0;
+    state.combat.addHits = 0;
+    state.combat.telegraph = null;
     const st = styleOf(state);
     const edge = triangleEdge(st, m.style);
     if (edge !== "even") {
@@ -83,6 +102,10 @@ export function startDungeon(state, dungeonId) {
   if (Math.max(skillLevel(state, "might"), skillLevel(state, "mark"), skillLevel(state, "weave")) < d.req) {
     return `Need Might, Mark, or Weave at ${d.req}.`;
   }
+  if (d.infinite) {
+    state.combat.echoDepth = 0;
+    stampEcho(state, 0);
+  }
   state.combat.dungeon = dungeonId;
   state.combat.dungeonIndex = 0;
   state.combat.poison = 0;
@@ -98,6 +121,14 @@ export function startDungeon(state, dungeonId) {
   takeItem(state, "dungeon-key", 1);
   log(state, `${d.name}: ${d.sequence.length} sequential kills. Spent a Citadel Key. Death resets the run.`);
   return null;
+}
+
+function stampEcho(state, depth) {
+  const m = echoMonster(depth);
+  const proto = CONTENT.monsters["echo-0"];
+  if (proto?.model) m.model = { ...proto.model, eid: "echo-0" };
+  CONTENT.monsters[m.id] = m;
+  return m;
 }
 
 export function stopFight(state, reason = "abandon") {
@@ -139,10 +170,18 @@ export function combatTick(state, ms) {
     if (!state.combat.fighting) return;
     state.combat.nextHitAt = now + playerInterval(state);
   }
+  tickMechanic(state, now);
   if (now >= state.combat.enemyNextAt && state.combat.fighting) {
     enemyHit(state);
     const m = CONTENT.monsters[state.combat.monsterId];
     if (m && state.combat.fighting) state.combat.enemyNextAt = now + m.interval;
+    if (state.combat.addHits > 0 && state.combat.fighting) {
+      state.combat.addHits -= 1;
+      const add = Math.max(1, Math.floor((m?.maxHit || 4) * 0.35));
+      state.combat.hp -= add;
+      combatLog(state, `A remnant add nicks you for ${add}.`, { dmg: add, foeHit: true });
+      if (state.combat.hp <= 0) die(state);
+    }
   }
 }
 
@@ -326,6 +365,30 @@ function dryLog(state, msg) {
   state.combat.dryUntil = now + DRY_LOG_MS;
 }
 
+function tickMechanic(state, now) {
+  const m = CONTENT.monsters[state.combat.monsterId];
+  const mech = mechanicOf(m);
+  if (!mech || !state.combat.fighting) return;
+  const cadence = mech.cadence || 9000;
+  const telegraph = mech.telegraph || 1500;
+  state.combat.nextMechAt = state.combat.nextMechAt || (now + cadence);
+  if (!state.combat.telegraph && now >= state.combat.nextMechAt - telegraph && now < state.combat.nextMechAt) {
+    state.combat.telegraph = mech.type || mech.kind;
+    combatLog(state, `${m.name} ${mech.tell || "coils"}.`);
+  }
+  if (now >= state.combat.nextMechAt) {
+    state.combat.telegraph = null;
+    state.combat.nextMechAt = now + cadence;
+    if (typeof mech.apply === "function") mech.apply(state, m);
+    if (mech.type === "phase" && (state.combat.monsterHp / (state.combat.monsterMaxHp || m.hp)) <= 0.5) {
+      mech.apply(state, m);
+    }
+    if (mech.type === "enrage" && (now - (state.combat.fightStarted || 0)) >= (mech.atMs || 180000)) {
+      mech.apply(state, m);
+    }
+  }
+}
+
 function playerHit(state, echoFollow = false) {
   const m = CONTENT.monsters[state.combat.monsterId];
   if (!m || !state.combat.fighting) return;
@@ -406,6 +469,10 @@ function playerHit(state, echoFollow = false) {
   let dmg = 1 + Math.floor(Math.random() * Math.max(1, maxHit));
 
   const notes = [];
+  if ((state.combat.guardUntil || 0) > now && state.combat.style === state.combat.guardStyle) {
+    dmg = Math.max(1, Math.floor(dmg * 0.5));
+    notes.push("veilward");
+  }
   const specName = w?.special;
   if (specFired) notes.push(`special: ${specName || "surge"}`);
   if (specName === "pierce" && specFired) dmg = Math.floor(dmg * 1.25);
@@ -586,13 +653,23 @@ function kill(state, m) {
   bumpGuild(state, "bounty");
   for (const d of m.drops) {
     if (Math.random() < d.chance * (1 + (chartBonuses(state).rare || 0))) {
-      stashItem(state, d.item, d.min + Math.floor(Math.random() * (d.max - d.min + 1)), "kill drop");
+      const qty = d.min + Math.floor(Math.random() * (d.max - d.min + 1));
+      stashItem(state, d.item, qty, "kill drop");
+      const rar = rarityOf(CONTENT.items[d.item] || d);
+      state._pendingYield = state._pendingYield || [];
+      state._dripTag = rar.id === "common" ? state._dripTag : rar.id;
     }
   }
   if (m.unique && Math.random() < m.unique.chance) {
     stashItem(state, m.unique.item, 1, "unique drop");
     log(state, `Unique: ${CONTENT.items[m.unique.item]?.name}`);
+    state._dripTag = rarityOf(CONTENT.items[m.unique.item] || { rarity: "exotic" }).id;
   }
+  noteMonster(state, m.id);
+  gradeKill(state, m, {
+    elapsedMs: (state.now || 0) - (state.combat.fightStarted || 0),
+    foodUsed: state.combat.foodUsed || 0
+  });
   if (state.bounty.monsterId === m.id) {
     state.bounty.have += 1;
     if (state.bounty.have >= state.bounty.need) {
@@ -602,7 +679,25 @@ function kill(state, m) {
       state.bounty.streak += 1;
       state.quests.stats.bounties += 1;
       log(state, `Bounty complete. +${tokens} tokens.`);
-      rollBounty(state, { free: true });
+      if (state.bounty.chain) {
+        const chain = state.bounty.chain;
+        chain.step += 1;
+        if (chain.step >= chain.ids.length) {
+          stashItem(state, "bounty-token", 25, "chain");
+          state.bounty.chainsDone = (state.bounty.chainsDone || 0) + 1;
+          log(state, "Chain complete. +25 tokens.");
+          state.bounty.chain = null;
+          rollBounty(state, { free: true });
+        } else {
+          const next = chain.ids[chain.step];
+          state.bounty.monsterId = next;
+          state.bounty.have = 0;
+          state.bounty.need = 6 + chain.step * 4;
+          log(state, `Chain ${chain.step + 1}/${chain.ids.length}: hunt ${CONTENT.monsters[next]?.name}.`);
+        }
+      } else {
+        rollBounty(state, { free: true });
+      }
     }
   }
   log(state, `${m.name} falls.`);
@@ -618,6 +713,13 @@ function kill(state, m) {
       stopFight(state, "clear");
       return;
     }
+    if (d.infinite) {
+      state.combat.echoDepth = (state.combat.echoDepth || 0) + 1;
+      state.combat.echoBest = Math.max(state.combat.echoBest || 0, state.combat.echoDepth);
+      const next = stampEcho(state, state.combat.echoDepth);
+      startFight(state, next.id, { dungeon: true, chain: true, boss: true });
+      return;
+    }
     state.combat.dungeonIndex += 1;
     if (state.combat.dungeonIndex >= d.sequence.length) {
       stashItem(state, d.reward.item, d.reward.qty, "dungeon reward");
@@ -627,6 +729,7 @@ function kill(state, m) {
       combatLog(state, `${d.name} cleared.`);
       state.combat.dungeonClears = state.combat.dungeonClears || {};
       state.combat.dungeonClears[d.id] = (state.combat.dungeonClears[d.id] || 0) + 1;
+      noteDungeon(state, d.id);
       stopFight(state, "clear");
       checkQuests(state);
       return;
@@ -657,6 +760,15 @@ export function die(state) {
   } else {
     log(state, "Death tax: empty purse — nothing to take.");
   }
+  if (state.rules?.mode === "hardcore") {
+    for (const id of ["might", "mark", "weave", "guard", "vitality"]) {
+      if (state.skills[id]) {
+        state.skills[id].xp = XP_TABLE[1] || 0;
+        state.skills[id].level = 1;
+      }
+    }
+    log(state, "Hardcore: combat arts reset to 1.");
+  }
   state.combat.hp = Math.max(1, Math.floor(state.combat.maxHp * 0.35));
   const tip = deathTip(blow);
   const d = CONTENT.dungeons.find((x) => x.id === state.combat.dungeon);
@@ -664,6 +776,7 @@ export function die(state) {
     dungeon: d ? d.name : null,
     floor: d ? (state.combat.dungeonIndex || 0) + 1 : null,
     of: d ? d.sequence.length : null,
+    echo: d?.infinite ? state.combat.echoDepth || 0 : null,
     foe: foe?.name || "a foe",
     blow: blow.kind || "hit",
     triangle: blow.triangle || playerStats(state).tri?.edge,
@@ -705,6 +818,7 @@ function autoEat(state, opts = {}) {
   const thHp = state.combat.maxHp * (state.combat.autoEat || 0.5);
   const need = opts.force || state.combat.hp <= Math.max(thHp, lethal);
   if (!need) return;
+  if (ensureOrders(state).eat !== false && orderUnlocked(state, "eat")) autoEatFinest(state);
   const ids = [state.combat.foodId, state.combat.foodId2].filter(Boolean);
   let food = ids.find((id) => bankCount(state, id) > 0);
   if (!food) {
@@ -715,7 +829,10 @@ function autoEat(state, opts = {}) {
   const it = CONTENT.items[food];
   if (!it?.heal) return;
   if (!takeItem(state, food, 1)) return;
+  state.combat.foodUsed = (state.combat.foodUsed || 0) + 1;
   let heal = it.heal;
+  const eclipse = weeklyEclipse(state.now || Date.now());
+  if (eclipse.foodMul) heal = Math.max(1, Math.floor(heal * eclipse.foodMul));
   if (state.shopBought["shop-eat2"]) heal = Math.floor(heal * 1.08);
   heal = Math.floor(heal * (1 + (potionStats(state).eatBoost || 0)));
   if (state.combat.eatWound > 0) {
@@ -850,22 +967,62 @@ export function rollBounty(state, opts = {}) {
   const had = state.bounty?.monsterId;
   if (had && !opts.free) {
     if (!takeItem(state, "bounty-token", 1)) return "Rerolling a live contract costs 1 bounty token.";
+    state.bounty.streak = 0;
+    state.bounty.chain = null;
   }
   const blocked = new Set(state.bounty?.block || []);
   if (had) blocked.add(had);
   const lvl = skillLevel(state, "bounty");
-  const pool = Object.values(CONTENT.monsters).filter((m) => !m.dungeonOnly && m.slayerReq <= lvl + 8 && !blocked.has(m.id));
-  const pickFrom = pool.length ? pool : Object.values(CONTENT.monsters).filter((m) => !m.dungeonOnly && m.slayerReq <= lvl + 8);
+  const pool = Object.values(CONTENT.monsters).filter((m) => !m.dungeonOnly && !m.echo && m.slayerReq <= lvl + 8 && !blocked.has(m.id));
+  const pickFrom = pool.length ? pool : Object.values(CONTENT.monsters).filter((m) => !m.dungeonOnly && !m.echo && m.slayerReq <= lvl + 8);
   if (!pickFrom.length) return "No contracts in range.";
+  const wantChain = Math.random() < 0.1 || opts.forceChain;
+  if (wantChain) {
+    const sorted = [...pickFrom].sort((a, b) => a.slayerReq - b.slayerReq);
+    const a = sorted[0];
+    const b = sorted[Math.min(sorted.length - 1, Math.floor(sorted.length / 2))];
+    const c = sorted[sorted.length - 1];
+    const elite = ensureElite(c);
+    state.bounty = {
+      monsterId: a.id,
+      need: 8,
+      have: 0,
+      streak: state.bounty.streak || 0,
+      block: [...blocked].slice(-5),
+      chain: { ids: [a.id, b.id, elite.id], step: 0 },
+      chainsDone: state.bounty.chainsDone || 0
+    };
+    return null;
+  }
   const m = pickFrom[Math.floor(Math.random() * pickFrom.length)];
   state.bounty = {
     monsterId: m.id,
     need: 8 + Math.floor(Math.random() * 18),
     have: 0,
     streak: state.bounty.streak || 0,
-    block: [...blocked].slice(-5)
+    block: [...blocked].slice(-5),
+    chain: null,
+    chainsDone: state.bounty.chainsDone || 0
   };
   return null;
+}
+
+function ensureElite(base) {
+  const id = "elite-" + base.id;
+  if (!CONTENT.monsters[id]) {
+    CONTENT.monsters[id] = {
+      ...base,
+      id,
+      name: "Elite " + (base.catalogName || base.name),
+      hp: Math.floor(base.hp * 1.35),
+      maxHit: base.maxHit + 2,
+      acc: Math.floor(base.acc * 1.2),
+      dungeonOnly: false,
+      fieldBoss: true,
+      model: base.model
+    };
+  }
+  return CONTENT.monsters[id];
 }
 
 export function swapWeaponStyle(state, style) {
@@ -915,6 +1072,7 @@ function rollCombatPet(state) {
     if (!pet || state.pets[pet.id]) continue;
     if (Math.random() < pet.chance) {
       state.pets[pet.id] = true;
+      notePet(state, pet.id);
       log(state, `Pet found: ${pet.name}`);
     }
   }

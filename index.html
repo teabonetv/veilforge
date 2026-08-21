@@ -27,6 +27,9 @@
         <h1 class="brand">VEILFORGE <small>THE LAST WORKSHOP</small></h1>
         <div class="links">
           <a class="dev-only" href="progress.html">Progress</a>
+          <button type="button" id="log-badge" data-act="desk" data-arg="codex">LOG 0%</button>
+          <span id="mode-chip" class="chip" hidden></span>
+          <span id="active-title" class="muted"></span>
           <button type="button" data-act="export">Export</button>
           <button type="button" data-act="import">Import</button>
           <button type="button" data-act="settings">Settings</button>
@@ -74,6 +77,7 @@
         </div>
       </div>
     </header>
+    <div id="eclipse-banner" class="eclipse-banner" hidden></div>
     <div id="codex"></div>
     <div id="commit"></div>
     <nav id="desk-nav">
@@ -81,6 +85,7 @@
       <button type="button" data-act="desk" data-arg="bank">Bank</button>
       <button type="button" data-act="desk" data-arg="stall">Shop</button>
       <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
+      <button type="button" data-act="desk" data-arg="codex">Codex</button>
       <button type="button" class="dock-halt" data-act="stop">Halt</button>
       <span class="desk-tag">Prepare. Idle. Trade. The dusk endures.</span>
     </nav>
@@ -129,6 +134,15 @@
         <aside class="stall-inspect" id="stall-copy"></aside>
       </div>
     </div>
+    <div id="codex-desk" hidden>
+      <div class="desk-head">
+        <h2>Codex</h2>
+        <p>Silhouettes until you meet them. The dusk keeps a ledger, not a tutorial gate.</p>
+        <span id="codex-meta"></span>
+      </div>
+      <div id="codex-tabs" class="tabs"></div>
+      <div id="codex-grid"></div>
+    </div>
     <div id="layout">
       <nav id="skill-nav"></nav>
       <div id="mid">
@@ -163,6 +177,8 @@
   </div>
   <div id="level-modal" hidden></div>
   <div id="death-modal" hidden></div>
+  <div id="edict-modal" hidden></div>
+  <div id="dawn-modal" hidden></div>
   <div id="fork-modal" hidden></div>
   <div id="toast"></div>
   <script type="module" src="js/main.js"></script>

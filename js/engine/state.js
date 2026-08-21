@@ -1,10 +1,12 @@
-import { SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, levelFromXp, buildContent } from "../content/catalog.js";
+import { SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, levelFromXp, buildContent, MASTERY_MILESTONES } from "../content/catalog.js";
 import { utf8ToB64, b64ToUtf8, clampName, safeMergeKey } from "../util/text.js";
+import { noteItem } from "./logbook.js";
 
 export const CONTENT = buildContent();
 export const TICK_MS = 50;
 export const SAVE_KEY = "veilforge-save-v1";
-export const SAVE_VERSION = 2;
+export const SAVE_BAK = "veilforge-save-bak-v1";
+export const SAVE_VERSION = 3;
 
 let saveFail = null;
 export function lastSaveFail() {
@@ -45,9 +47,9 @@ export function createState() {
       kills: {}, style: "might", spell: "gust-bolt", prayers: [], vow: 100, maxVow: 100,
       foodId: "food-0", foodId2: null, autoEat: 0.4, potionId: null, potionCharges: 0,
       stunUntil: 0, poison: 0, ward: 0, dungeonDeaths: 0,
-      spec: 0, useSpec: true
+      spec: 0, useSpec: true, echoDepth: 0, echoBest: 0, dungeonClears: {}
     },
-    bounty: { monsterId: null, need: 0, have: 0, streak: 0, block: [] },
+    bounty: { monsterId: null, need: 0, have: 0, streak: 0, block: [], chain: null, chainsDone: 0 },
     course: { chosen: {}, built: {} },
     soil: { plots: [null, null, null, null], useCompost: false },
     drove: { pens: [null, null] },
@@ -60,11 +62,23 @@ export function createState() {
     offlineHours: 18,
     stats: { actions: 0, kills: 0, deaths: 0, gp: 0, offlineMs: 0 },
     log: [],
-    settings: { toasts: true, reducedMotion: false, showCombatLog: true, tickScale: 1 },
+    settings: { toasts: true, reducedMotion: false, showCombatLog: true, tickScale: 1, hiscores: false, hiscoreName: "" },
     action: null,
     actionCounts: {},
+    actionMode: {},
     now: 0,
     levelUps: [],
+    logbook: { items: {}, monsters: {}, dungeons: {}, pets: {}, first: {} },
+    achv: { claimed: {}, done: {} },
+    titles: [],
+    activeTitle: "",
+    renewals: {},
+    rules: { mode: "standard" },
+    orders: { eat: true, bank: false, sell: false, sellFloor: "common", scripts: [] },
+    commissions: { lastDay: null, done: 0 },
+    actTier: 1,
+    endow: 0,
+    deeds: {},
     _fx: 0
   };
 }
@@ -78,7 +92,9 @@ export function addXp(state, skill, amount, content = CONTENT) {
   const toasts = [];
   const sk = state.skills[skill];
   const before = levelFromXp(sk.xp);
-  sk.xp += amount;
+  const renew = (state.renewals?.[skill] || 0);
+  const rite = Math.min(3, Math.pow(1.08, renew));
+  sk.xp += amount * rite * (1 + (state.endow || 0) * 0.005);
   sk.level = levelFromXp(sk.xp);
   if (sk.level > before) {
     toasts.push(`${skillName(skill)} ${sk.level}`);
@@ -122,7 +138,8 @@ export function bankUsed(state) {
 }
 
 export function bankCap(state) {
-  return 36 + (state.shopBought["shop-slots"] || 0) * 6;
+  const slots = state.shopBought["shop-slots"] || 0;
+  return 36 + slots * 6;
 }
 
 export function skillLocked(state, skillId) {
@@ -192,6 +209,7 @@ export function addItem(state, id, qty) {
     qty = Math.min(qty, stackMax - have);
   }
   state.bank[id] = (state.bank[id] || 0) + qty;
+  noteItem(state, id);
   if (!state.itemTabs[id]) {
     const cat = CONTENT.items[id]?.category;
     const slot = CONTENT.items[id]?.slot;
@@ -235,16 +253,24 @@ export function masteryLevel(xp) {
 
 export function masteryBonus(state, masteryId, skillHint) {
   const skill = skillHint || skillFromMasteryId(masteryId) || state.action?.skill;
-  if (!skill || !state.skills[skill]) return { speed: 0, preserve: 0, output: 0, rare: 0 };
+  if (!skill || !state.skills[skill]) return { speed: 0, preserve: 0, output: 0, rare: 0, label: "" };
   const xp = state.skills[skill].mastery[masteryId] || 0;
   const ml = masteryLevel(xp);
   const cp = state.skills[skill].checkpoints?.[masteryId] || 0;
-  return {
-    speed: ml * 0.0025 + cp * 0.04,
-    preserve: ml * 0.0015 + cp * 0.03,
-    output: ml * 0.001 + cp * 0.02,
-    rare: ml * 0.002 + cp * 0.015
-  };
+  let speed = ml * 0.0025 + cp * 0.04;
+  let preserve = ml * 0.0015 + cp * 0.03;
+  const output = ml * 0.001 + cp * 0.02;
+  let rare = ml * 0.002 + cp * 0.015;
+  let label = "";
+  for (const [th, row] of Object.entries(MASTERY_MILESTONES)) {
+    if (ml >= Number(th)) {
+      speed += row.speed || 0;
+      preserve += row.preserve || 0;
+      rare += row.rare || 0;
+      label = row.label;
+    }
+  }
+  return { speed, preserve, output, rare, label, level: ml };
 }
 
 function skillFromMasteryId(masteryId) {
@@ -344,25 +370,127 @@ export function persistable(state) {
   return out;
 }
 
+export function checksum(str) {
+  let h = 2166136261;
+  for (let i = 0; i < String(str).length; i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16);
+}
+
+let saveStore = null;
+export function setSaveStore(store) {
+  saveStore = store;
+}
+
+function storeGet(key) {
+  try {
+    if (saveStore) return saveStore.getItem(key);
+    if (typeof localStorage !== "undefined") return localStorage.getItem(key);
+  } catch { /* quota / private mode */ }
+  return null;
+}
+
+function storeSet(key, value) {
+  try {
+    if (saveStore) {
+      saveStore.setItem(key, value);
+      return;
+    }
+    if (typeof localStorage !== "undefined") localStorage.setItem(key, value);
+  } catch (e) {
+    throw e;
+  }
+}
+
+function storeRemove(key) {
+  try {
+    if (saveStore) saveStore.removeItem(key);
+    else if (typeof localStorage !== "undefined") localStorage.removeItem(key);
+  } catch { /* ignore */ }
+}
+
+function wrapSave(data) {
+  const body = JSON.stringify(data);
+  return JSON.stringify({ wrap: 1, sum: checksum(body), data });
+}
+
+function unwrapSave(raw) {
+  const s = JSON.parse(raw);
+  if (s && s.wrap === 1 && s.data) {
+    const body = JSON.stringify(s.data);
+    if (checksum(body) !== s.sum) throw new Error("checksum mismatch");
+    return s.data;
+  }
+  return s;
+}
+
 export function save(state) {
   state.lastSave = Date.now();
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(persistable(state)));
+    const prev = storeGet(SAVE_KEY);
+    if (prev) storeSet(SAVE_BAK, prev);
+    storeSet(SAVE_KEY, wrapSave(persistable(state)));
     saveFail = null;
+    if (typeof window !== "undefined") {
+      window.Capacitor?.Plugins?.Preferences?.set?.({ key: SAVE_KEY, value: wrapSave(persistable(state)) }).catch?.(() => {});
+    }
   } catch (e) {
     saveFail = e.message || "quota";
     console.warn("save failed", e);
   }
 }
 
-export function load() {
+function parseSlot(raw) {
+  if (!raw) return null;
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
-    if (!raw) return null;
-    const s = JSON.parse(raw);
-    return normalizeState(deepMerge(createState(), s));
+    return unwrapSave(raw);
   } catch {
     return null;
+  }
+}
+
+export function load() {
+  const primary = parseSlot(storeGet(SAVE_KEY));
+  if (primary) return normalizeState(deepMerge(createState(), primary));
+  const bak = parseSlot(storeGet(SAVE_BAK));
+  if (bak) {
+    const recovered = normalizeState(deepMerge(createState(), bak));
+    try { save(recovered); } catch { /* ignore */ }
+    log(recovered, "Recovered your forge from the ember-backup.");
+    return recovered;
+  }
+  return null;
+}
+
+export function wipeSaves() {
+  storeRemove(SAVE_KEY);
+  storeRemove(SAVE_BAK);
+}
+
+function sweepOrphans(state) {
+  const known = CONTENT.items || {};
+  for (const id of Object.keys(state.bank || {})) {
+    if (id === "coins") continue;
+    if (!known[id]) {
+      delete state.bank[id];
+      log(state, `The vault forgot an unknown stack (${id}).`);
+    }
+  }
+  for (const id of Object.keys(state.itemTabs || {})) {
+    if (id !== "coins" && !known[id]) delete state.itemTabs[id];
+  }
+  for (const slot of Object.keys(state.equipment || {})) {
+    const id = state.equipment[slot];
+    if (id && !known[id]) {
+      state.equipment[slot] = null;
+      log(state, `Unequipped forgotten ${slot}.`);
+    }
+  }
+  for (const slot of Object.keys(state.tools || {})) {
+    const id = state.tools[slot];
+    if (id && !known[id]) state.tools[slot] = null;
   }
 }
 
@@ -395,10 +523,28 @@ export function normalizeState(merged) {
   merged.soil.useCompost = !!merged.soil.useCompost;
   merged.chart = merged.chart || { active: [], slots: 2, studied: {}, ranks: {} };
   merged.chart.ranks = merged.chart.ranks || {};
-  merged.bounty = merged.bounty || { monsterId: null, need: 0, have: 0, streak: 0, block: [] };
+  merged.bounty = merged.bounty || { monsterId: null, need: 0, have: 0, streak: 0, block: [], chain: null, chainsDone: 0 };
   merged.bounty.block = merged.bounty.block || [];
   merged.whisper = merged.whisper || { heat: 0, streak: 0, heatByMark: {} };
   merged.whisper.heatByMark = merged.whisper.heatByMark || {};
+  merged.logbook = merged.logbook || { items: {}, monsters: {}, dungeons: {}, pets: {}, first: {} };
+  merged.achv = merged.achv || { claimed: {}, done: {} };
+  merged.titles = Array.isArray(merged.titles) ? merged.titles : [];
+  merged.activeTitle = merged.activeTitle || "";
+  merged.renewals = merged.renewals && typeof merged.renewals === "object" ? merged.renewals : {};
+  merged.rules = merged.rules || { mode: "standard" };
+  merged.orders = merged.orders || { eat: true, bank: false, sell: false, sellFloor: "common", scripts: [] };
+  merged.commissions = merged.commissions || { lastDay: null, done: 0 };
+  merged.actionMode = merged.actionMode && typeof merged.actionMode === "object" ? merged.actionMode : {};
+  merged.actTier = Math.max(1, Number(merged.actTier) || 1);
+  merged.endow = Math.max(0, Number(merged.endow) || 0);
+  merged.combat = merged.combat || {};
+  merged.combat.echoDepth = Number(merged.combat.echoDepth) || 0;
+  merged.combat.echoBest = Number(merged.combat.echoBest) || 0;
+  merged.combat.dungeonClears = merged.combat.dungeonClears || {};
+  merged.deeds = merged.deeds || {};
+  merged.settings = merged.settings || {};
+  if (merged.settings.hiscores == null) merged.settings.hiscores = false;
   for (const sk of Object.values(merged.skills || {})) {
     if (!sk) continue;
     sk.level = levelFromXp(sk.xp || 0);
@@ -407,12 +553,21 @@ export function normalizeState(merged) {
   if (lo0 && lo0.name === "Wanderer" && lo0.equipment && !Object.values(lo0.equipment).some(Boolean)) {
     lo0.equipment = { ...createState().loadouts[0].equipment };
   }
+  sweepOrphans(merged);
   return merged;
 }
 
 function migrateState(state, toVersion) {
   if (toVersion === 2) {
     remapQuestId(state, "whisper-dock-beggar", "q-whisper");
+  }
+  if (toVersion === 3) {
+    if (typeof state.whisper?.heat === "number" && !state.whisper.heatByMark) {
+      state.whisper.heatByMark = {};
+      log(state, "The marks have forgotten you.");
+    }
+    state.logbook = state.logbook || { items: {}, monsters: {}, dungeons: {}, pets: {}, first: {} };
+    state.rules = state.rules || { mode: "standard" };
   }
 }
 
@@ -451,12 +606,37 @@ export function importSave(str) {
   }
   let s;
   try {
-    s = JSON.parse(json);
-  } catch {
-    throw new Error("That save is not valid JSON.");
+    s = unwrapSave(json);
+  } catch (e) {
+    if (String(e.message || "").includes("checksum")) throw new Error("That save failed its checksum.");
+    try {
+      s = JSON.parse(json);
+    } catch {
+      throw new Error("That save is not valid JSON.");
+    }
   }
   if (!s || typeof s !== "object") throw new Error("That save has no data.");
+  if (s.wrap === 1 && s.data) s = s.data;
   return normalizeState(deepMerge(createState(), s));
 }
 
-export { SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, levelFromXp };
+export function renewSkill(state, skill) {
+  if (!state.skills[skill]) return "Unknown craft.";
+  if (skillLevel(state, skill) < MAX_LEVEL) return `Renewal wants ${skill} at ${MAX_LEVEL}.`;
+  const sk = state.skills[skill];
+  const mastery = { ...sk.mastery };
+  const checkpoints = { ...sk.checkpoints };
+  const guildRank = sk.guildRank;
+  const guildProgress = sk.guildProgress;
+  sk.xp = 0;
+  sk.level = 1;
+  sk.mastery = mastery;
+  sk.checkpoints = checkpoints;
+  sk.guildRank = guildRank;
+  sk.guildProgress = guildProgress;
+  state.renewals[skill] = (state.renewals[skill] || 0) + 1;
+  log(state, `Vow renewed on ${skillName(skill)}. The dusk endures.`);
+  return null;
+}
+
+export { SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, levelFromXp, MASTERY_MILESTONES };

@@ -49,6 +49,49 @@ export function xpForLevel(level) {
 export const XP_TABLE = Array.from({ length: 121 }, (_, i) => xpForLevel(i));
 export const MAX_LEVEL = 120;
 
+export const MASTERY_MILESTONES = {
+  25: { label: "Practised", batchBonus: 1 },
+  50: { label: "Seasoned", speed: 0.04 },
+  75: { label: "Master", preserve: 0.03 },
+  100: { label: "Legend", rare: 0.05 }
+};
+
+export function echoMonster(depth) {
+  const t = Math.min(13, 2 + Math.floor(Math.max(0, depth) / 5));
+  const mul = Math.pow(1.18, Math.max(0, depth));
+  const styles = ["might", "mark", "weave"];
+  const mechs = ["enrage", "guard", "phase", "curse", "summon"];
+  const hp = Math.floor((80 + 30 * depth) * mul);
+  return {
+    id: `echo-${depth}`,
+    name: `Echo ${depth}`,
+    area: "The Echo",
+    dungeonOnly: true,
+    echo: true,
+    boss: true,
+    hp,
+    maxHit: Math.max(4, Math.floor((8 + depth * 1.6) * Math.pow(1.12, Math.min(depth, 40)))),
+    acc: Math.floor((14 + depth * 3) * Math.pow(1.08, depth)),
+    eva: Math.floor(10 + depth * 2),
+    style: styles[depth % 3],
+    interval: Math.max(1100, 2400 - depth * 40),
+    def: Math.floor(8 + depth * 3),
+    slayerReq: 118,
+    tier: t,
+    special: depth % 4 === 0 ? "burst" : depth % 4 === 1 ? "drain" : depth % 4 === 2 ? "poison" : null,
+    burstMul: 2.2,
+    xp: { might: 24 + depth * 4, guard: 20 + depth * 3, vitality: 18 + depth * 3, mark: 24 + depth * 4, weave: 24 + depth * 4 },
+    drops: [
+      { item: "coins", min: 20 + depth * 8, max: 60 + depth * 16, chance: 1, rarity: "common" },
+      { item: "bones", min: 1, max: 3, chance: 0.8, rarity: "common" },
+      { item: `echo-sigil-${depth % 12}`, min: 1, max: 1, chance: Math.max(0.002, 0.06 - depth * 0.0005), rarity: "dusk" }
+    ],
+    unique: { item: `echo-sigil-${depth % 12}`, chance: Math.max(0.002, 0.04 - depth * 0.0004), rarity: "dusk" },
+    mechanic: { type: mechs[depth % mechs.length], cadence: Math.max(5000, 10000 - depth * 80), telegraph: 1500 },
+    desc: `Infinite descent ${depth}. Stats scale. Death resets the climb.`
+  };
+}
+
 export function levelFromXp(xp) {
   let lvl = 1;
   for (let i = 2; i <= MAX_LEVEL; i++) {
@@ -467,6 +510,7 @@ export function buildContent() {
           { item: idify(`${TIER_NAMES[Math.min(13, t)]}-saber`), min: 1, max: 1, chance: 0.008 },
         ],
         unique: mi === 5 ? { item: idify(`${TIER_NAMES[Math.min(13, t)]}-amulet`), chance: 0.02 } : null,
+        fieldBoss: mi === 5,
         desc: `${nm} of ${area.name}. Style ${style}${mi === 5 ? ", area unique hunter." : "."}`
       };
       mids.push(id);
@@ -518,6 +562,8 @@ export function buildContent() {
         { item: idify(`${TIER_NAMES[t]}-amulet`), min: 1, max: 1, chance: 0.08 }
       ],
       unique: { item: idify(`${TIER_NAMES[t]}-amulet`), chance: 0.06 },
+      boss: true,
+      dungeonOnly: true,
       desc: `${d.name} closer. Authored boss — not a recycled field mob.`
     };
     seq.push(bossId);
@@ -722,6 +768,86 @@ export function buildContent() {
     { id: "dust-str", name: "Dust Edge", cost: 16, bonus: { str: 0.04 }, desc: "+4% melee power." },
     { id: "dust-ward", name: "Dust Ward", cost: 16, bonus: { magic: 0.04 }, desc: "+4% weave power." }
   ];
+
+  for (let i = 0; i < 12; i++) {
+    addItem({
+      id: `echo-sigil-${i}`,
+      name: `Echo Sigil ${i + 1}`,
+      category: "equipment",
+      slot: i % 2 ? "ring" : "amulet",
+      rarity: i >= 8 ? "dusk" : "exotic",
+      value: 400 + i * 80,
+      stats: { acc: 2 + (i % 3), str: i % 2, magic: (i + 1) % 3, hp: 1 },
+      desc: "A sidegrade from The Echo. Set-synergy, not a strict BiS stick."
+    });
+  }
+  addItem({
+    id: "chain-ring", name: "Chain Ring", category: "equipment", slot: "ring", rarity: "exotic",
+    value: 900, stats: { acc: 6, str: 4, hp: 2 }, desc: "Bounty-chain exclusive. The hunt remembers."
+  });
+  addItem({
+    id: "chain-cape", name: "Chain Cape", category: "equipment", slot: "cape", rarity: "exotic",
+    value: 1400, stats: { def: 8, hp: 4 }, desc: "Bounty-chain exclusive cloak."
+  });
+  addItem({
+    id: "chain-relic", name: "Chain Relic", category: "equipment", slot: "amulet", rarity: "dusk",
+    value: 2200, stats: { acc: 8, magic: 6, ranged: 6, hp: 3 }, desc: "Bounty-chain closer relic."
+  });
+  addItem({
+    id: "workshop-seal", name: "Workshop Seal", category: "equipment", slot: "ring", rarity: "exotic",
+    value: 1600, stats: { acc: 3, hp: 2 }, desc: "Commission unique. A wax-and-iron pride."
+  });
+  addItem({
+    id: "workshop-banner", name: "Workshop Banner", category: "equipment", slot: "cape", rarity: "rare",
+    value: 800, stats: { def: 3, hp: 1 }, desc: "Commission vanity. The forge on your back."
+  });
+
+  shop.push(
+    { id: "shop-chain-ring", item: "chain-ring", qty: 1, cost: 400, tokens: true, name: "Chain Ring", desc: "Spend bounty tokens. Chain exclusive." },
+    { id: "shop-chain-cape", item: "chain-cape", qty: 1, cost: 900, tokens: true, name: "Chain Cape", desc: "Spend bounty tokens. Chain exclusive." },
+    { id: "shop-chain-relic", item: "chain-relic", qty: 1, cost: 1600, tokens: true, name: "Chain Relic", desc: "Spend bounty tokens. Chain exclusive." },
+    { id: "shop-endow", item: null, effect: "endow", cost: 5000, repeatable: true, max: 20, name: "Citadel Endowment", desc: "Permanent +0.5% all XP. Geometric cost." },
+    { id: "shop-banner", item: "workshop-banner", qty: 1, cost: 12000, name: "Forge Banner", desc: "Cosmetic cape. Ledger-tracked vanity." }
+  );
+
+  const echo0 = echoMonster(0);
+  monsters[echo0.id] = echo0;
+  dungeons.push({
+    id: "the-echo",
+    name: "The Echo",
+    req: 118,
+    infinite: true,
+    sequence: ["echo-0"],
+    bossName: "Echo 0",
+    reward: { item: "echo-sigil-0", qty: 1 },
+    tokens: 6,
+    desc: "Infinite descent under The Last Page. Depth scales. Death resets. Halt is still Halt."
+  });
+
+  const MECHS = ["curse", "phase", "guard", "enrage", "summon"];
+  let mi = 0;
+  for (const m of Object.values(monsters)) {
+    if (m.dungeonOnly || m.fieldBoss || m.boss) {
+      if (!m.mechanic) {
+        m.mechanic = { type: MECHS[mi % MECHS.length], cadence: 9000, telegraph: 1500, counter: m.style };
+        mi += 1;
+      }
+      m.boss = true;
+    }
+    if (!m.rarity) m.rarity = m.boss ? "rare" : "common";
+  }
+  for (const it of Object.values(items)) {
+    if (it.rarity) continue;
+    if (it.slot && (it.tier || 0) >= 11) it.rarity = "exotic";
+    else if (it.slot && (it.tier || 0) >= 7) it.rarity = "rare";
+    else if (it.slot && (it.tier || 0) >= 3) it.rarity = "uncommon";
+    else if ((it.value || 0) >= 120) it.rarity = "uncommon";
+    else it.rarity = "common";
+  }
+  for (const m of Object.values(monsters)) {
+    for (const d of m.drops || []) d.rarity = items[d.item]?.rarity || d.rarity || "common";
+    if (m.unique) m.unique.rarity = items[m.unique.item]?.rarity || "exotic";
+  }
 
   return imprintContent({
     items, actions, monsters, areas, dungeons, shop, quests, guildTasks,

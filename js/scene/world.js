@@ -129,6 +129,8 @@ export function createWorld(canvas) {
     }
 
     tintForSkill(skill, fighting, scene, gold, rim, hemi, floor);
+    applyActTier(state?.actTier || 1, aurora, scene, hemi);
+    applyScars(state, citadel, gold);
     const job = state?.action?.skill || skill;
     const foodN = Object.entries(state?.bank || {}).reduce((n, [id, qty]) => n + ((CONTENT.items[id]?.heal && qty > 0) ? qty : 0), 0);
     const topSkill = Object.values(state?.skills || {}).reduce((m, s) => Math.max(m, s?.level || 1), 1);
@@ -155,8 +157,9 @@ export function createWorld(canvas) {
       flame.position.y = flame.userData.baseY + Math.sin(t * 10 + flame.userData.bob) * 0.05;
     }
     citadel.userData.flames.forEach((c) => {
+      const scar = Math.min(0.28, Object.values(state?.combat?.dungeonClears || {}).reduce((n, v) => n + (v || 0), 0) * 0.02);
       c.position.y = 4.55 + Math.sin(t * 3.2 + c.userData.bob) * 0.08;
-      c.scale.setScalar(0.9 + Math.sin(t * 6 + c.userData.bob) * 0.12);
+      c.scale.setScalar(0.9 + scar + Math.sin(t * 6 + c.userData.bob) * 0.12);
     });
 
     const drift = reduced ? 0 : 1;
@@ -250,7 +253,7 @@ export function createWorld(canvas) {
     renderer.render(scene, camera);
   }
 
-  return { frame, resize, scene };
+  return { frame, resize, scene, applyActTier: (n) => applyActTier(n, aurora, scene, hemi), setArenaTint };
 }
 
 function makeMats() {
@@ -760,6 +763,40 @@ function buildHpBars() {
     b.userData.fill.position.x = (eR - 1) * 0.43;
   }
   return { root, set };
+}
+
+function applyActTier(n, aurora, scene, hemi) {
+  const tier = Math.max(1, Math.min(6, Number(n) || 1));
+  const palette = [
+    [0x3ee0c0, 0x4f6dff, 0xc084fc],
+    [0x7ddeb2, 0x4f6dff, 0x9b8cff],
+    [0xe8b86d, 0xff7a2a, 0xc084fc],
+    [0x8eb4ff, 0x4f6dff, 0xf0b7ff],
+    [0xd4788c, 0x7b6cff, 0xf0b7ff],
+    [0xf0b7ff, 0xe8c9a0, 0x7b6cff]
+  ][tier - 1];
+  const mats = aurora?.children || [];
+  for (const mesh of mats) {
+    const u = mesh.material?.uniforms;
+    if (!u?.uA) continue;
+    u.uA.value.setHex(palette[0]);
+    u.uB.value.setHex(palette[1]);
+    u.uC.value.setHex(palette[2]);
+    u.uAmp.value = 0.85 + tier * 0.08;
+  }
+  if (hemi) hemi.intensity = 0.55 + tier * 0.04;
+  if (scene?.fog) scene.fog.density = 0.034 + tier * 0.0015;
+}
+
+function setArenaTint(hex) {
+  /* reserved for boss-arena flashes; frame() already tints on fight */
+  return hex;
+}
+
+function applyScars(state, citadel, gold) {
+  const clears = Object.values(state?.combat?.dungeonClears || {}).reduce((n, v) => n + (v || 0), 0);
+  const echo = state?.combat?.echoBest || 0;
+  if (gold) gold.color.setHex(clears + echo > 8 ? 0xffc878 : 0xe0b15a);
 }
 
 function tintForSkill(skill, fighting, scene, gold, rim, hemi, floor) {

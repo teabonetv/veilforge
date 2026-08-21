@@ -23,6 +23,11 @@
   --r-md: 10px;
   --r-lg: 16px;
   --r-pill: 999px;
+  --rarity-common: #c8bdd6;
+  --rarity-uncommon: #7ddeb2;
+  --rarity-rare: #8eb4ff;
+  --rarity-exotic: #e8b86d;
+  --rarity-dusk: #f0b7ff;
   font-family: "Segoe UI", system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
@@ -141,8 +146,14 @@ button:disabled:not(.locked) {
 }
 #yield-hits .drip.xp { color: var(--ok); top: 2px; }
 #yield-hits .drip.item { color: var(--gold); top: 18px; font-size: 12px; }
-#yield-hits .drip.rare { color: var(--lilac); top: 18px; font-size: 13px; }
+#yield-hits .drip.rare { color: var(--rarity-rare); top: 18px; font-size: 13px; }
+#yield-hits .drip.exotic { color: var(--rarity-exotic); top: 18px; font-size: 13px; }
+#yield-hits .drip.dusk { color: var(--rarity-dusk); top: 18px; font-size: 13px; animation: dusk-shimmer 1.2s ease-in-out; }
 #yield-hits .drip.burn { color: var(--rose); top: 18px; }
+@keyframes dusk-shimmer {
+  0%, 100% { filter: brightness(1); text-shadow: 0 0 8px #f0b7ff66; }
+  50% { filter: brightness(1.35); text-shadow: 0 0 16px #f0b7ffaa; }
+}
 #action-wrap.pop { box-shadow: 0 0 16px #7ddeb266, inset 0 0 8px #7ddeb233; }
 @keyframes drip-up {
   0% { opacity: 1; transform: translateX(-50%) translateY(8px) scale(1.05); }
@@ -375,6 +386,7 @@ select, option {
 .xpbar span { position: absolute; inset: 0; font-size: 11px; display: flex; align-items: center; justify-content: center; }
 .guild { font-size: 12px; color: var(--gold-dim); margin: 8px 0 12px; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+/* P9: stacked gradient + card-frame.png. border-image fights radius tokens and clips Imagine cells. */
 .card {
   display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
   text-align: left; min-height: 0; padding: 9px 10px;
@@ -886,3 +898,56 @@ select, option {
 .comm span { font-size: 12px; color: var(--text); }
 .ware.sold, .vtile.sold, .comm.sold { opacity: 0.72; }
 .xpbar, .qbar, .vow { border-radius: var(--r-pill); }
+
+.eclipse-banner {
+  padding: 4px 16px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--rarity-dusk);
+  background: linear-gradient(90deg, #241036, #1a1028);
+  border-bottom: 1px solid #5a3a78;
+}
+.skill.renewed {
+  box-shadow: inset 0 0 0 1px var(--gold), 0 0 12px #e8c9a044;
+}
+.logslot { filter: brightness(0); opacity: 0.28; }
+.logslot.found { filter: none; opacity: 1; }
+#codex-desk { padding: 12px 16px 24px; overflow: auto; height: calc(100vh - 140px); }
+#codex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(108px, 1fr)); gap: 8px; }
+.codex-cell {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 6px; font-size: 11px; text-align: center;
+  border-radius: var(--r-md);
+  background: #160d22;
+  border: 1px solid var(--line-soft);
+}
+.codex-cell .dico { width: 40px; height: 40px; }
+.fight-board.telegraph {
+  animation: telegraph-pulse 0.9s ease-in-out infinite;
+  outline: 2px solid var(--rose);
+}
+@keyframes telegraph-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 #d4788c88; }
+  50% { box-shadow: 0 0 0 10px transparent; }
+}
+.edict-sheet, .dawn-sheet {
+  background:
+    radial-gradient(800px 240px at 50% -20%, #3a184866, transparent 60%),
+    linear-gradient(180deg, #1c122c, #12081a);
+}
+.dawn-sheet h3 { color: var(--gold); }
+.mode-row, .orders-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.deed-row { display: flex; gap: 6px; font-size: 11px; color: var(--gold); }
+.echo-card { border-color: var(--rarity-dusk); }
+#mode-chip { letter-spacing: 0.08em; text-transform: uppercase; font-size: 11px; }
+#log-badge { color: var(--gold); border-color: var(--gold-dim); }
+#active-title { font-size: 12px; }
+#edict-modal, #dawn-modal {
+  position: fixed; inset: 0; background: #05020ccc; display: grid; place-items: center; z-index: 40;
+}
+#edict-modal[hidden], #dawn-modal[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .fight-board.telegraph { animation: none; }
+  #yield-hits .drip.dusk { animation: none; }
+}

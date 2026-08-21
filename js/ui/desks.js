@@ -6,6 +6,13 @@ import { iconMarkup } from "../scene/icons.js";
 import { escapeHtml } from "../util/text.js";
 import { QUAY_BOOTHS, inferBooth, offerModel, offerName, quayDeal, offerPrice, quayGossip, hungerStacks, pawnRate, quayCommissions } from "../engine/market.js";
 import { glyphMarks, glyphLock } from "./glyphs.js";
+import { ledgerStats, collectUniqueIds } from "../engine/ledger.js";
+import { logbookStats } from "../engine/logbook.js";
+import { ACHIEVEMENTS } from "../content/achievements.js";
+import { currentCommission } from "../engine/commissions.js";
+import { fetchScores } from "../engine/scores.js";
+import { rarityOf } from "../content/rarity.js";
+import { deedMedals } from "../engine/deeds.js";
 
 const SLOTS = [
   { id: "helm", label: "Hood", side: "left", i: 0 },
@@ -32,6 +39,9 @@ let stallBooth = "tools";
 let stallPick = null;
 let stallFilter = "";
 let stallPacks = 1;
+let codexTab = "beasts";
+let hiscoreRows = [];
+let hiscoreAsked = false;
 
 export function setDesk(id) {
   desk = id;
@@ -82,6 +92,7 @@ export function renderDesks(ctx) {
   const bankEl = document.getElementById("bank-desk");
   const wandEl = document.getElementById("wander-desk");
   const stallEl = document.getElementById("stall-desk");
+  const codexEl = document.getElementById("codex-desk");
   if (bankEl) {
     bankEl.hidden = desk !== "bank";
     if (desk === "bank") renderVault(ctx);
@@ -94,10 +105,14 @@ export function renderDesks(ctx) {
     stallEl.hidden = desk !== "stall";
     if (desk === "stall") renderStall(ctx);
   }
+  if (codexEl) {
+    codexEl.hidden = desk !== "codex";
+    if (desk === "codex") renderCodexDesk(ctx);
+  }
   document.querySelectorAll("#desk-nav [data-arg]").forEach((b) => {
     b.classList.toggle("on", b.dataset.arg === desk);
     if (!b.querySelector(".pix")) {
-      const kind = b.dataset.arg === "stall" ? "coins" : b.dataset.arg === "bank" ? "pouch" : b.dataset.arg === "loadout" ? "saber" : "forge";
+      const kind = b.dataset.arg === "stall" ? "coins" : b.dataset.arg === "bank" ? "pouch" : b.dataset.arg === "loadout" ? "saber" : b.dataset.arg === "codex" ? "tome" : "forge";
       b.insertAdjacentHTML("afterbegin", `<span class="dico">${iconMarkup({ eid: "tab-" + b.dataset.arg, kind }, 28)}</span>`);
     }
   });
@@ -119,7 +134,7 @@ function renderVault(ctx) {
   const held = Object.entries(state.bank).filter(([, n]) => n > 0);
   const chips = [["held", "In vault"], ["weapons", "Weapons"], ["armour", "Armour"], ["food", "Food"], ["log", "Timber"], ["all", "Compendium"]]
     .map(([id, lab]) => `<button type="button" class="${vaultCat === id ? "on" : ""}" data-act="vault-cat" data-arg="${id}">${lab}</button>`).join("");
-  const lens = [["items", "Items"], ["monsters", "Monsters"], ["dungeons", "Dungeons"], ["actions", "Actions"], ["pets", "Pets"]]
+  const lens = [["items", "Items"], ["monsters", "Monsters"], ["dungeons", "Gates"], ["uniques", "Uniques"], ["quests", "Pages"], ["pets", "Pets"], ["actions", "Actions"]]
     .map(([id, lab]) => `<button type="button" class="${vaultLens === id ? "on" : ""}" data-act="vault-lens" data-arg="${id}">${lab}</button>`).join("");
 
   let tiles = "";
@@ -138,6 +153,18 @@ function renderVault(ctx) {
     tiles = CONTENT.dungeons
       .filter((d) => !vaultFilter || d.name.toLowerCase().includes(vaultFilter))
       .map((d) => tile("dungeon", d.id, d.name, (state.combat.dungeonClears || {})[d.id] || 0, d.model)).join("");
+  } else if (vaultLens === "uniques") {
+    const ids = collectUniqueIds();
+    tiles = ids.map((id) => {
+      const it = CONTENT.items[id];
+      const found = !!(ctx.state.logbook?.items?.[id] || bankCount(ctx.state, id));
+      return tile("item", id, found ? (it?.name || id) : "????", found ? (bankCount(ctx.state, id) || 1) : 0, it?.model, found ? "" : "locked logslot");
+    }).join("");
+  } else if (vaultLens === "quests") {
+    tiles = CONTENT.quests.map((q) => {
+      const done = (ctx.state.quests.done || []).includes(q.id);
+      return tile("quest", q.id, done ? q.name : "Sealed page", done ? 1 : 0, q.model, done ? "" : "locked logslot");
+    }).join("");
   } else if (vaultLens === "pets") {
     const owned = CONTENT.pets.filter((p) => state.pets?.[p.id]).length;
     tiles = `<p class="pet-head">${owned} / ${CONTENT.pets.length} companions</p>` + CONTENT.pets
@@ -183,7 +210,7 @@ function renderInspect(ctx) {
       <p class="temper">${it.temper} · ${it.catalogName || ""}</p>
       <blockquote>${it.voice}</blockquote>
       <p class="blurb">${it.desc || ""}</p>
-      <p class="muted">${it.category}${it.slot ? " · " + it.slot : ""} · ${n.toLocaleString()} held · ${glyphMarks(11)} ${it.value || 0}</p>
+      <p class="muted">${it.category}${it.slot ? " · " + it.slot : ""} · ${n.toLocaleString()} held · ${glyphMarks(11)} ${it.value || 0} · ${rarityOf(it).name}</p>
       ${it.stats ? `<p class="muted">Acc ${it.stats.acc || 0} · Str ${it.stats.str || 0} · Ranged ${it.stats.ranged || 0} · Magic ${it.stats.magic || 0} · Def ${it.stats.def || 0} · HP ${it.stats.hp || 0}</p>` : ""}
       ${it.heal ? `<p class="muted">Heals ${it.heal}</p>` : ""}
       ${it.special ? `<p class="muted">Special ${it.special}</p>` : ""}
@@ -199,7 +226,8 @@ function renderInspect(ctx) {
       <blockquote>${m.voice}</blockquote>
       <p class="blurb">${m.desc || ""}</p>
       <p class="muted">HP ${m.hp} · max hit ${m.maxHit} · interval ${(m.interval / 1000).toFixed(1)}s · slayer ${m.slayerReq}</p>
-      <p class="muted">${(m.drops || []).map((d) => `${Math.round(d.chance * 100)}% ${CONTENT.items[d.item]?.name || d.item}`).join(" · ")}</p>
+      <p class="muted">${(m.drops || []).map((d) => `${odds(d.chance)} ${CONTENT.items[d.item]?.name || d.item}`).join(" · ")}${m.unique ? ` · unique ${odds(m.unique.chance)} ${CONTENT.items[m.unique.item]?.name || m.unique.item}` : ""}</p>
+      ${m.mechanic ? `<p class="muted">Mechanic ${m.mechanic.type} · cadence ${(m.mechanic.cadence || 0) / 1000}s</p>` : ""}
       ${m.dungeonOnly ? `<p class="blurb">Dungeon closer — hunt it inside its gate, not on the field.</p>` : `<button type="button" data-act="fight" data-arg="${id}">Hunt</button>`}`;
   } else if (kind === "dungeon") {
     const d = CONTENT.dungeons.find((x) => x.id === id);
@@ -209,6 +237,12 @@ function renderInspect(ctx) {
       <blockquote>${d.voice}</blockquote>
       <p class="blurb">${d.desc || ""}</p>
       <button type="button" data-act="dungeon" data-arg="${id}">Enter</button>`;
+  } else if (kind === "quest") {
+    const q = CONTENT.quests.find((x) => x.id === id);
+    if (!q) return;
+    const done = (ctx.state.quests.done || []).includes(id);
+    el.innerHTML = `<h3>${done ? q.name : "A sealed page"}</h3>
+      <p class="blurb">${done ? (q.how || q.desc) : "The ledger does not whisper this yet."}</p>`;
   } else if (kind === "pet") {
     const p = CONTENT.pets.find((x) => x.id === id);
     if (!p) return;
@@ -364,6 +398,7 @@ export function renderStall(ctx) {
       <p class="muted">Hunger: they want <strong>${deal.hunger}</strong> this calendar dusk. Vault fence starts at 40% and falls on high-tier junk. The quay pays ${Math.round(pawnRate() * 100)}%.</p>
       ${pawn}
       ${commissionRow(state)}
+      ${workshopBoard(state)}
     </div>`;
   }
   const booths = document.getElementById("stall-booths");
@@ -418,7 +453,9 @@ export function renderStall(ctx) {
         ${[1, 5, 10].map((n) => `<button type="button" class="${stallPacks === n ? "on" : ""}" data-act="stall-packs" data-arg="${n}">${n}</button>`).join("")}
       </div>` : ""}
       <div class="acts">
-        <button type="button" class="primary" data-act="buy" data-arg="${o.id}" ${sold || !lvok ? "disabled" : ""}>Pay ${glyphMarks(11)} ${Math.floor(cost).toLocaleString()}${packable && stallPacks > 1 ? ` ×${stallPacks}` : ""}</button>
+        ${state.rules?.mode === "iron" && !o.tokens
+          ? `<p class="blurb">Wanderer's Path: the quay will not sell. Fence at 40%.</p>`
+          : `<button type="button" class="primary" data-act="buy" data-arg="${o.id}" ${sold || !lvok ? "disabled" : ""}>Pay ${glyphMarks(11)} ${Math.floor(cost).toLocaleString()}${packable && stallPacks > 1 ? ` ×${stallPacks}` : ""}</button>`}
       </div>`;
   }
 }
@@ -436,6 +473,14 @@ export function onStallBooth(v) { stallBooth = v; stallPick = null; }
 export function onStallPick(v) { stallPick = v; }
 export function onStallPacks(v) { stallPacks = Math.max(1, Math.min(10, +v || 1)); }
 export function stallPackCount() { return stallPacks; }
+export function onCodexTab(v) { codexTab = v; }
+
+function odds(p) {
+  const n = Number(p);
+  if (!(n > 0)) return "never";
+  if (n >= 0.995) return "always";
+  return `1/${Math.max(2, Math.round(1 / n))}`;
+}
 
 export function inspectModelOf() {
   const { kind, id } = vaultPick;
@@ -444,6 +489,7 @@ export function inspectModelOf() {
   if (kind === "dungeon") return CONTENT.dungeons.find((d) => d.id === id)?.model;
   if (kind === "action") return CONTENT.actions[id]?.model;
   if (kind === "pet") return CONTENT.pets.find((p) => p.id === id)?.model;
+  if (kind === "quest") return CONTENT.quests.find((q) => q.id === id)?.model;
   return null;
 }
 
@@ -460,4 +506,104 @@ function commissionRow(state) {
     </button>`;
   }).join("");
   return `<div class="commissions"><h4>Dusk commissions</h4><p class="muted">Rotating indentures. Pay the underwrite, deliver the goods, take the purse.</p>${rows}</div>`;
+}
+
+function workshopBoard(state) {
+  const c = currentCommission(state);
+  const lines = c.requires.map((r) => `${bankCount(state, r.item)}/${r.qty} ${escapeHtml(CONTENT.items[r.item]?.name || r.item)}`).join(" · ");
+  const ready = c.requires.every((r) => bankCount(state, r.item) >= r.qty);
+  const done = state.commissions?.lastDay === c.day;
+  return `<div class="commissions"><h4>Workshop indenture</h4>
+    <p>${escapeHtml(c.name)} · ${c.pays.toLocaleString()} veilmarks</p>
+    <p class="muted">${lines}</p>
+    <button type="button" class="primary" data-act="workshop" ${ready && !done ? "" : "disabled"}>${done ? "Delivered today" : "Deliver"}</button>
+  </div>`;
+}
+
+function logCell(kind, id, name, found, model) {
+  return `<button type="button" class="codex-cell ${found ? "found" : ""}" data-act="vault-pick" data-kind="${kind}" data-arg="${id}">
+    <span class="dico ${found ? "found" : "logslot"}">${iconMarkup(model || { eid: id }, 40)}</span>
+    <strong>${escapeHtml(found ? name : "????")}</strong>
+  </button>`;
+}
+
+function renderCodexDesk(ctx) {
+  const { state } = ctx;
+  const ls = ledgerStats(state);
+  const lb = logbookStats(state, CONTENT);
+  const tabs = [
+    ["beasts", "Beasts"],
+    ["bosses", "Bosses"],
+    ["gates", "Gates"],
+    ["relics", "Relics"],
+    ["pets", "Pets"],
+    ["pages", "Pages"],
+    ["diaries", "Diaries"],
+    ["hiscores", "Hiscores"]
+  ];
+  const tabHtml = tabs.map(([id, lab]) => `<button type="button" class="${codexTab === id ? "on" : ""}" data-act="codex-tab" data-arg="${id}">${lab}</button>`).join("");
+  const meta = document.getElementById("codex-meta");
+  if (meta) meta.textContent = `LOG ${lb.totalPct}% · standing ${ls.completionPct}%`;
+  const tabsEl = document.getElementById("codex-tabs");
+  const grid = document.getElementById("codex-grid");
+  if (tabsEl) tabsEl.innerHTML = tabHtml;
+  if (!grid) return;
+  if (codexTab === "hiscores") {
+    if (!hiscoreAsked && state.settings?.hiscores) {
+      hiscoreAsked = true;
+      fetchScores().then((rows) => { hiscoreRows = rows; renderDesks(ctx); });
+    }
+    grid.innerHTML = `<div class="panel"><p class="muted">${state.settings?.hiscores ? "Client contract only. No board is hosted here." : "Opt in from Workshop settings."}</p>
+      ${(hiscoreRows || []).slice(0, 20).map((r) => `<p>${escapeHtml(r.name || "?")} · lv ${r.totalLevel || "?"} · echo ${r.echoBest || 0}</p>`).join("") || "<p class='muted'>Empty board.</p>"}</div>`;
+    return;
+  }
+  if (codexTab === "beasts") {
+    grid.innerHTML = Object.values(CONTENT.monsters)
+      .filter((m) => !m.dungeonOnly && !m.echo && !String(m.id).startsWith("elite-"))
+      .map((m) => logCell("monster", m.id, m.name, !!(state.logbook?.monsters?.[m.id] || state.combat.kills?.[m.id]), m.model)).join("");
+    return;
+  }
+  if (codexTab === "bosses") {
+    grid.innerHTML = Object.values(CONTENT.monsters)
+      .filter((m) => m.dungeonOnly || m.fieldBoss || m.boss)
+      .filter((m) => !m.echo || m.id === "echo-0")
+      .map((m) => {
+        const found = !!(state.logbook?.monsters?.[m.id] || state.combat.kills?.[m.id]);
+        const medals = deedMedals(state, m.id).filter((d) => d.have).map((d) => d.id).join(" ");
+        return `<button type="button" class="codex-cell ${found ? "found" : ""}" data-act="vault-pick" data-kind="monster" data-arg="${m.id}">
+          <span class="dico ${found ? "found" : "logslot"}">${iconMarkup(m.model || {}, 40)}</span>
+          <strong>${escapeHtml(found ? m.name : "????")}</strong>
+          <span>${escapeHtml(medals || "")}</span>
+        </button>`;
+      }).join("");
+    return;
+  }
+  if (codexTab === "gates") {
+    grid.innerHTML = CONTENT.dungeons.map((d) => logCell("dungeon", d.id, d.name, !!((state.combat.dungeonClears || {})[d.id] || state.logbook?.dungeons?.[d.id]), d.model)).join("");
+    return;
+  }
+  if (codexTab === "relics") {
+    const ids = collectUniqueIds();
+    grid.innerHTML = ids.map((id) => {
+      const it = CONTENT.items[id];
+      const found = !!(state.logbook?.items?.[id] || bankCount(state, id));
+      return logCell("item", id, it?.name || id, found, it?.model);
+    }).join("") + workshopBoard(state);
+    return;
+  }
+  if (codexTab === "pets") {
+    grid.innerHTML = CONTENT.pets.map((p) => logCell("pet", p.id, p.name, !!(state.pets?.[p.id] || state.logbook?.pets?.[p.id]), p.model)).join("");
+    return;
+  }
+  if (codexTab === "pages") {
+    grid.innerHTML = CONTENT.quests.map((q) => logCell("quest", q.id, q.name, (state.quests.done || []).includes(q.id), q.model)).join("");
+    return;
+  }
+  grid.innerHTML = ACHIEVEMENTS.map((a) => {
+    const done = !!(state.achv?.done?.[a.id]);
+    return `<button type="button" class="codex-cell ${done ? "found" : ""}" data-act="wear-title" data-arg="${escapeHtml(a.reward?.title || "")}">
+      <strong>${escapeHtml(done ? a.name : "????")}</strong>
+      <span>${escapeHtml(done ? (a.reward?.title || "") : "unsealed")}</span>
+    </button>`;
+  }).join("");
 }
