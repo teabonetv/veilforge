@@ -59,6 +59,8 @@
     { "n": 1, "state": "builders running", "coherence": "queued" }
   ],
   "log": [
+    { "n": 7, "event": "Builder D re-dispatched with full brief after a runtime hiccup split the batch; strays stopped." },
+    { "n": 6, "event": "All four lanes confirmed isolated: veilforge-wt-a/b/c/d on branches wt-a/b/c/d." },
     { "n": 5, "event": "Builders A/B/C/D dispatched to isolated lanes (round 1)." },
     { "n": 4, "event": "Benchmark locked: Melvor Idle live blind compare; MI2 from public docs (not yet playable)." },
     { "n": 3, "event": "Live dashboard deployed." },
