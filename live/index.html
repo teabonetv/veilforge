@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Veilforge · Operation Utterly Perfect</title>
+<style>
+  :root {
+    --bg: #0b0a12; --ink: #e8e2d4; --dim: #8f88a8; --line: #2a2438;
+    --amber: #ffb454; --violet: #a78bfa; --blue: #6cb6ff; --green: #7ee787;
+    --red: #ff6b6b; --gold: #ffd700; --card: rgba(17, 14, 26, .82);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--ink); font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  #scene { position: fixed; inset: 0; display: block; }
+  .hud { position: fixed; pointer-events: none; }
+  #header { top: 18px; left: 22px; }
+  #header h1 { font-size: 21px; letter-spacing: 3px; font-weight: 700; }
+  #header h1 span { color: var(--amber); }
+  #phase { margin-top: 4px; font-size: 13px; color: var(--amber); letter-spacing: 1px; }
+  #protocol { top: 74px; left: 22px; max-width: 430px; font-size: 11.5px; line-height: 1.55; color: var(--dim); }
+  #protocol li { list-style: none; padding-left: 14px; position: relative; }
+  #protocol li::before { content: "◆"; position: absolute; left: 0; color: var(--violet); font-size: 8px; top: 3px; }
+  #logbox { bottom: 18px; left: 22px; width: min(430px, 44vw); font-size: 11.5px; }
+  #logbox h2 { font-size: 11px; letter-spacing: 2px; color: var(--dim); margin-bottom: 6px; font-weight: 600; }
+  #logbox div.ev { color: var(--dim); line-height: 1.6; border-left: 1px solid var(--line); padding-left: 10px; }
+  #logbox div.ev b { color: var(--ink); font-weight: 600; }
+  #cards { position: fixed; right: 18px; top: 50%; transform: translateY(-50%); width: min(360px, 40vw);
+           display: flex; flex-direction: column; gap: 10px; }
+  .piece { background: var(--card); border: 1px solid var(--line); border-left-width: 3px; border-radius: 6px;
+           padding: 9px 12px; backdrop-filter: blur(6px); transition: box-shadow .4s, border-color .4s; }
+  .piece.hot { border-color: var(--amber); box-shadow: 0 0 18px rgba(255, 180, 84, .25); }
+  .piece h3 { font-size: 13.5px; display: flex; justify-content: space-between; align-items: baseline; }
+  .piece h3 em { font-style: normal; font-size: 10px; letter-spacing: 1.5px; padding: 2px 7px; border-radius: 3px; }
+  .piece p.scope { font-size: 11px; color: var(--dim); margin-top: 3px; line-height: 1.45; }
+  .piece p.gap { font-size: 11px; color: var(--red); margin-top: 4px; line-height: 1.45; }
+  .piece p.verdict { font-size: 11px; color: var(--green); margin-top: 4px; line-height: 1.45; }
+  .piece p.rounds { font-size: 10px; color: var(--dim); margin-top: 4px; letter-spacing: .5px; }
+  .st-building em { background: rgba(255,180,84,.15); color: var(--amber); }
+  .st-critiquing em { background: rgba(167,139,250,.15); color: var(--violet); }
+  .st-iterating em { background: rgba(108,182,255,.15); color: var(--blue); }
+  .st-wowed em { background: rgba(126,231,135,.15); color: var(--green); }
+  .st-merged em { background: rgba(232,226,212,.12); color: var(--ink); }
+  .st-blocked em { background: rgba(255,107,107,.15); color: var(--red); }
+  .st-queued em { background: rgba(143,136,168,.12); color: var(--dim); }
+  .tag { position: absolute; transform: translate(-50%, -100%); font-size: 11px; letter-spacing: 1px;
+         color: var(--ink); text-shadow: 0 1px 6px #000; white-space: nowrap; pointer-events: none; }
+  .tag small { display: block; text-align: center; font-size: 9.5px; letter-spacing: .5px; }
+  #foot { bottom: 18px; right: 20px; font-size: 10px; color: var(--dim); text-align: right; line-height: 1.5; }
+  #foot a { color: var(--dim); }
+  @media (max-width: 900px) { #cards { display: none; } #protocol { max-width: 60vw; } }
+</style>
+</head>
+<body>
+<canvas id="scene"></canvas>
+
+<div class="hud" id="header"><h1>VEILFORGE <span>//</span> OPERATION UTTERLY PERFECT</h1><div id="phase">…</div></div>
+<ul class="hud" id="protocol"></ul>
+<div class="hud" id="logbox"><h2>CAMPAIGN LOG</h2><div id="evs"></div></div>
+<div id="cards"></div>
+<div class="hud" id="foot">live state: <span id="tick">–</span><br/>critics play the game, not the summary</div>
+
+<script type="module">
+import * as THREE from "../js/vendor/three.module.js";
+
+const COLORS = {
+  queued:    0x4a445e,
+  building:  0xffb454,
+  critiquing:0xa78bfa,
+  iterating: 0x6cb6ff,
+  wowed:     0x7ee787,
+  merged:    0xe8e2d4,
+  blocked:   0xff6b6b
+};
+const STATUS_ORDER = ["queued","building","critiquing","iterating","wowed","merged","blocked"];
+
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById("scene"), antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0b0a12);
+scene.fog = new THREE.Fog(0x0b0a12, 30, 85);
+
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, .1, 200);
+
+scene.add(new THREE.AmbientLight(0x8888aa, .55));
+const key = new THREE.DirectionalLight(0xffd9a0, 1.1); key.position.set(6, 12, 8); scene.add(key);
+const rim = new THREE.PointLight(0xa78bfa, 40, 60); rim.position.set(-8, 6, -6); scene.add(rim);
+
+// floor grid
+const grid = new THREE.GridHelper(80, 40, 0x2a2438, 0x1a1626);
+grid.position.y = -.01; scene.add(grid);
+
+const pillarGroup = new THREE.Group(); scene.add(pillarGroup);
+const tags = []; // {el, obj}
+
+function buildPillars(pieces) {
+  pillarGroup.clear();
+  tags.forEach(t => t.el.remove()); tags.length = 0;
+  const n = pieces.length || 1;
+  pieces.forEach((p, i) => {
+    const ang = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const r = 7.5;
+    const x = Math.cos(ang) * r, z = Math.sin(ang) * r;
+    const col = new THREE.Color(COLORS[p.status] ?? COLORS.queued);
+    const rounds = (p.build_round || 0) + (p.critic_round || 0) * .6;
+    const h = 1.2 + Math.min(rounds, 8) * .75;
+
+    const mat = new THREE.MeshStandardMaterial({ color: col, roughness: .35, metalness: .25,
+      emissive: col.clone().multiplyScalar(.35) });
+    const geo = new THREE.CylinderGeometry(.9, 1.05, h, 6);
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, h / 2, z);
+    pillarGroup.add(mesh);
+
+    // base disc
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(1.7, 1.7, .08, 32),
+      new THREE.MeshStandardMaterial({ color: 0x14101f, roughness: .8 }));
+    disc.position.set(x, .04, z); pillarGroup.add(disc);
+
+    // glow ring colored by status
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1.45, .045, 8, 48),
+      new THREE.MeshBasicMaterial({ color: col }));
+    ring.rotation.x = Math.PI / 2; ring.position.set(x, .1, z);
+    ring.userData.spin = (i % 2 ? 1 : -1) * (.2 + i * .07);
+    pillarGroup.add(ring);
+
+    // flame on active pieces
+    if (["building", "critiquing", "iterating"].includes(p.status)) {
+      const fire = new THREE.Mesh(new THREE.IcosahedronGeometry(.34, 0),
+        new THREE.MeshBasicMaterial({ color: col }));
+      fire.position.set(x, h + .45, z);
+      fire.userData.flame = true;
+      pillarGroup.add(fire);
+    }
+
+    const el = document.createElement("div");
+    el.className = "tag";
+    el.innerHTML = `<b>${p.id} · ${p.title}</b><small>${p.status.toUpperCase()} · B${p.build_round||0}/C${p.critic_round||0}</small>`;
+    document.body.appendChild(el);
+    tags.push({ el, x, y: h + 1.1, z });
+  });
+}
+
+function resize() {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}
+addEventListener("resize", resize); resize();
+
+let t = 0, hotIndex = -1, lastData = "";
+function animate() {
+  requestAnimationFrame(animate);
+  t += .008;
+  const orbitR = 16;
+  camera.position.set(Math.cos(t * .5) * orbitR, 7.5, Math.sin(t * .5) * orbitR);
+  camera.lookAt(0, 2.4, 0);
+  pillarGroup.children.forEach(ch => {
+    if (ch.userData.flame) { ch.scale.setScalar(.85 + Math.sin(t * 14 + ch.position.x) * .18); ch.rotation.y += .03; ch.rotation.x += .02; }
+    if (ch.userData.spin !== undefined) ch.rotation.z += ch.userData.spin * .02;
+    if (ch.geometry?.type === "CylinderGeometry") ch.material.emissiveIntensity = .8 + Math.sin(t * 3 + ch.position.x * .7) * .3;
+  });
+  const v = new THREE.Vector3();
+  tags.forEach(tag => {
+    v.set(tag.x, tag.y, tag.z).project(camera);
+    tag.el.style.left = ((v.x * .5 + .5) * innerWidth) + "px";
+    tag.el.style.top = ((-v.y * .5 + .5) * innerHeight) + "px";
+    tag.el.style.opacity = v.z < 1 ? 1 : 0;
+  });
+  renderer.render(scene, camera);
+}
+animate();
+
+async function refresh() {
+  try {
+    const res = await fetch("state.json", { cache: "no-store" });
+    const txt = await res.text();
+    if (txt === lastData) return;
+    lastData = txt;
+    const s = JSON.parse(txt);
+    document.getElementById("phase").textContent = `${s.phase} · ${s.day}`;
+    document.getElementById("protocol").innerHTML = (s.protocol || []).map(p => `<li>${p}</li>`).join("");
+    document.getElementById("evs").innerHTML = (s.log || []).slice(0, 7)
+      .map(e => `<div class="ev"><b>#${e.n}</b> ${e.event}</div>`).join("");
+    const cards = document.getElementById("cards");
+    cards.innerHTML = "";
+    (s.pieces || []).forEach((p, i) => {
+      const d = document.createElement("div");
+      d.className = `piece st-${p.status}` + (i === hotIndex ? " hot" : "");
+      d.innerHTML =
+        `<h3>${p.id} · ${p.title}<em>${(p.status||"").toUpperCase()}</em></h3>` +
+        `<p class="scope">${p.scope||""}</p>` +
+        (p.gap ? `<p class="gap">▲ biggest gap: ${p.gap}</p>` : "") +
+        (p.verdict ? `<p class="verdict">${p.verdict}</p>` : "") +
+        `<p class="rounds">build ×${p.build_round||0} · critic ×${p.critic_round||0}</p>`;
+      cards.appendChild(d);
+    });
+    buildPillars(s.pieces || []);
+    document.getElementById("tick").textContent = new Date().toLocaleTimeString();
+  } catch (e) { /* keep last good frame */ }
+}
+refresh();
+setInterval(refresh, 5000);
+setInterval(() => { hotIndex = (hotIndex + 1) % Math.max(1, (JSON.parse(lastData || "{}").pieces || [1]).length); }, 4000);
+</script>
+</body>
+</html>

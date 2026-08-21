@@ -1,0 +1,68 @@
+{
+  "campaign": "OPERATION UTTERLY PERFECT",
+  "game": "Veilforge — The Last Workshop",
+  "phase": "Wave 1 · build round 1",
+  "day": "Day 1",
+  "protocol": [
+    "Builders work isolated branches; never trusted summaries — critics play the LIVE game.",
+    "Blind side-by-side vs Melvor Idle (live at melvoridle.com). MI2 is Steam 'TBA 2026' — judged from public dev updates only.",
+    "No fixed rounds. A piece closes only when its critic is WOWED. Fresh coherence agent between waves."
+  ],
+  "legend": ["queued", "building", "critiquing", "iterating", "wowed", "merged", "blocked"],
+  "pieces": [
+    {
+      "id": "A",
+      "title": "The First Hour",
+      "scope": "Onboarding, quest beats, teaching copy, pacing, next-step clarity",
+      "lane": "wt-a",
+      "build_round": 1,
+      "critic_round": 0,
+      "status": "building",
+      "verdict": "",
+      "gap": ""
+    },
+    {
+      "id": "B",
+      "title": "Combat Feel & Fairness",
+      "scope": "Fights, telegraphs, death tax, bosses, dungeon flow",
+      "lane": "wt-b",
+      "build_round": 1,
+      "critic_round": 0,
+      "status": "building",
+      "verdict": "",
+      "gap": ""
+    },
+    {
+      "id": "C",
+      "title": "Economy & Long-Game Loops",
+      "scope": "Market/Quay, rarity, ledger, commissions, offline & vault, mastery",
+      "lane": "wt-c",
+      "build_round": 1,
+      "critic_round": 0,
+      "status": "building",
+      "verdict": "",
+      "gap": ""
+    },
+    {
+      "id": "D",
+      "title": "Presentation & UI Polish",
+      "scope": "Shell/desks, icons, floaters, feedback juice, readability",
+      "lane": "wt-d",
+      "build_round": 1,
+      "critic_round": 0,
+      "status": "building",
+      "verdict": "",
+      "gap": ""
+    }
+  ],
+  "waves": [
+    { "n": 1, "state": "builders running", "coherence": "queued" }
+  ],
+  "log": [
+    { "n": 5, "event": "Builders A/B/C/D dispatched to isolated lanes (round 1)." },
+    { "n": 4, "event": "Benchmark locked: Melvor Idle live blind compare; MI2 from public docs (not yet playable)." },
+    { "n": 3, "event": "Live dashboard deployed." },
+    { "n": 2, "event": "Repo fast-forwarded to 272856c + local test; suite green." },
+    { "n": 1, "event": "Campaign declared by Luke: smallest judgeable pieces, hostile critics, no round cap." }
+  ]
+}
