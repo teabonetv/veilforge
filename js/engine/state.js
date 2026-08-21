@@ -7,6 +7,8 @@ export const TICK_MS = 50;
 export const SAVE_KEY = "veilforge-save-v1";
 export const SAVE_BAK = "veilforge-save-bak-v1";
 export const SAVE_VERSION = 3;
+/** Per-category stack caps in the vault. Shared by addItem and the craft room check. */
+export const STACK_MAX = { log: 40, fish: 40, ore: 40, food: 48, bar: 24, herb: 40, seed: 24 };
 
 let saveFail = null;
 export function lastSaveFail() {
@@ -75,7 +77,7 @@ export function createState() {
     renewals: {},
     rules: { mode: "standard" },
     orders: { eat: true, bank: false, sell: false, sellFloor: "common", scripts: [] },
-    commissions: { lastDay: null, done: 0 },
+    commissions: { lastDay: null, done: 0, streak: 0 },
     actTier: 1,
     endow: 0,
     deeds: {},
@@ -198,8 +200,7 @@ export function addItem(state, id, qty) {
   if (!exists && bankUsed(state) >= bankCap(state)) {
     return false;
   }
-  const cat = CONTENT.items[id]?.category;
-  const stackMax = ({ log: 40, fish: 40, ore: 40, food: 48, bar: 24, herb: 40, seed: 24 })[cat];
+  const stackMax = STACK_MAX[CONTENT.items[id]?.category];
   if (stackMax) {
     const have = state.bank[id] || 0;
     if (have >= stackMax) {
@@ -253,7 +254,7 @@ export function masteryLevel(xp) {
 
 export function masteryBonus(state, masteryId, skillHint) {
   const skill = skillHint || skillFromMasteryId(masteryId) || state.action?.skill;
-  if (!skill || !state.skills[skill]) return { speed: 0, preserve: 0, output: 0, rare: 0, label: "" };
+  if (!skill || !state.skills[skill]) return { speed: 0, preserve: 0, output: 0, rare: 0, xp: 0, label: "" };
   const xp = state.skills[skill].mastery[masteryId] || 0;
   const ml = masteryLevel(xp);
   const cp = state.skills[skill].checkpoints?.[masteryId] || 0;
@@ -261,6 +262,7 @@ export function masteryBonus(state, masteryId, skillHint) {
   let preserve = ml * 0.0015 + cp * 0.03;
   const output = ml * 0.001 + cp * 0.02;
   let rare = ml * 0.002 + cp * 0.015;
+  const bonusXp = (ml - 1) * 0.001 + cp * 0.01;
   let label = "";
   for (const [th, row] of Object.entries(MASTERY_MILESTONES)) {
     if (ml >= Number(th)) {
@@ -270,7 +272,11 @@ export function masteryBonus(state, masteryId, skillHint) {
       label = row.label;
     }
   }
-  return { speed, preserve, output, rare, label, level: ml };
+  let milestoneXp = 0;
+  for (const [th, row] of Object.entries(MASTERY_MILESTONES)) {
+    if (ml >= Number(th)) milestoneXp += row.xp || 0;
+  }
+  return { speed, preserve, output, rare, xp: bonusXp + milestoneXp, label, level: ml };
 }
 
 function skillFromMasteryId(masteryId) {
@@ -534,7 +540,8 @@ export function normalizeState(merged) {
   merged.renewals = merged.renewals && typeof merged.renewals === "object" ? merged.renewals : {};
   merged.rules = merged.rules || { mode: "standard" };
   merged.orders = merged.orders || { eat: true, bank: false, sell: false, sellFloor: "common", scripts: [] };
-  merged.commissions = merged.commissions || { lastDay: null, done: 0 };
+  merged.commissions = merged.commissions || { lastDay: null, done: 0, streak: 0 };
+  merged.commissions.streak = Math.max(0, Number(merged.commissions.streak) || 0);
   merged.actionMode = merged.actionMode && typeof merged.actionMode === "object" ? merged.actionMode : {};
   merged.actTier = Math.max(1, Number(merged.actTier) || 1);
   merged.endow = Math.max(0, Number(merged.endow) || 0);

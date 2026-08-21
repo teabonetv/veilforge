@@ -1,11 +1,11 @@
 import {
-  CONTENT, TICK_MS, skillLevel, addXp, addItem, takeItem, bankCount, log,
+  CONTENT, TICK_MS, STACK_MAX, skillLevel, addXp, addItem, takeItem, bankCount, log,
   masteryBonus, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses,
   recalcHp, sumGear, masteryLevel, skillLocked, lockMessage, bankUsed, bankCap, stashItem
 } from "./state.js";
 import { combatTick, startFight, stopFight, playerInterval, consumePotionCharge } from "./combat.js";
 import { checkQuests } from "./quests.js";
-import { quayCommissions, vaultFenceRate } from "./market.js";
+import { quayCommissions, vaultFenceRate, openCoinGoals } from "./market.js";
 import { standingBonuses } from "./ledger.js";
 import { stacksToAutoSell, autoEatFinest } from "./orders.js";
 import { weeklyEclipse } from "./eclipse.js";
@@ -192,6 +192,27 @@ function completeAction(state, act) {
   if (act.id === "course-lap") return completeLap(state, act);
   if (act.id?.startsWith("chart-study-")) return completeChartStudy(state, act);
 
+  /* Trust rule: a craft that pays in goods never spends inputs into a full vault.
+     Try Standing Orders first; if the shelf still will not take the output, halt
+     BEFORE consuming anything. Gathering keeps its own halt below. */
+  if (act.inputs && act.outputs) {
+    let blocked = blockedOutput(state, act);
+    if (blocked) {
+      const sold = stacksToAutoSell(state);
+      for (const row of sold) sellItems(state, row.id, row.qty);
+      if (sold.length) log(state, "Standing order sold commons to unstick the vault.");
+      blocked = blockedOutput(state, act);
+    }
+    if (blocked) {
+      const why = `Halted ${act.name}: ${blocked.name} is capped and the vault will not take more. No inputs were spent. ${craftSinkHint(act)}`;
+      log(state, why);
+      state._haltReason = why;
+      state.action = null;
+      state._uiDirty = true;
+      return;
+    }
+  }
+
   if (act.inputs) {
     const ch = chartBonuses(state);
     const mb = masteryBonus(state, act.masteryId, act.skill);
@@ -265,6 +286,10 @@ function completeAction(state, act) {
         noteGive(state, r.item, r.min || 1, true, "rare drop");
         state._dripTag = state._dripTag || "rare";
         log(state, `Rare: ${CONTENT.items[r.item]?.name || r.item}`);
+        if (state._offlineSim) {
+          const tally = state._offRares || (state._offRares = {});
+          tally[r.item] = (tally[r.item] || 0) + (r.min || 1);
+        }
       }
     }
   }
@@ -282,12 +307,36 @@ function gatherSinkHint(act) {
   return "Sell at the Quay or buy vault slots.";
 }
 
+/** The first output stack that cannot accept even its minimum roll, or null. */
+function blockedOutput(state, act) {
+  for (const o of act.outputs || []) {
+    if (o.item === "coins") continue;
+    const it = CONTENT.items[o.item];
+    if (!it) continue;
+    const stackMax = STACK_MAX[it.category] || 0;
+    const have = state.bank[o.item] || 0;
+    if (stackMax && have >= stackMax) return it;
+    if (!have && !state.itemTabs?.[o.item] && bankUsed(state) >= bankCap(state)) return it;
+  }
+  return null;
+}
+
+function craftSinkHint(act) {
+  const id = act.outputs?.[0]?.item;
+  const cat = CONTENT.items[id]?.category;
+  if (cat === "food") return "Eat, sell, or feed the Standing Orders shelf.";
+  if (cat === "bar") return "Forge gear or pawn bars at the Quay.";
+  if (cat === "rune") return "Cast spells or sell runes at the Quay.";
+  return "Sell at the Quay or buy vault slots.";
+}
+
 function grantSkillBits(state, act, xpMul, xpOverride) {
   const gb = guildBonuses(state, act.skill);
   const cb = courseBonuses(state);
   const ch = chartBonuses(state);
   const pet = petBonuses(state, act.skill);
-  let mul = 1 + (gb.xp || 0) + (cb.allXp || 0) + (cb.xpMul || 0) + (ch.allXp || 0) + (ch.xp || 0) + pet.xp + (standingBonuses(state).allXp || 0);
+  const mbXp = masteryBonus(state, act.masteryId, act.skill).xp || 0;
+  let mul = 1 + mbXp + (gb.xp || 0) + (cb.allXp || 0) + (cb.xpMul || 0) + (ch.allXp || 0) + (ch.xp || 0) + pet.xp + (standingBonuses(state).allXp || 0);
   if (act.skill === "chart") mul += cb.chartXp || 0;
   const baseXp = xpOverride != null ? xpOverride : act.xp;
   const notes = addXp(state, act.skill, baseXp * mul * xpMul);
@@ -613,7 +662,7 @@ export function sellItems(state, id, qty, opts = {}) {
 }
 
 export function fulfillCommission(state, id) {
-  const job = quayCommissions().find((j) => j.id === id);
+  const job = quayCommissions(state).find((j) => j.id === id);
   if (!job) return "That indenture has sailed.";
   if (state.shopBought?.[job.id]) return "Already delivered this dusk.";
   if ((state.bank[job.need.item] || 0) < job.need.qty) {
@@ -650,7 +699,8 @@ export function spendCheckpoint(state, actionId) {
 
 export function offlineCapMs(state) {
   const hours = Math.max(18, Math.min(24, state.offlineHours || (state.shopBought?.["shop-offline"] ? 24 : 18)));
-  return hours * 3600000;
+  const boon = standingBonuses(state).offHours || 0;
+  return (hours + boon) * 3600000;
 }
 
 function resolveOfflineHunt(state, ms) {
@@ -704,7 +754,10 @@ export function applyOffline(state, ms) {
   const sim = Math.min(Math.max(0, ms), cap) * (1 + (cb.offlineMul || 0));
   if (sim <= 0) return;
   state.lastSave = Date.now();
+  state._haltReason = null;
+  state._offRares = null;
   const beforeActs = state.stats.actions || 0;
+  const beforeGp = state.stats.gp || 0;
   const beforeCounts = { ...(state.actionCounts || {}) };
   state._offlineSim = true;
   state.stats.offlineMs += sim;
@@ -772,13 +825,23 @@ export function applyOffline(state, ms) {
   state.settings.tickScale = saved;
   state._offlineSim = false;
   const mins = Math.round(sim / 60000);
-  const topJob = Object.entries(state.actionCounts || {}).sort((a, b) => (b[1] - (beforeCounts[a[0]] || 0)) - (a[1] - (beforeCounts[b[0]] || 0)))[0];
-  const jobDelta = topJob ? (topJob[1] - (beforeCounts[topJob[0]] || 0)) : 0;
+  const deltas = Object.entries(state.actionCounts || {})
+    .map(([id, n]) => [id, n - (beforeCounts[id] || 0)])
+    .filter(([, d]) => d > 0)
+    .sort((a, b) => b[1] - a[1]);
+  const topJob = deltas[0];
+  const jobDelta = topJob ? topJob[1] : 0;
   const harvestNow = (state.soil?.plots || []).filter((p) => p?.ready).length;
   const droveNow = (state.drove?.pens || []).filter((p) => p?.ready).length;
   const huntKills = (state.stats.kills || 0) - killsBefore;
   const huntDied = (state.stats.deaths || 0) > deathsBefore || (hunting && !state.combat.fighting);
   const foodUsed = foodBefore - (bankCount(state, state.combat.foodId) + bankCount(state, state.combat.foodId2));
+  const coinsEarned = Math.max(0, (state.stats.gp || 0) - beforeGp);
+  const rares = Object.entries(state._offRares || {})
+    .map(([id, n]) => ({ id, name: CONTENT.items[id]?.name || id, n }))
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 6);
+  state._offRares = null;
   state.lastOffline = {
     minutes: mins,
     actions: (state.stats.actions || 0) - beforeActs,
@@ -788,13 +851,20 @@ export function applyOffline(state, ms) {
     huntPaused: hunting && huntDied,
     kills: huntKills,
     foodUsed: Math.max(0, foodUsed),
+    coins: coinsEarned,
+    rares,
+    capped: ms > cap + 1,
     truncated,
     halt: state._haltReason || null,
+    goals: openCoinGoals(state).slice(0, 3),
     t: Date.now()
   };
+  const coinNote = coinsEarned > 0 ? ` · +${coinsEarned.toLocaleString()} veilmarks` : "";
+  const rareNote = rares.length ? ` · rares: ${rares.map((r) => r.name).join(", ")}` : "";
+  const capNote = state.lastOffline.capped ? " The dusk kept only its share — Deep Rest and standing extend the window." : "";
   const huntNote = hunting ? (huntDied ? " Hunt ended on death." : ` Hunt resolved · ${huntKills} kills.`) : "";
   const truncNote = truncated ? " Remainder settled in bulk." : "";
-  log(state, `Offline report: ${mins} min · ${state.lastOffline.actions} actions · ${state.lastOffline.job}.${huntNote}${truncNote}`);
+  log(state, `Offline report: ${mins} min · ${state.lastOffline.actions} actions · ${state.lastOffline.job}${coinNote}.${huntNote}${rareNote}${truncNote}${capNote}`);
   if (mins > 0) state._dawn = true;
 }
 

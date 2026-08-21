@@ -58,18 +58,23 @@ export function currentCommission(state, now = Date.now()) {
 
 export function deliverCommission(state, now = Date.now()) {
   const c = currentCommission(state, now);
-  state.commissions = state.commissions || { lastDay: null, done: 0 };
+  state.commissions = state.commissions || { lastDay: null, done: 0, streak: 0 };
   if (state.commissions.lastDay === c.day) return "Already delivered today's indenture.";
   for (const r of c.requires) {
     if (bankCount(state, r.item) < r.qty) {
       return `Need ${r.qty} ${CONTENT.items[r.item]?.name || r.item}.`;
     }
   }
+  const yesterday = dailySeed(now - 86400000);
+  const streak = state.commissions.lastDay === yesterday ? (state.commissions.streak || 0) + 1 : 1;
+  const bonusPct = Math.min(4, streak - 1) * 0.1;
+  const pay = Math.round(c.pays * (1 + bonusPct));
   for (const r of c.requires) takeItem(state, r.item, r.qty);
-  addItem(state, "coins", c.pays);
+  addItem(state, "coins", pay);
   if (c.unique) addItem(state, c.unique, 1);
   state.commissions.lastDay = c.day;
+  state.commissions.streak = streak;
   state.commissions.done = (state.commissions.done || 0) + 1;
-  log(state, `Workshop commission: ${c.name}. +${c.pays} veilmarks.`);
+  log(state, `Workshop commission: ${c.name}. +${pay} veilmarks${streak > 1 ? ` · streak ${streak} (+${Math.round(bonusPct * 100)}%)` : ""}.`);
   return null;
 }

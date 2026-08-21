@@ -1,12 +1,12 @@
 import { pathToFileURL } from "node:url";
-import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem, persistable, skillLocked, lockMessage, SAVE_KEY, SAVE_BAK, SAVE_VERSION, save, load, setSaveStore, checksum, masteryBonus, renewSkill, addXp } from "../engine/state.js";
+import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem, persistable, skillLocked, lockMessage, SAVE_KEY, SAVE_BAK, SAVE_VERSION, save, load, setSaveStore, checksum, masteryBonus, renewSkill, addXp, STACK_MAX } from "../engine/state.js";
 import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouch, plantPlot, buyPillar, spendChartRank, setUseCompost, thieveStunChance, markHeat, setActionMode } from "../engine/sim.js";
 import { startFight, startDungeon, equipItem, unequip, rollBounty, playerStats, die, deathTaxAmount, combatLog } from "../engine/combat.js";
 import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
 import { iconMarkup, iconUrl } from "../scene/icons.js";
 import { PIX_EID } from "../scene/pix-map.js";
-import { offerModel, quayDeal, inferBooth, QUAY_BOOTHS, openCoinGoals, quayCommissions } from "../engine/market.js";
+import { offerModel, quayDeal, inferBooth, QUAY_BOOTHS, openCoinGoals, quayCommissions, offerPrice, pawnRate } from "../engine/market.js";
 import { firstHourBeat } from "../engine/quests.js";
 import { RARITY, rarityOf, rollRarity } from "../content/rarity.js";
 import { ledgerStats, standingBonuses, STANDING_TIERS } from "../engine/ledger.js";
@@ -212,10 +212,25 @@ if ((off.actionCounts["timber-0"] || 0) < 900) {
 }
 if (off._dripSeq) throw new Error("offline should not spam yield drips: " + off._dripSeq);
 if (offlineCapMs(off) < 18 * 3600000 - 1) throw new Error("offline cap too small");
+if (!(off.lastOffline?.coins > 0)) throw new Error("offline report missed coin income: " + JSON.stringify(off.lastOffline));
+if (!Array.isArray(off.lastOffline?.goals)) throw new Error("offline report lost its coin goals");
+
+const cappedSt = createState();
+startAction(cappedSt, "timber-0");
+applyOffline(cappedSt, 40 * 3600000);
+if (!cappedSt.lastOffline?.capped) throw new Error("40h away did not flag the offline cap");
+if (cappedSt.lastOffline.minutes > 18 * 60 + 2) throw new Error("capped minutes exceed the window: " + cappedSt.lastOffline.minutes);
+
+const huntFoe = C.monsters[Object.keys(C.monsters)[0]];
+const savedFoeHp = huntFoe.hp;
+const savedFoeAcc = huntFoe.acc;
+/* Guarantee the foe connects so auto-eat is exercised, not lucky misses. */
+huntFoe.hp = 24;
+huntFoe.acc = 999;
 
 const hunt = createState();
 addItem(hunt, "food-0", 200);
-startFight(hunt, Object.keys(C.monsters)[0]);
+startFight(hunt, huntFoe.id);
 const foodBeforeHunt = bankCount(hunt, "food-0");
 applyOffline(hunt, 4 * 3600000);
 if ((hunt.stats.kills || 0) < 1) throw new Error("offline hunt earned no kills");
@@ -224,10 +239,13 @@ if (bankCount(hunt, "food-0") >= foodBeforeHunt) throw new Error("offline hunt d
 const dryHunt = createState();
 dryHunt.bank["food-0"] = 0;
 dryHunt.combat.foodId = "food-0";
-startFight(dryHunt, Object.keys(C.monsters)[0]);
+startFight(dryHunt, huntFoe.id);
 applyOffline(dryHunt, 4 * 3600000);
 if (!dryHunt.lastOffline?.huntPaused) throw new Error("starved hunt should pause on death: " + JSON.stringify(dryHunt.lastOffline));
 if ((dryHunt.stats.kills || 0) >= 5000) throw new Error("death should cap offline kills");
+
+huntFoe.hp = savedFoeHp;
+huntFoe.acc = savedFoeAcc;
 
 const nokey = createState();
 const d0 = C.dungeons[0];
@@ -429,6 +447,25 @@ test("G2 vault halt", () => {
   if ((fullb.lastOffline?.actions || 0) > 8) throw new Error("full vault kept chopping: " + fullb.lastOffline.actions);
   const halts = fullb.log.filter((l) => /^Halted /.test(l.msg));
   if (halts.length !== 1) throw new Error("expected one halt reason, got " + halts.length + " " + JSON.stringify(halts.map((h) => h.msg)));
+});
+
+test("G9 craft never eats inputs into a full vault", () => {
+  const st = createState();
+  addItem(st, "fish-0", 30);
+  st.bank["food-0"] = STACK_MAX.food;
+  for (const id of Object.keys(C.items)) {
+    if (bankUsed(st) >= bankCap(st)) break;
+    if (id === "coins" || id === "food-0" || id === "fish-0") continue;
+    addItem(st, id, 1);
+  }
+  const beforeFish = bankCount(st, "fish-0");
+  const e = startAction(st, "cook-0");
+  if (e) throw new Error(e);
+  applyOffline(st, 2 * 3600000);
+  if (bankCount(st, "fish-0") !== beforeFish) throw new Error(`inputs were eaten: ${beforeFish} -> ${bankCount(st, "fish-0")}`);
+  if (st.action) throw new Error("craft kept running against a capped shelf");
+  if (!st.log.some((l) => /^Halted /.test(l.msg))) throw new Error("no halt named for the capped craft");
+  if (!(st.lastOffline?.halt || "").includes("No inputs were spent")) throw new Error("offline report lost the craft halt: " + st.lastOffline?.halt);
 });
 test("E2 save strips underscore", () => {
   const mid = createState();
@@ -639,9 +676,43 @@ test("C2 logbook + C5 standing", () => {
   if (!(lb.items.have >= 2)) throw new Error("starter items not logged: " + JSON.stringify(lb.items));
   const ls = ledgerStats(st);
   if (typeof ls.completionPct !== "number") throw new Error("completionPct missing");
-  if (STANDING_TIERS.length !== 4) throw new Error("standing tiers");
+  if (STANDING_TIERS.length !== 5) throw new Error("standing tiers");
   const boon = standingBonuses(st);
   if (!boon.label) throw new Error("standing label");
+});
+
+test("C5b standing pawn boon", () => {
+  const fan = createState();
+  for (const q of C.quests) fan.quests.done.push(q.id);
+  const sb = standingBonuses(fan);
+  if (!(sb.pawn >= 0.02)) throw new Error("standing pays no quay favour: " + JSON.stringify(sb));
+  const bare = standingBonuses(createState());
+  if (bare.pawn !== 0) throw new Error("fresh save already has favour");
+});
+
+test("C9 quay pawn rates", () => {
+  const st = createState();
+  addItem(st, "log-0", 10);
+  const base = pawnRate(st);
+  if (base < 0.72 || base > 0.73) throw new Error("bare pawn rate drifted: " + base);
+  const deal = quayDeal();
+  const rLog = pawnRate(st, C.items["log-0"]);
+  if (deal.hunger === "log" && !(rLog > base + 0.1)) throw new Error("hunger premium missing");
+  if (deal.hunger !== "log" && Math.abs(rLog - base) > 1e-9) throw new Error("non-hunger paid premium");
+  if (pawnRate(null) < 0.719 || pawnRate(null) > 0.721) throw new Error("stateless pawn rate drifted");
+});
+
+test("C10 dual dusk bargains", () => {
+  const d = quayDeal();
+  if (!d.offer) throw new Error("budget bargain missing");
+  if (!d.deals.length) throw new Error("deals empty");
+  const st = createState();
+  for (const o of d.deals) {
+    const { cost, deal: on } = offerPrice(st, o);
+    if (!on) throw new Error("bargain not priced as deal: " + o.id);
+    if (cost >= o.cost) throw new Error("bargain not cheaper: " + o.id);
+  }
+  if (d.deals.length >= 2 && d.deals[0].id === d.deals[1].id) throw new Error("both bargains are the same hook");
 });
 
 test("C6 mastery 50 speed", () => {
@@ -654,6 +725,27 @@ test("C6 mastery 50 speed", () => {
   if (mb.label !== "Seasoned" && mb.label !== "Master" && mb.label !== "Legend") {
     throw new Error("milestone label: " + mb.label);
   }
+});
+
+test("C8 mastery pays xp", () => {
+  const fresh = createState();
+  const act = C.actions["timber-0"];
+  const mb0 = masteryBonus(fresh, act.masteryId, "timber");
+  if (mb0.xp !== 0) throw new Error("fresh mastery already pays: " + mb0.xp);
+  const st = createState();
+  st.skills.timber.mastery[act.masteryId] = 12 * 99 * 99;
+  const mb = masteryBonus(st, act.masteryId, "timber");
+  if (!(mb.xp >= 0.2)) throw new Error("legend mastery xp thin: " + mb.xp);
+  const run1 = (s) => {
+    const e = startAction(s, "timber-0");
+    if (e) throw new Error(e);
+    let guard = 0;
+    while ((s.actionCounts["timber-0"] || 0) < 1 && guard++ < 20000) tick(s, 50);
+    return s.skills.timber.xp;
+  };
+  const xpPlain = run1(createState());
+  const xpMaster = run1(st);
+  if (!(xpMaster > xpPlain * 1.1)) throw new Error("mastery xp not applied in sim: " + xpMaster + " vs " + xpPlain);
 });
 
 test("D5 echo depth", () => {
@@ -707,6 +799,27 @@ test("D8 workshop commission", () => {
   if (st.commissions.done !== 1) throw new Error("commission not marked");
   const again = deliverCommission(st, Date.UTC(2026, 7, 21));
   if (!again) throw new Error("double-delivered");
+});
+
+test("D8b commission streak pays", () => {
+  const st = createState();
+  const t1 = Date.UTC(2026, 7, 21);
+  let c = currentCommission(st, t1);
+  for (const r of c.requires) addItem(st, r.item, r.qty);
+  if (deliverCommission(st, t1)) throw new Error("day1 delivery failed");
+  if ((st.commissions.streak || 0) !== 1) throw new Error("streak should open at 1");
+  const purse1 = st.coins;
+  const t2 = t1 + 86400000;
+  c = currentCommission(st, t2);
+  for (const r of c.requires) addItem(st, r.item, r.qty);
+  if (deliverCommission(st, t2)) throw new Error("day2 delivery failed");
+  if (st.commissions.streak !== 2) throw new Error("streak did not climb: " + st.commissions.streak);
+  if (!(st.coins - purse1 >= c.pays * 1.09)) throw new Error("day2 streak paid no bonus");
+  const t4 = t1 + 3 * 86400000;
+  c = currentCommission(st, t4);
+  for (const r of c.requires) addItem(st, r.item, r.qty);
+  if (deliverCommission(st, t4)) throw new Error("day4 delivery failed");
+  if (st.commissions.streak !== 1) throw new Error("missed day did not reset streak");
 });
 
 test("BEAT-1 firstHourBeat still", () => {
