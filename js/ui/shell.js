@@ -1,12 +1,13 @@
 import { escapeHtml } from "../util/text.js";
-import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, log, masteryLevel, recalcHp, skillLocked, bankUsed, bankCap, stashItem, upcomingUnlocks, bankValue, masteryBonus } from "../engine/state.js";
-import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems, setUseCompost, maxAffordable } from "../engine/sim.js";
-import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval, swapWeaponStyle } from "../engine/combat.js";
-import { questProgress } from "../engine/quests.js";
+import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCount, log, masteryLevel, recalcHp, skillLocked, lockMessage, bankUsed, bankCap, stashItem, upcomingUnlocks, bankValue, masteryBonus, lastSaveFail } from "../engine/state.js";
+import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems, setUseCompost, maxAffordable, fulfillCommission, markHeat } from "../engine/sim.js";
+import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval, swapWeaponStyle, gearSetInfo } from "../engine/combat.js";
+import { questProgress, firstHourBeat } from "../engine/quests.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
 import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf, onStallSearch, onStallBooth, onStallPick, onStallPacks, stallPackCount, currentStallBooth, currentStallFilter } from "./desks.js";
 import { iconMarkup, SKILL_ICON_KIND } from "../scene/icons.js";
-import { QUAY_BOOTHS, inferBooth, offerModel, quayDeal, offerName as stallOfferName, offerPrice, pawnRate } from "../engine/market.js";
+import { QUAY_BOOTHS, inferBooth, offerModel, quayDeal, offerName as stallOfferName, offerPrice, pawnRate, quayCommissions, vaultFenceRate } from "../engine/market.js";
+import { glyphLock, glyphMarks } from "./glyphs.js";
 
 let forkFn = null;
 let shownLevelKey = "";
@@ -152,6 +153,10 @@ function handle(ctx, act, arg, el) {
       break;
     case "death-ack":
       state._deathSheet = null;
+      ctx.render();
+      break;
+    case "commission":
+      err(fulfillCommission(state, arg));
       ctx.render();
       break;
     case "compost":
@@ -368,15 +373,16 @@ export function renderShell(ctx) {
     const lock = skillLocked(state, s.id);
     const pct = lock ? 0 : Math.floor(xpPct(state, s.id));
     const ico = { kind: SKILL_ICON_KIND[s.id] || "material", hue: 40 + SKILLS.indexOf(s) * 17, seed: SKILLS.indexOf(s) + 3, eid: s.id };
-    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="Locked until ${lock}"` : ""}>${glyph(ico, "skico")}<span class="sn">${s.name}</span><span class="lv">${lock ? "🔒" : `${lv} · ${pct}%`}</span>${lock ? "" : `<i class="xpmini"><b style="width:${pct}%"></b></i>`}</button>`;
+    return `<button type="button" class="skill ${on} ${lock ? "locked" : ""}" data-act="skill" data-arg="${s.id}" ${lock ? `title="${escapeHtml(lockMessage(lock))}"` : ""}>${glyph(ico, "skico")}<span class="sn">${s.name}</span><span class="lv">${lock ? glyphLock(12) : `${lv} · ${pct}%`}</span>${lock ? "" : `<i class="xpmini"><b style="width:${pct}%"></b></i>`}</button>`;
   }).join("");
   root.querySelector("#skill-nav").innerHTML = left;
   renderTop(ctx);
   renderCodex(ctx);
   renderCenter(ctx);
   renderRight(ctx);
-  renderDesks(ctx);
   renderLevelModal(ctx);
+  renderDeathModal(ctx);
+  renderDesks(ctx);
 }
 
 function duelSwing(now, nextAt, interval) {
@@ -390,6 +396,12 @@ function renderTop(ctx) {
   const hp = state.combat.hp;
   const max = state.combat.maxHp;
   document.getElementById("coins").textContent = Math.floor(state.coins).toLocaleString();
+  const fail = lastSaveFail();
+  const failEl = document.getElementById("save-fail");
+  if (failEl) {
+    failEl.hidden = !fail;
+    failEl.textContent = fail ? `Save failed: ${fail}` : "";
+  }
   document.getElementById("hp-label").textContent = `${Math.ceil(hp)} / ${max}`;
   document.getElementById("hp-fill").style.width = `${Math.max(0, 100 * hp / max)}%`;
   document.getElementById("vow-fill").style.width = `${Math.max(0, 100 * state.combat.vow / state.combat.maxVow)}%`;
@@ -422,7 +434,13 @@ function renderTop(ctx) {
 
   if (m) {
     duel?.classList.remove("idle");
-    document.getElementById("foe-tag").textContent = m.name;
+    if (state._killFlash && Date.now() - state._killFlash < 900) duel?.classList.add("kill");
+    else duel?.classList.remove("kill");
+    const foeTag = document.getElementById("foe-tag");
+    if (foeTag) {
+      foeTag.textContent = m.name;
+      foeTag.dataset.style = m.style || "";
+    }
     document.getElementById("foe-hp-label").textContent = `${Math.max(0, Math.ceil(state.combat.monsterHp))}/${state.combat.monsterMaxHp || m.hp}`;
     document.getElementById("foe-fill").style.width = `${Math.max(0, 100 * state.combat.monsterHp / (state.combat.monsterMaxHp || m.hp))}%`;
     document.getElementById("you-swing").style.width = `${duelSwing(now, state.combat.nextHitAt, playerInterval(state))}%`;
@@ -432,6 +450,7 @@ function renderTop(ctx) {
     bar.classList.add("combat");
   } else {
     duel?.classList.add("idle");
+    duel?.classList.toggle("kill", !!(state._killFlash && Date.now() - state._killFlash < 900));
     document.getElementById("foe-tag").textContent = "No foe";
     document.getElementById("foe-hp-label").textContent = "—";
     document.getElementById("foe-fill").style.width = "0%";
@@ -455,10 +474,7 @@ function renderTop(ctx) {
   if (commit) {
     if (m) {
       const foodN = bankCount(state, state.combat.foodId);
-      const death = state._deathSheet
-        ? ` <button type="button" data-act="death-ack">You fell${state._deathSheet.dungeon ? ` in ${state._deathSheet.dungeon} (${state._deathSheet.floor}/${state._deathSheet.of})` : ` to ${state._deathSheet.foe}`} — dismiss</button>`
-        : "";
-      commit.innerHTML = `<b>Committed:</b> fighting ${escapeHtml(m.name)} · ${foodN} food · Halt to leave. Soil/Drove still tick.${death}`;
+      commit.innerHTML = `<b>Committed:</b> fighting ${escapeHtml(m.name)} · ${foodN} food · Halt to leave. Soil/Drove still tick.`;
       commit.className = "danger";
     } else if (act) {
       const a = CONTENT.actions[act.id];
@@ -476,17 +492,14 @@ function renderTop(ctx) {
       const report = off
         ? ` <button type="button" data-act="offline-ack">Offline: ${off.minutes}m · ${off.job} · ${off.actions} actions — dismiss</button>`
         : "";
-      const death = state._deathSheet
-        ? ` <button type="button" data-act="death-ack">You fell${state._deathSheet.dungeon ? ` in ${state._deathSheet.dungeon}` : ""} — dismiss</button>`
-        : "";
-      commit.innerHTML = `<b>Committed:</b> ${escapeHtml(a?.name || act.id)} (${skillName(act.skill)})${act.remaining != null ? ` · ${act.remaining} left in batch` : ""}${capNote}. Switching jobs asks Halt.${report}${death}`;
+      commit.innerHTML = `<b>Committed:</b> ${escapeHtml(a?.name || act.id)} (${skillName(act.skill)})${act.remaining != null ? ` · ${act.remaining} left in batch` : ""}${capNote}. Switching jobs asks Halt.${report}`;
       commit.className = state._yieldWarn ? "danger" : "";
     } else {
       const off = state.lastOffline;
       const report = off
         ? ` <button type="button" data-act="offline-ack">Offline: ${off.minutes}m · ${off.job} · ${off.actions} actions${off.huntPaused ? " · hunt paused" : ""} · ${off.plotsReady} plots ready · ${off.pensReady} pens ready — dismiss</button>`
         : "";
-      const gq = CONTENT.quests.find((x) => x.id === state.quests.active[0]);
+      const gq = firstHourBeat(state)?.q || CONTENT.quests.find((x) => x.id === state.quests.active[0]);
       const hint = gq ? `${gq.how || gq.desc}` : "Open Timber and click Warding Choir.";
       commit.innerHTML = `<b>Do this:</b> ${escapeHtml(hint)}${report}`;
       commit.className = off ? "warn" : "idle";
@@ -730,6 +743,28 @@ function renderLevelModal(ctx) {
   </div>`;
 }
 
+function renderDeathModal(ctx) {
+  const modal = document.getElementById("death-modal");
+  if (!modal) return;
+  const sheet = ctx.state._deathSheet;
+  if (!sheet) {
+    modal.hidden = true;
+    modal.innerHTML = "";
+    return;
+  }
+  modal.hidden = false;
+  const where = sheet.dungeon
+    ? `${escapeHtml(sheet.dungeon)} floor ${sheet.floor}/${sheet.of}`
+    : "the field";
+  modal.innerHTML = `<div class="sheet toast-sheet death-sheet">
+    <h3>You fell</h3>
+    <p>${escapeHtml(sheet.foe)} on ${where}.</p>
+    <p><strong>${escapeHtml(sheet.blow || "hit")}</strong>${sheet.dmg != null ? ` · ${sheet.dmg} damage` : ""}${sheet.triangle && sheet.triangle !== "even" ? ` · triangle ${escapeHtml(sheet.triangle)}` : ""} · food ${sheet.food ?? 0}</p>
+    <p class="blurb">${escapeHtml(sheet.tip || "")}</p>
+    <button type="button" data-act="death-ack">Rise</button>
+  </div>`;
+}
+
 function renderCodex(ctx) {
   const el = document.getElementById("codex");
   if (!el) return;
@@ -741,9 +776,9 @@ function renderCodex(ctx) {
     return;
   }
   el.className = "";
-  const qid = state.quests.active[0];
-  const q = CONTENT.quests.find((x) => x.id === qid);
-  const upcoming = CONTENT.quests.filter((x) => !state.quests.done.includes(x.id) && x.id !== qid).slice(0, 2);
+  const beat = firstHourBeat(state);
+  const q = beat?.q;
+  const upcoming = CONTENT.quests.filter((x) => !state.quests.done.includes(x.id) && x.id !== q?.id).slice(0, 2);
   let next = "No current goal — pick Timber and chop.";
   let jump = "";
   if (q) {
@@ -751,7 +786,7 @@ function renderCodex(ctx) {
     const open = steps.find((s) => !s.ok) || steps[0];
     const frac = open ? `${Math.min(open.have, open.need)}/${open.need}` : "";
     next = `<strong>Do this: ${q.name}</strong> ${frac} — ${q.how || open?.label || q.desc}`;
-    const hintSkill = inferQuestSkill(q);
+    const hintSkill = beat?.skill || inferQuestSkill(q);
     if (hintSkill) jump = `<button type="button" data-act="skill" data-arg="${hintSkill}">Go to ${skillName(hintSkill)}</button>`;
   }
   const then = upcoming.map((x) => x.name).join(" → ");
@@ -808,7 +843,7 @@ function renderCenter(ctx) {
   else if (sk.id === "chart") body = renderChart(ctx);
   else if (COMBAT_SKILLS.includes(sk.id)) body = renderCombatSkill(ctx, sk.id);
   const lockBanner = lock
-    ? `<p class="blurb warn">Locked until <strong>${escapeHtml(lock)}</strong> (you are ${skillName(sk.id)} ${lv}). Train the listed skill — this board is a preview.</p>`
+    ? `<p class="blurb warn">${escapeHtml(lockMessage(lock))} (you are ${skillName(sk.id)} ${lv}). Train the listed skill — this board is a preview.</p>`
     : "";
   const pipeline = pipelineFor(sk.id);
   const nextLine = coming.length
@@ -831,12 +866,15 @@ function renderCenter(ctx) {
 }
 
 function renderWhisper(ctx) {
-  const heat = ctx.state.whisper?.heat || 0;
-  const streak = ctx.state.whisper?.streak || 0;
+  const { state } = ctx;
+  const running = state.action && CONTENT.actions[state.action.id]?.npc;
+  const mark = running || CONTENT.npcs[0];
+  const heat = mark ? markHeat(state, mark.id) : 0;
+  const streak = state.whisper?.streak || 0;
   return `<div class="heat">
-      <span>Heat ${heat}/14 — stun chance climbs when you get caught</span>
+      <span>Heat ${heat}/14 on ${escapeHtml(mark?.name || "this mark")} — stun is per pocket, not the whole quay</span>
       <div class="xpbar"><i style="width:${Math.min(100, heat / 14 * 100)}%"></i></div>
-      <span class="muted">Clean streak ${streak}. Cool off or pick a softer mark.</span>
+      <span class="muted">Clean streak ${streak}. Switching marks leaves the last one's heat behind.</span>
     </div>${renderActions(ctx, "whisper")}`;
 }
 
@@ -856,7 +894,7 @@ function pipelineFor(skill) {
     soil: "Compost is the click. Plant with a bag, harvest fatter. Pouches open.",
     drove: "Feed pens. Collect without fodder is a thin faucet.",
     course: "Pay to build a pillar. Unpaid selects do nothing.",
-    whisper: "Stun is the tax. Heat climbs if you get caught. Pick pockets, not a second job.",
+    whisper: "Stun is the tax. Heat is per mark — switching pockets actually helps.",
     might: "Triangle: Might beats Mark, loses to Weave. Food and style, not a DPS sheet.",
     mark: "Needs ammo. Beats Weave, loses to Might.",
     weave: "Needs runes. Beats Might, loses to Mark.",
@@ -958,6 +996,7 @@ function renderActions(ctx, skill) {
     ? `<div class="tabs job-tabs">${keys.map((k) => `<button type="button" class="${k === tab ? "on" : ""}" data-act="job-tab" data-arg="${k}">${JOB_TAB_LABEL[k] || k}</button>`).join("")}</div>`
     : (JOB_TAB_LABEL[tab] && tab !== "train" ? `<h3 class="grp">${JOB_TAB_LABEL[tab]}</h3>` : "");
   const running = state.action && CONTENT.actions[state.action.id];
+  const beat = firstHourBeat(state);
   const picked = selectedAction && CONTENT.actions[selectedAction]?.skill === skill
     ? CONTENT.actions[selectedAction]
     : (running?.skill === skill && (running.category || "train") === tab ? running : null);
@@ -965,8 +1004,10 @@ function renderActions(ctx, skill) {
     const lvok = skillLevel(state, skill) >= a.level;
     const on = state.action?.id === a.id;
     const sel = picked?.id === a.id;
+    const goal = beat?.actionId === a.id;
     const why = !lvok ? lockReason(state, a) : "";
-    return `<button type="button" class="card compact ${on ? "on" : ""} ${sel ? "sel" : ""} ${lvok ? "" : "locked"}" data-act="job-pick" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
+    return `<button type="button" class="card compact ${on ? "on" : ""} ${sel ? "sel" : ""} ${goal ? "goal" : ""} ${lvok ? "" : "locked"}" data-act="job-pick" data-arg="${a.id}" ${lvok ? "" : "disabled"}>
+      ${lvok ? "" : `<span class="lock-corner">${glyphLock(10)}</span>`}
       ${glyph(a.model)}
       <strong>${a.name}</strong>
       <span>Lv ${a.level} · ${(actionDuration(state, a) / 1000).toFixed(1)}s${on && state.action?.remaining != null ? ` · ${state.action.remaining} left` : ""}</span>
@@ -1108,9 +1149,6 @@ function renderChart(ctx) {
       ${CONTENT.constellations.map((c) => `<option value="${c.id}" ${cur === c.id ? "selected" : ""}>${c.name} — ${fmtBonus(c.bonus)}</option>`).join("")}
     </select>`);
   }
-  const study = CONTENT.constellations.map((c) => {
-    return `<button type="button" class="card" data-act="start" data-arg="chart-${c.id}" disabled style="display:none"></button>`;
-  }).join("");
   return `<p class="blurb">Only ${state.chart.slots} constellations bind at once. Study grants stardust. Spend dust on ranked modifiers — that is Chart, not another timer. A slotted star with 0 study grants nothing.</p>
     <div class="pillars">${slots.join("")}</div>
     <p class="muted">Stardust ${bankCount(state, "stardust")}</p>
@@ -1126,7 +1164,7 @@ function renderChart(ctx) {
       return `<button type="button" class="card ${on ? "on" : ""}" data-act="start" data-arg="chart-study-${c.id}">
         <strong>Study ${c.name}</strong><span>Chart xp · ${c.studyTime / 1000}s · insight ${n}${on && n <= 0 ? " · slotted, unarmed" : ""}</span><em>${fmtBonus(c.bonus)}</em>
       </button>`;
-    }).join("")}</div>${study}`;
+    }).join("")}</div>`;
 }
 
 function renderCombatTheater(ctx) {
@@ -1145,6 +1183,9 @@ function renderCombatTheater(ctx) {
       </div>
     </div>`;
   }
+  const heal = Math.max(CONTENT.items[foodId]?.heal || 0, CONTENT.items[state.combat.foodId2]?.heal || 0);
+  const foodEst = heal > 0 ? Math.max(1, Math.ceil((m.maxHit * 1.6) / heal)) : "∞";
+  const set = gearSetInfo(state);
   const youSwing = duelSwing(now, state.combat.nextHitAt, playerInterval(state));
   const foeSwing = duelSwing(now, state.combat.enemyNextAt, m.interval);
   const dun = state.combat.dungeon ? CONTENT.dungeons.find((d) => d.id === state.combat.dungeon) : null;
@@ -1154,7 +1195,8 @@ function renderCombatTheater(ctx) {
       <div class="bar hp"><i style="width:${Math.max(0, 100 * state.combat.hp / state.combat.maxHp)}%;display:block;height:100%;background:linear-gradient(90deg,#8e3a58,var(--rose))"></i></div>
       <p class="hint">${Math.ceil(state.combat.hp)} / ${state.combat.maxHp} · next strike ${youSwing.toFixed(0)}%</p>
       <p class="hint">Style ${st.style} · Acc ${st.acc.toFixed(0)} · Power ${st.power.toFixed(0)} · Def ${st.def.toFixed(0)} · max hit ~${Math.max(1, Math.floor(st.power / 4))}${st.tri?.edge && st.tri.edge !== "even" ? ` · triangle ${st.tri.edge}` : ""}${st.takenMul && st.takenMul < 1 ? ` · Aegis ${Math.round((1 - st.takenMul) * 100)}% less taken` : ""}</p>
-      <p class="hint">Food ${foodN} ${foodId ? itemName(foodId) : "—"} / backup ${state.combat.foodId2 ? `${bankCount(state, state.combat.foodId2)} ${itemName(state.combat.foodId2)}` : "none"} ${foodN <= 3 ? "· running low" : ""}</p>
+      <p class="hint">Food ${foodN} ${foodId ? itemName(foodId) : "—"} / backup ${state.combat.foodId2 ? `${bankCount(state, state.combat.foodId2)} ${itemName(state.combat.foodId2)}` : "none"} ${foodN <= 3 ? "· running low" : ""} · ~${foodEst} rations/kill if auto-eat holds</p>
+      <p class="hint">${escapeHtml(set.label)}</p>
       <p class="hint">Special ${Math.floor(state.combat.spec || 0)}% ${(state.combat.useSpec !== false) ? "ON" : "OFF"} — spends into your weapon job (riposte/shred/bleed/pierce/echo), not a generic 1.5×</p>
       <div class="tabs">
         <button type="button" data-act="swap-style" data-arg="might">Swap Might</button>
@@ -1278,12 +1320,14 @@ export function renderRight(ctx) {
 
 function renderGear(ctx) {
   const { state } = ctx;
+  const set = gearSetInfo(state);
   const slots = ["weapon", "shield", "helm", "body", "legs", "boots", "gloves", "cape", "amulet", "ammo", "ring"];
   document.getElementById("gear").innerHTML = slots.map((s) => {
     const id = state.equipment[s];
     const it = CONTENT.items[id];
     return `<div class="slot"><b>${s}</b> ${it ? `<span>${it.name}</span> <button type="button" data-act="unequip" data-arg="${s}">x</button>` : "<em>empty</em>"}</div>`;
-  }).join("") + `<div class="slot"><b>tools</b> <span>axe ${CONTENT.items[state.tools.axe]?.name || "–"} ${state.tools.axe ? `<button type="button" data-act="unequip" data-arg="axe">x</button>` : ""} · pick ${CONTENT.items[state.tools.pick]?.name || "–"} ${state.tools.pick ? `<button type="button" data-act="unequip" data-arg="pick">x</button>` : ""} · rod ${CONTENT.items[state.tools.rod]?.name || "–"} ${state.tools.rod ? `<button type="button" data-act="unequip" data-arg="rod">x</button>` : ""}</span></div>
+  }).join("") + `<p class="set-line">${escapeHtml(set.label)}</p>
+    <div class="slot"><b>tools</b> <span>axe ${CONTENT.items[state.tools.axe]?.name || "–"} ${state.tools.axe ? `<button type="button" data-act="unequip" data-arg="axe">x</button>` : ""} · pick ${CONTENT.items[state.tools.pick]?.name || "–"} ${state.tools.pick ? `<button type="button" data-act="unequip" data-arg="pick">x</button>` : ""} · rod ${CONTENT.items[state.tools.rod]?.name || "–"} ${state.tools.rod ? `<button type="button" data-act="unequip" data-arg="rod">x</button>` : ""}</span></div>
     <button type="button" data-act="desk" data-arg="loadout">Open wanderer</button>
     <button type="button" data-act="loadout-save">Save loadout</button>
     ${state.loadouts.map((l, i) => `<button type="button" data-act="loadout-load" data-arg="${i}">${l.name}</button>`).join("")}`;
@@ -1307,7 +1351,7 @@ function renderBank(ctx) {
         ${glyph(it.model, "bico")}
         <span class="nm">${it.name}</span>
         <span class="qty">${n.toLocaleString()}</span>
-        <span class="val">${stackVal.toLocaleString()} ✦ · ${it.category}</span>
+        <span class="val">${glyphMarks(11)} ${stackVal.toLocaleString()} · ${it.category}</span>
         <div class="acts">
           ${eq ? `<button type="button" data-act="equip" data-arg="${id}">equip</button>` : ""}
           ${it.potion ? `<button type="button" data-act="drink" data-arg="${id}">drink</button>` : ""}
@@ -1320,7 +1364,7 @@ function renderBank(ctx) {
     }).join("");
   const html = `<div class="tabs">${tabBtns}</div>
     <input id="bank-search" placeholder="Search bank" value="${escapeHtml(bankFilter)}" />
-    <div class="bank-meta"><span>${held.length}/${bankCap(state)} stacks${held.length >= bankCap(state) ? " · FULL" : ""}</span><span>${bankValue(state).toLocaleString()} ✦ vault</span></div>
+    <div class="bank-meta"><span>${held.length}/${bankCap(state)} stacks${held.length >= bankCap(state) ? " · FULL" : ""}</span><span>${glyphMarks(11)} ${bankValue(state).toLocaleString()} vault</span></div>
     <button type="button" data-act="desk" data-arg="bank">Open dedicated vault</button>
     <div class="bank-grid">${rows || "<p class='blurb'>Empty tab.</p>"}</div>`;
   fillHtml(document.getElementById("bank"), html);
@@ -1397,7 +1441,7 @@ function renderQuests(ctx) {
         <div class="qbar"><i style="width:${s.pct}%"></i></div>
       </div>`).join("");
     const reward = [];
-    if (q.reward?.coins) reward.push(`${q.reward.coins} ✦`);
+    if (q.reward?.coins) reward.push(`${glyphMarks(11)} ${q.reward.coins}`);
     if (q.reward?.items) q.reward.items.forEach((it) => reward.push(`${it.qty} ${itemName(it.id)}`));
     return `<div class="q"><strong>${q.name}</strong><p>${q.how || q.desc}</p>${prog}${reward.length ? `<p class="muted">Reward: ${reward.join(" · ")}</p>` : ""}</div>`;
   }).join("");
@@ -1406,7 +1450,22 @@ function renderQuests(ctx) {
     .slice(0, 4)
     .map((q) => `<p class="muted">Coming: ${q.name} — ${q.how || q.desc}</p>`)
     .join("");
-  document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>`;
+  const ownedPets = CONTENT.pets.filter((p) => state.pets?.[p.id]).length;
+  const petGrid = `<div class="pet-ledger">
+    <h4>${ownedPets} / ${CONTENT.pets.length} companions</h4>
+    <div class="pet-grid">${CONTENT.pets.map((p) => {
+      const on = !!state.pets?.[p.id];
+      const hint = on ? `${p.name} · +${Math.round((p.bonus?.xp || 0) * 100)}% ${p.skill} xp` : `Still wild · ${skillName(p.skill)} actions (~0.035%)`;
+      return `<button type="button" class="pet-cell ${on ? "on" : "locked"}" data-act="desk" data-arg="bank" title="${escapeHtml(hint)}">
+        <span class="dico">${iconMarkup(p.model || { eid: p.id }, 28)}</span>
+        <strong>${escapeHtml(on ? p.name : "????")}</strong>
+        <span>${escapeHtml(on ? `${skillName(p.skill)} +xp` : `Hunt: ${skillName(p.skill)}`)}</span>
+      </button>`;
+    }).join("")}</div>
+  </div>`;
+  document.getElementById("quests").innerHTML = cards + coming + `<p class="blurb">Sealed ${state.quests.done.length}/${CONTENT.quests.length}</p>${petGrid}`;
+  const badge = document.getElementById("ledger-count");
+  if (badge) badge.textContent = String(state.quests.active.length);
 }
 
 function renderShop(ctx) {
@@ -1425,10 +1484,10 @@ function renderShop(ctx) {
       const sold = o.max && bought >= o.max;
       const lvok = !o.reqLevel || skillLevel(state, o.reqSkill) >= o.reqLevel;
       const why = sold ? "Sold out" : !lvok ? `Need ${skillName(o.reqSkill)} ${o.reqLevel}` : state.coins < cost ? "Short on marks" : "";
-      return `<button type="button" class="ware ${sold || !lvok ? "locked" : ""} ${onDeal ? "deal" : ""}" data-act="buy" data-arg="${o.id}" ${sold || !lvok ? "disabled" : ""}>
+      return `<button type="button" class="ware ${!lvok ? "locked" : ""} ${sold ? "sold" : ""} ${onDeal ? "deal" : ""}" data-act="buy" data-arg="${o.id}" ${sold || !lvok ? "disabled" : ""}>
         <span class="bico">${iconMarkup(offerModel(o), 28)}</span>
         <strong>${escapeHtml(stallOfferName(o))}</strong>
-        <span class="cost">${Math.floor(cost).toLocaleString()} ✦${onDeal ? " dusk" : ""}</span>
+        <span class="cost">${glyphMarks(11)} ${Math.floor(cost).toLocaleString()}${onDeal ? " dusk" : ""}</span>
         <span class="sub">${escapeHtml(o.desc || "")} · owned ${bought}${o.max ? "/" + o.max : ""}${why ? " · " + why : ""}</span>
       </button>`;
     }).join("")}</div>`

@@ -1,4 +1,4 @@
-import { createState, load, save, exportSave, importSave, CONTENT, recalcHp } from "./engine/state.js";
+import { createState, load, save, exportSave, importSave, CONTENT, recalcHp, SAVE_KEY } from "./engine/state.js";
 import { tick, applyOffline } from "./engine/sim.js";
 import { bindUI, renderShell, renderTop, renderRight } from "./ui/shell.js";
 import { createWorld } from "./scene/world.js";
@@ -46,7 +46,7 @@ const ctx = {
     renderShell(ctx);
   },
   wipe: () => {
-    localStorage.removeItem("veilforge-save-v1");
+    localStorage.removeItem(SAVE_KEY);
     state = createState();
     ctx.state = state;
     recalcHp(state);

@@ -1,5 +1,36 @@
 import { CONTENT, skillLevel, addXp, log, stashItem } from "./state.js";
 
+const FIRST_HOUR = ["q-wake", "q-fire", "q-fish", "q-cook", "q-blood"];
+
+export function firstHourBeat(state) {
+  for (const id of FIRST_HOUR) {
+    if ((state.quests.done || []).includes(id)) continue;
+    const q = CONTENT.quests.find((x) => x.id === id);
+    if (!q) continue;
+    const actionReq = (q.req || []).find((r) => r.type === "action" && !reqMet(state, r));
+    return {
+      id: q.id,
+      actionId: actionReq?.id || null,
+      skill: q.skill || skillOfQuest(q),
+      q
+    };
+  }
+  return null;
+}
+
+function skillOfQuest(q) {
+  if (q.skill) return q.skill;
+  const r = (q.req || []).find((x) => x.type === "action") || q.req?.[0];
+  if (r?.type === "action") return CONTENT.actions[r.id]?.skill || "timber";
+  if (r?.type === "kills" || r?.type === "dungeon") return "might";
+  if (r?.type === "harvest") return "soil";
+  if (r?.type === "laps") return "course";
+  if (r?.type === "bounty") return "bounty";
+  if (r?.type === "drove") return "drove";
+  if (r?.type === "level") return r.skill;
+  return "timber";
+}
+
 export function checkQuests(state) {
   for (const qid of [...state.quests.active]) {
     const q = CONTENT.quests.find((x) => x.id === qid);
