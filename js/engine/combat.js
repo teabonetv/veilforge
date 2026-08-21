@@ -1,7 +1,7 @@
 import { CONTENT, skillLevel, addXp, addItem, takeItem, bankCount, log, sumGear, recalcHp, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses, stashItem, skillLocked, lockMessage, XP_TABLE } from "./state.js";
 import { checkQuests } from "./quests.js";
 import { noteMonster, noteDungeon, notePet } from "./logbook.js";
-import { mechanicOf } from "../content/mechanics.js";
+import { mechanicOf, restoreMech } from "../content/mechanics.js";
 import { gradeKill } from "./deeds.js";
 import { echoMonster } from "../content/catalog.js";
 import { rarityOf } from "../content/rarity.js";
@@ -16,6 +16,27 @@ const POISON_TICK_MS = 700;
 const DRY_LOG_MS = 2500;
 
 const STYLE_BEATS = { might: "mark", mark: "weave", weave: "might" };
+
+/* Every fight starts with a clean mechanic slate: no inherited telegraphs,
+   no stale curse, no boss flags bleeding across floors or respawns. */
+function resetMechanicState(state) {
+  const c = state.combat;
+  c.curse = 0;
+  c.curseUntil = 0;
+  c.takenMul = 1;
+  c.phased = false;
+  c.enraged = false;
+  c.guardUntil = 0;
+  c.guardStyle = null;
+  c.addHits = 0;
+  c.telegraph = null;
+  c.nextMechAt = 0;
+  c.burstWind = false;
+  c.riposteArmed = false;
+  c.braceLogged = false;
+  c.braceAt = 0;
+  c.curseBraced = false;
+}
 
 export function startFight(state, monsterId, opts = {}) {
   let m = CONTENT.monsters[monsterId];
@@ -41,6 +62,8 @@ export function startFight(state, monsterId, opts = {}) {
   if (foodN * heal < m.maxHit * 3) {
     log(state, `${m.name} outpaces your larder (${foodN} food). Cook, or pick a weaker dock rat.`);
   }
+  restoreMech(m); // undo any mechanic stat mutation left on this catalog foe
+  resetMechanicState(state);
   state.action = null;
   state.combat.fighting = true;
   state.combat.monsterId = monsterId;
@@ -70,12 +93,6 @@ export function startFight(state, monsterId, opts = {}) {
   if (!opts.chain && !opts.respawn) {
     state.combat.fightStarted = now;
     state.combat.foodUsed = 0;
-    state.combat.phased = false;
-    state.combat.enraged = false;
-    state.combat.curse = 0;
-    state.combat.guardUntil = 0;
-    state.combat.addHits = 0;
-    state.combat.telegraph = null;
     const st = styleOf(state);
     const edge = triangleEdge(st, m.style);
     if (edge !== "even") {
@@ -133,6 +150,8 @@ function stampEcho(state, depth) {
 
 export function stopFight(state, reason = "abandon") {
   if (state.combat.dungeon && reason === "abandon") log(state, "Dungeon run abandoned. Progress lost.");
+  restoreMech(CONTENT.monsters[state.combat.monsterId]);
+  resetMechanicState(state);
   state.combat.fighting = false;
   state.combat.monsterId = null;
   state.combat.dungeon = null;
@@ -158,6 +177,7 @@ export function playerInterval(state) {
 export function combatTick(state, ms) {
   if (!state.combat.fighting) return;
   const now = state.now || 0;
+  decayCurse(state, now);
   clampPrayers(state);
   autoEat(state);
   regenVow(state, ms);
@@ -171,18 +191,54 @@ export function combatTick(state, ms) {
     state.combat.nextHitAt = now + playerInterval(state);
   }
   tickMechanic(state, now);
+  if (state.combat.burstWind && state.combat.fighting) braceForBurst(state, now);
   if (now >= state.combat.enemyNextAt && state.combat.fighting) {
     enemyHit(state);
     const m = CONTENT.monsters[state.combat.monsterId];
     if (m && state.combat.fighting) state.combat.enemyNextAt = now + m.interval;
     if (state.combat.addHits > 0 && state.combat.fighting) {
       state.combat.addHits -= 1;
-      const add = Math.max(1, Math.floor((m?.maxHit || 4) * 0.35));
+      let add = Math.max(1, Math.floor((m?.maxHit || 4) * 0.35));
+      add = Math.floor(add * curseTaken(state, now));
+      const fromFull = state.combat.hp >= state.combat.maxHp;
+      if (fromFull && add >= state.combat.hp) add = Math.max(1, state.combat.hp - 1); // adds obey held-the-line mercy
       state.combat.hp -= add;
       combatLog(state, `A remnant add nicks you for ${add}.`, { dmg: add, foeHit: true });
+      autoEat(state, { after: true, force: state.combat.hp <= 0 });
       if (state.combat.hp <= 0) die(state);
     }
   }
+}
+
+/* A curse is a timed wound, not a permanent tax. */
+function decayCurse(state, now) {
+  const c = state.combat;
+  if ((c.curseUntil || 0) > 0 && now >= c.curseUntil) {
+    c.curse = 0;
+    c.curseUntil = 0;
+    c.takenMul = 1;
+    if (c.curseBraced) {
+      c.curseBraced = false;
+      log(state, "Your draught burned the curse off early.");
+    } else {
+      combatLog(state, "The curse fades.");
+    }
+  }
+}
+
+function curseTaken(state, now) {
+  return (state.combat.curseUntil || 0) > now ? (state.combat.takenMul || 1) : 1;
+}
+
+function braceForBurst(state, now) {
+  if (!state.combat.braceLogged) {
+    state.combat.braceLogged = true;
+    combatLog(state, "It coils — auto-eat braces for the burst.");
+  }
+  /* Pace the brace: one ration per beat, not the whole larder in a blink. */
+  if (now < (state.combat.braceAt || 0)) return;
+  state.combat.braceAt = now + 700;
+  autoEat(state, { brace: true });
 }
 
 function clampPrayers(state) {
@@ -379,7 +435,10 @@ function tickMechanic(state, now) {
   if (now >= state.combat.nextMechAt) {
     state.combat.telegraph = null;
     state.combat.nextMechAt = now + cadence;
+    state._mechBraced = combatPotionLive(state);
+    if (mech.type === "guard") state.combat.guardStyle = styleOf(state);
     if (typeof mech.apply === "function") mech.apply(state, m);
+    state._mechBraced = false;
     if (mech.type === "phase" && (state.combat.monsterHp / (state.combat.monsterMaxHp || m.hp)) <= 0.5) {
       mech.apply(state, m);
     }
@@ -469,7 +528,7 @@ function playerHit(state, echoFollow = false) {
   let dmg = 1 + Math.floor(Math.random() * Math.max(1, maxHit));
 
   const notes = [];
-  if ((state.combat.guardUntil || 0) > now && state.combat.style === state.combat.guardStyle) {
+  if ((state.combat.guardUntil || 0) > now && styleOf(state) === state.combat.guardStyle) {
     dmg = Math.max(1, Math.floor(dmg * 0.5));
     notes.push("veilward");
   }
@@ -581,7 +640,8 @@ function enemyHit(state) {
   }
 
   let dmg = 1 + Math.floor(Math.random() * m.maxHit);
-  dmg = Math.max(1, Math.floor(dmg * st.tri.taken * (st.takenMul || 1)));
+  const cursed = (state.combat.curseUntil || 0) > now;
+  dmg = Math.max(1, Math.floor(dmg * st.tri.taken * (st.takenMul || 1) * (cursed ? (state.combat.takenMul || 1) : 1)));
   if (boss) dmg = Math.floor(dmg * 1.18);
   if (state.combat.ward > 0) {
     dmg = Math.floor(dmg * 0.72);
@@ -631,7 +691,7 @@ function enemyHit(state) {
     dmg = Math.max(1, state.combat.hp - 1);
     specialNotes.push("held the line");
   }
-  state._lastBlow = { kind: blowKind, dmg, fromFull, triangle: st.tri.edge };
+  state._lastBlow = { kind: blowKind, dmg, fromFull, triangle: st.tri.edge, cursed };
 
   state.combat.hp -= dmg;
   const spec = specialNotes.length ? ` ${specialNotes.join(", ")}` : "";
@@ -776,13 +836,16 @@ export function die(state) {
     dungeon: d ? d.name : null,
     floor: d ? (state.combat.dungeonIndex || 0) + 1 : null,
     of: d ? d.sequence.length : null,
+    cleared: d ? (d.infinite ? (state.combat.echoDepth || 0) : (state.combat.dungeonIndex || 0)) : null,
     echo: d?.infinite ? state.combat.echoDepth || 0 : null,
     foe: foe?.name || "a foe",
     blow: blow.kind || "hit",
     triangle: blow.triangle || playerStats(state).tri?.edge,
+    cursed: !!blow.cursed,
     food: foodN,
     fromFull: !!blow.fromFull,
     dmg: blow.dmg,
+    tax,
     tip,
     t: Date.now()
   };
@@ -809,6 +872,8 @@ function deathTip(blow) {
   if (blow.kind === "poison") return "Poison tick — carry more food or a ward.";
   if (blow.kind === "drain") return "Drain thins vows and food. Eat earlier or swap style.";
   if (blow.kind === "starve") return "Dry larder — cook before you hunt.";
+  if (blow.cursed) return "A dusk curse was riding you — a live draught burns it off early.";
+  if (blow.triangle === "dis") return "You fought at a triangle disadvantage — swap style before the next hunt.";
   return "The hit landed. Food, triangle, or heavier plate next time.";
 }
 
@@ -816,7 +881,9 @@ function autoEat(state, opts = {}) {
   const m = CONTENT.monsters[state.combat.monsterId];
   const lethal = m ? m.maxHit + 1 : 0;
   const thHp = state.combat.maxHp * (state.combat.autoEat || 0.5);
-  const need = opts.force || state.combat.hp <= Math.max(thHp, lethal);
+  /* Bracing for a telegraphed burst: top off toward 90%, nothing more. */
+  if (opts.brace && !opts.force && state.combat.hp >= state.combat.maxHp * 0.9) return;
+  const need = opts.force || opts.brace || state.combat.hp <= Math.max(thHp, lethal);
   if (!need) return;
   if (ensureOrders(state).eat !== false && orderUnlocked(state, "eat")) autoEatFinest(state);
   const ids = [state.combat.foodId, state.combat.foodId2].filter(Boolean);
@@ -853,6 +920,12 @@ export function combatLog(state, msg, meta = null) {
     state._floaters.push({ n: String(meta.dmg), foe: !!meta.foeHit, id: (state._floaterSeq = (state._floaterSeq || 0) + 1) });
     if (state._floaters.length > 8) state._floaters.shift();
   }
+}
+
+function combatPotionLive(state) {
+  if (!state.combat.potionId || state.combat.potionCharges <= 0) return false;
+  const pot = CONTENT.items[state.combat.potionId]?.potion || {};
+  return ["accMul", "strMul", "rangedMul", "magicMul", "defMul", "eatBoost"].some((k) => k in pot);
 }
 
 export function consumePotionCharge(state, why = "any") {

@@ -14,6 +14,7 @@ import { currentCommission, deliverCommission } from "../engine/commissions.js";
 import { ACHIEVEMENTS } from "../content/achievements.js";
 import { wearTitle } from "../engine/achievements.js";
 import { rarityOf } from "../content/rarity.js";
+import { mechanicOf } from "../content/mechanics.js";
 import { deedMedals } from "../engine/deeds.js";
 import { glyphLock, glyphMarks } from "./glyphs.js";
 
@@ -884,6 +885,8 @@ function renderDeathModal(ctx) {
     <h3>You fell</h3>
     <p>${escapeHtml(sheet.foe)} on ${where}.</p>
     <p><strong>${escapeHtml(sheet.blow || "hit")}</strong>${sheet.dmg != null ? ` · ${sheet.dmg} damage` : ""}${sheet.triangle && sheet.triangle !== "even" ? ` · triangle ${escapeHtml(sheet.triangle)}` : ""} · food ${sheet.food ?? 0}</p>
+    ${sheet.tax > 0 ? `<p class="muted">The citadel took ${sheet.tax} veilmarks.</p>` : ""}
+    ${sheet.cleared > 0 ? `<p class="muted">Floors cleared before the fall: ${sheet.cleared}.</p>` : ""}
     <p class="blurb">${escapeHtml(sheet.tip || "")}</p>
     ${sheet.echo != null ? `<p class="muted">Echo depth ${sheet.echo}. The climb resets.</p>` : ""}
     <button type="button" data-act="death-ack">Rise</button>
@@ -1395,9 +1398,25 @@ function renderCombatTheater(ctx) {
   const foeSwing = duelSwing(now, state.combat.enemyNextAt, m.interval);
   const dun = state.combat.dungeon ? CONTENT.dungeons.find((d) => d.id === state.combat.dungeon) : null;
   const medals = deedMedals(state, m.id).filter((d) => d.have).map((d) => d.id).join(" · ");
+  const mech = m.mechanic ? mechanicOf(m) : null;
+  const mechIn = mech && state.combat.nextMechAt ? Math.max(0, Math.ceil((state.combat.nextMechAt - now) / 1000)) : null;
   const tell = state.combat.telegraph
-    ? `<p class="hint">Telegraph: ${escapeHtml(String(state.combat.telegraph))}${m.mechanic?.counter ? ` · counter ${escapeHtml(m.mechanic.counter)}` : ""}</p>`
-    : "";
+    ? `<p class="hint tell">⚑ ${escapeHtml(String(mech?.tell || state.combat.telegraph))} — lands in ~${mechIn ?? "?"}s${mech?.counter ? ` · counter: ${escapeHtml(mech.counter)}` : ""}</p>`
+    : mech && mechIn != null
+      ? `<p class="hint">Next move in ~${mechIn}s</p>`
+      : "";
+  const youStatus = [
+    (state.combat.poison || 0) > 0 ? `POISONED ${state.combat.poison}` : "",
+    (state.combat.curseUntil || 0) > now ? `cursed (+${Math.round(((state.combat.takenMul || 1) - 1) * 100)}% taken)` : "",
+    (state.combat.guardUntil || 0) > now ? "veilward — swap style" : "",
+    (state.combat.ward || 0) > 0 ? `tide ward ×${state.combat.ward}` : "",
+    (state.combat.eatWound || 0) > 0 ? "drain-sick" : ""
+  ].filter(Boolean).join(" · ");
+  const foeStatus = [
+    state.combat.burstWind ? "COILED — burst next swing" : "",
+    (state.combat.bleed || 0) > 0 ? `bleeding ${state.combat.bleed}` : "",
+    (state.combat.shred || 0) > 0 ? `shredded ${state.combat.shred}` : ""
+  ].filter(Boolean).join(" · ");
   return `<div class="fight-board${state.combat.telegraph ? " telegraph" : ""}">
     <div>
       <h4>You</h4>
@@ -1407,6 +1426,7 @@ function renderCombatTheater(ctx) {
       <p class="hint">Food ${foodN} ${foodId ? itemName(foodId) : "—"} / backup ${state.combat.foodId2 ? `${bankCount(state, state.combat.foodId2)} ${itemName(state.combat.foodId2)}` : "none"} ${foodN <= 3 ? "· running low" : ""} · ~${foodEst} rations/kill if auto-eat holds</p>
       <p class="hint">${escapeHtml(set.label)}</p>
       <p class="hint">Special ${Math.floor(state.combat.spec || 0)}% ${(state.combat.useSpec !== false) ? "ON" : "OFF"} — spends into your weapon job (riposte/shred/bleed/pierce/echo), not a generic 1.5×</p>
+      ${youStatus ? `<p class="hint status">${escapeHtml(youStatus)}</p>` : ""}
       <div class="tabs">
         <button type="button" data-act="swap-style" data-arg="might">Swap Might</button>
         <button type="button" data-act="swap-style" data-arg="mark">Swap Mark</button>
@@ -1419,6 +1439,7 @@ function renderCombatTheater(ctx) {
       <div class="bar hp foe"><i style="display:block;height:100%;width:${Math.max(0, 100 * state.combat.monsterHp / (state.combat.monsterMaxHp || m.hp))}%;background:linear-gradient(90deg,#3a2a78,#8b7cff)"></i></div>
       <p class="hint">${Math.max(0, Math.ceil(state.combat.monsterHp))} / ${state.combat.monsterMaxHp || m.hp} · incoming ${foeSwing.toFixed(0)}%</p>
       <p class="hint">Hit ${m.maxHit} · ${m.style}${m.special ? " · " + m.special : ""}${m.mechanic?.type ? ` · ${m.mechanic.type}` : ""}</p>
+      ${foeStatus ? `<p class="hint status">${escapeHtml(foeStatus)}</p>` : ""}
       ${tell}
       ${medals ? `<p class="deed-row">${escapeHtml(medals)}</p>` : ""}
       <p class="hint">${dun ? (dun.infinite ? `${dun.name} depth ${state.combat.echoDepth || 0} (best ${state.combat.echoBest || 0})` : `${dun.name} floor ${(state.combat.dungeonIndex || 0) + 1}/${dun.sequence.length}`) : m.area}</p>

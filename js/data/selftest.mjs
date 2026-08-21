@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem, persistable, skillLocked, lockMessage, SAVE_KEY, SAVE_BAK, SAVE_VERSION, save, load, setSaveStore, checksum, masteryBonus, renewSkill, addXp } from "../engine/state.js";
 import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouch, plantPlot, buyPillar, spendChartRank, setUseCompost, thieveStunChance, markHeat, setActionMode } from "../engine/sim.js";
-import { startFight, startDungeon, equipItem, unequip, rollBounty, playerStats, die, deathTaxAmount, combatLog } from "../engine/combat.js";
+import { startFight, startDungeon, equipItem, unequip, rollBounty, playerStats, die, deathTaxAmount, combatLog, stopFight } from "../engine/combat.js";
 import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
 import { iconMarkup, iconUrl } from "../scene/icons.js";
@@ -576,6 +576,170 @@ test("no bankFull", () => {
   }
   addItem(st, "celestial-saber", 1);
   if ("bankFull" in st) throw new Error("bankFull still written");
+});
+
+function findMech(type) {
+  return Object.values(C.monsters).find((m) => m.mechanic?.type === type && !m.echo);
+}
+function mechFoe(st, boss, hp) {
+  st.skills.bounty.xp = XP_TABLE[60];
+  st.skills.bounty.level = 60;
+  st.bank["food-0"] = (st.bank["food-0"] || 0) + 60;
+  st.combat.foodId = "food-0";
+  st.combat.maxHp = hp;
+  st.combat.hp = hp;
+  const err = startFight(st, boss.id);
+  if (err) throw new Error(err);
+}
+
+test("CF1 curse is a timed wound, not a permanent tax", () => {
+  const boss = findMech("curse");
+  if (!boss) throw new Error("no curse boss in content");
+  const st = createState();
+  mechFoe(st, boss, 900);
+  let guard = 0;
+  while (!(st.combat.curseUntil > 0) && st.combat.fighting && guard++ < 400) tick(st, 50);
+  if (!(st.combat.curseUntil > 0)) throw new Error("curse never landed");
+  if (st.combat.takenMul !== 1.18) throw new Error("curse tax missing: " + st.combat.takenMul);
+  guard = 0;
+  while ((st.combat.curseUntil || 0) > 0 && st.combat.fighting && guard++ < 400) tick(st, 50);
+  if ((st.combat.curseUntil || 0) > 0) throw new Error("curse outlived its clock");
+  if (st.combat.takenMul !== 1) throw new Error("curse tax never faded: " + st.combat.takenMul);
+  stopFight(st);
+});
+
+test("CF2 phase/enrage restore the catalog foe", () => {
+  const boss = findMech("phase") || findMech("enrage");
+  if (!boss) throw new Error("no phase/enrage boss");
+  const base = { acc: boss.acc, maxHit: boss.maxHit, interval: boss.interval };
+  const st = createState();
+  mechFoe(st, boss, 900);
+  let guard = 0;
+  const fired = () => (boss.mechanic.type === "phase" ? st.combat.phased : st.combat.enraged);
+  while (!fired() && st.combat.fighting && guard++ < 400) tick(st, 50);
+  if (!fired()) throw new Error("mechanic never fired");
+  if (boss.acc === base.acc && boss.maxHit === base.maxHit) throw new Error("mechanic mutated nothing");
+  stopFight(st);
+  if (boss.acc !== base.acc || boss.maxHit !== base.maxHit || boss.interval !== base.interval) {
+    throw new Error("catalog boss kept mechanic mutations: " + JSON.stringify(base) + " -> " + JSON.stringify({ acc: boss.acc, maxHit: boss.maxHit, interval: boss.interval }));
+  }
+});
+
+test("CF3 phase never rewinds its wounds", () => {
+  const boss = findMech("phase");
+  if (!boss) throw new Error("no phase boss");
+  const st = createState();
+  mechFoe(st, boss, 900);
+  let guard = 0;
+  let low = Infinity;
+  while (!(st.combat.phased || !st.combat.fighting) && guard++ < 400) {
+    tick(st, 50);
+    low = Math.min(low, st.combat.monsterHp);
+  }
+  if (!st.combat.phased) throw new Error("phase never fired");
+  if (st.combat.monsterHp > low + 0.001) {
+    throw new Error("phase healed the boss: " + st.combat.monsterHp + " above seen low " + low);
+  }
+  stopFight(st);
+});
+
+test("CF4 remnant adds obey held-the-line mercy", () => {
+  const ash = Object.values(C.monsters).find((m) => m.name === "Ash Mite") || C.monsters[Object.keys(C.monsters)[0]];
+  const st = createState();
+  st.bank["food-0"] = 48;
+  st.combat.foodId = "food-0";
+  st.combat.maxHp = 1; // any unmerciful add kills from full here
+  st.combat.hp = 1;
+  const err = startFight(st, ash.id);
+  if (err) throw new Error(err);
+  st.combat.addHits = 1; // a summon's remnant, without the boss
+  st.combat.enemyNextAt = st.now + 60; // land it now, before the larder churns
+  let guard = 0;
+  let landed = false;
+  while (st.combat.fighting && guard++ < 200) {
+    const adds = st.combat.addHits || 0;
+    tick(st, 50);
+    if ((st.combat.addHits || 0) < adds) {
+      landed = true;
+      if (st.combat.hp <= 0) throw new Error("add killed from full HP — mercy broken");
+      break;
+    }
+  }
+  if (!landed) throw new Error("add never landed");
+  if ((st.stats.deaths || 0) > 0) throw new Error("deaths recorded: " + st.stats.deaths);
+  stopFight(st);
+});
+
+test("CF5 chained floors start with a clean mechanic slate", () => {
+  const d0 = C.dungeons.find((d) => d.id === "dock-vault");
+  const st = createState();
+  st.skills.might.xp = XP_TABLE[120];
+  st.skills.might.level = 120;
+  st.combat.maxHp = 900;
+  st.combat.hp = 900;
+  addItem(st, "dungeon-key", 1);
+  st.bank["food-0"] = 80;
+  st.combat.foodId = "food-0";
+  const err = startDungeon(st, d0.id);
+  if (err) throw new Error(err);
+  // wreckage from floor 1's fight must not ride into floor 2
+  st.combat.curseUntil = st.now + 999999;
+  st.combat.takenMul = 1.18;
+  st.combat.guardUntil = st.now + 999999;
+  st.combat.addHits = 3;
+  st.combat.phased = true;
+  st.combat.enraged = true;
+  st.combat.burstWind = true;
+  st.combat.telegraph = "curse";
+  let guard = 0;
+  while (st.combat.fighting && (st.combat.dungeonIndex || 0) < 1 && guard++ < 4000) tick(st, 50);
+  if (!st.combat.fighting || (st.combat.dungeonIndex || 0) !== 1) {
+    throw new Error("never reached floor 2: idx=" + st.combat.dungeonIndex + " fighting=" + st.combat.fighting);
+  }
+  if (st.combat.curseUntil || st.combat.takenMul !== 1 || st.combat.guardUntil || st.combat.addHits ||
+      st.combat.phased || st.combat.enraged || st.combat.burstWind || st.combat.telegraph) {
+    throw new Error("floor 2 inherited mechanic state: " + JSON.stringify({
+      curseUntil: st.combat.curseUntil, takenMul: st.combat.takenMul, guardUntil: st.combat.guardUntil,
+      addHits: st.combat.addHits, telegraph: st.combat.telegraph
+    }));
+  }
+  stopFight(st);
+});
+
+test("CF6 veilward names the live style", () => {
+  const boss = findMech("guard");
+  if (!boss) throw new Error("no guard boss");
+  const st = createState();
+  mechFoe(st, boss, 900);
+  let guard = 0;
+  while (!(st.combat.guardUntil > 0) && st.combat.fighting && guard++ < 400) tick(st, 50);
+  if (!(st.combat.guardUntil > 0)) throw new Error("veilward never raised");
+  if (st.combat.guardStyle !== playerStats(st).style) {
+    throw new Error("guardStyle is not the held style: " + st.combat.guardStyle + " vs " + playerStats(st).style);
+  }
+  stopFight(st);
+});
+
+test("CF7 auto-eat braces for a coiled burst", () => {
+  const foe = Object.values(C.monsters).find((m) => m.special === "burst" && !m.dungeonOnly && !m.echo);
+  if (!foe) throw new Error("no field burst monster");
+  const st = createState();
+  st.skills.bounty.xp = XP_TABLE[12];
+  st.skills.bounty.level = 12;
+  st.bank["food-0"] = 40;
+  st.combat.foodId = "food-0";
+  st.combat.maxHp = 100;
+  st.combat.hp = 45; // above the 40% auto-eat line, below the 90% brace line
+  const err = startFight(st, foe.id);
+  if (err) throw new Error(err);
+  st.combat.burstWind = true;
+  const before = bankCount(st, "food-0");
+  tick(st, 50);
+  tick(st, 50);
+  if (st.combat.hp <= 45) throw new Error("brace never ate: hp " + st.combat.hp);
+  if (bankCount(st, "food-0") >= before) throw new Error("brace ate no food");
+  if (before - bankCount(st, "food-0") > 2) throw new Error("brace stripped the larder: " + (before - bankCount(st, "food-0")));
+  stopFight(st);
 });
 
 function memStore() {
