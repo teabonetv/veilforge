@@ -7,7 +7,8 @@ import { escapeHtml, utf8ToB64 } from "../util/text.js";
 import { iconMarkup, iconUrl } from "../scene/icons.js";
 import { PIX_EID } from "../scene/pix-map.js";
 import { offerModel, quayDeal, inferBooth, QUAY_BOOTHS, openCoinGoals, quayCommissions } from "../engine/market.js";
-import { firstHourBeat } from "../engine/quests.js";
+import { firstHourBeat, checkQuests } from "../engine/quests.js";
+import { needsWelcome, toolNudge, sealCopy } from "../engine/onboard.js";
 import { RARITY, rarityOf, rollRarity } from "../content/rarity.js";
 import { ledgerStats, standingBonuses, STANDING_TIERS } from "../engine/ledger.js";
 import { logbookStats } from "../engine/logbook.js";
@@ -714,6 +715,48 @@ test("BEAT-1 firstHourBeat still", () => {
   st.actionCounts["timber-0"] = 3;
   const beat = firstHourBeat(st);
   if (beat?.id !== "q-wake") throw new Error("wake not current: " + beat?.id);
+});
+
+test("BEAT-2 seal celebration payload", () => {
+  const st = createState();
+  st.actionCounts["timber-0"] = 3;
+  checkQuests(st);
+  if (!st.quests.done.includes("q-wake")) throw new Error("q-wake did not seal");
+  if (!st._seal || st._seal.id !== "q-wake") throw new Error("seal payload missing: " + JSON.stringify(st._seal));
+  if (st._seal.coins !== 40 || st._seal.seq !== 1) throw new Error("seal payload wrong: " + JSON.stringify(st._seal));
+  if (!/Hatchet/.test(sealCopy(st._seal))) throw new Error("seal copy lost the hatchet: " + sealCopy(st._seal));
+  const dumped = persistable(st);
+  if (Object.keys(dumped).some((k) => k.startsWith("_"))) throw new Error("seal payload leaked into save");
+  st.actionCounts["ember-0"] = 3;
+  checkQuests(st);
+  if (st._seal.seq !== 2 || st._seal.id !== "q-fire") throw new Error("second seal did not tick: " + JSON.stringify(st._seal));
+});
+
+test("BEAT-3 tool nudge", () => {
+  const st = createState();
+  if (toolNudge(st)) throw new Error("empty vault flagged a tool: " + JSON.stringify(toolNudge(st)));
+  addItem(st, "drift-hatchet", 1);
+  const n = toolNudge(st);
+  if (!n || n.id !== "drift-hatchet" || n.slot !== "axe") throw new Error("nudge missed hatchet: " + JSON.stringify(n));
+  const e = equipItem(st, "drift-hatchet");
+  if (e) throw new Error(e);
+  if (toolNudge(st)) throw new Error("equipped tool still nudged");
+  addItem(st, "iron-hatchet", 1);
+  const n2 = toolNudge(st);
+  if (!n2 || n2.id !== "iron-hatchet") throw new Error("tier compare wrong: " + JSON.stringify(n2));
+});
+
+test("BEAT-4 welcome gate", () => {
+  const fresh = createState();
+  if (!needsWelcome(fresh)) throw new Error("fresh save not welcomed");
+  fresh.stats.actions = 1;
+  if (needsWelcome(fresh)) throw new Error("welcome nagged after play");
+  const acked = createState();
+  acked.settings.welcomed = true;
+  if (needsWelcome(acked)) throw new Error("welcome ignores ack");
+  const veteran = createState();
+  veteran.quests.done.push("q-wake");
+  if (needsWelcome(veteran)) throw new Error("welcome for a veteran");
 });
 
 test("E2 persistable no underscore", () => {

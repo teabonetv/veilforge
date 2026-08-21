@@ -3,6 +3,7 @@ import { CONTENT, SKILLS, COMBAT_SKILLS, XP_TABLE, MAX_LEVEL, skillLevel, bankCo
 import { startAction, stopAction, harvestPlot, plantPlot, collectPen, stockPen, actionDuration, spendCheckpoint, checkpointCost, buyPillar, spendChartRank, openPouch, feedPen, sellItems, setUseCompost, maxAffordable, fulfillCommission, markHeat, setActionMode } from "../engine/sim.js";
 import { startFight, stopFight, startDungeon, equipItem, unequip, drinkPotion, rollBounty, buryBones, playerStats, playerInterval, swapWeaponStyle, gearSetInfo } from "../engine/combat.js";
 import { questProgress, firstHourBeat, currentBeat, actOf } from "../engine/quests.js";
+import { needsWelcome, toolNudge, beatWhy, sealCopy } from "../engine/onboard.js";
 import { saveLoadout, loadLoadout } from "../engine/wanderer.js";
 import { desk, setDesk, setVaultPick, setFocusedSlot, renderDesks, onVaultSearch, onVaultCat, onVaultLens, applyKit, inspectModelOf, onStallSearch, onStallBooth, onStallPick, onStallPacks, stallPackCount, currentStallBooth, currentStallFilter, onCodexTab } from "./desks.js";
 import { iconMarkup, SKILL_ICON_KIND } from "../scene/icons.js";
@@ -123,11 +124,13 @@ function handle(ctx, act, arg, el) {
     case "dismiss-level":
       state.levelUps = (state.levelUps || []).slice(1);
       shownLevelKey = "";
+      clearTimeout(levelFade);
       renderLevelModal(ctx);
       break;
     case "dismiss-levels":
       state.levelUps = [];
       shownLevelKey = "";
+      clearTimeout(levelFade);
       renderLevelModal(ctx);
       break;
     case "start":
@@ -318,6 +321,12 @@ function handle(ctx, act, arg, el) {
       releaseModal();
       ctx.render();
       break;
+    case "wake-ack":
+      state.settings = state.settings || {};
+      state.settings.welcomed = true;
+      releaseModal();
+      ctx.render();
+      break;
     case "dawn-ack":
       state._dawn = false;
       releaseModal();
@@ -451,6 +460,28 @@ export function renderShell(ctx) {
   renderDesks(ctx);
   renderEdict(ctx);
   renderDawn(ctx);
+  renderWake(ctx);
+}
+
+/* One-time welcome for a brand-new wanderer. A single dismissible sheet —
+   orientation, not a gated tutorial. Every line points at something real. */
+function renderWake(ctx) {
+  const el = document.getElementById("wake-modal");
+  if (!el) return;
+  if (!needsWelcome(ctx.state)) {
+    if (!el.hidden) { el.hidden = true; el.innerHTML = ""; }
+    return;
+  }
+  if (ctx.state._deathSheet || ctx.state._edict || ctx.state._dawn) return;
+  el.hidden = false;
+  el.innerHTML = `<div class="sheet wake-sheet">
+    <h3>The Last Workshop</h3>
+    <p>You keep the last forge at the edge of the dusk. One job runs at a time — <strong>Halt</strong> to switch.</p>
+    <p>The <strong>Goal</strong> line always knows your next click. Follow it and the first watch handles itself: chop, burn, fish, cook, then blood in Cinder Docks.</p>
+    <p>Food keeps you breathing in a fight. Veilmarks buy tools. The ledger remembers everything else.</p>
+    <button type="button" class="primary" data-act="wake-ack">Begin the first watch</button>
+  </div>`;
+  trapModal(el);
 }
 
 function duelSwing(now, nextAt, interval) {
@@ -491,6 +522,8 @@ function renderTop(ctx) {
   }
   document.getElementById("hp-label").textContent = `${Math.ceil(hp)} / ${max}`;
   document.getElementById("hp-fill").style.width = `${Math.max(0, 100 * hp / max)}%`;
+  const coinsEl = document.getElementById("coins");
+  if (coinsEl) coinsEl.textContent = Math.floor(state.coins || 0).toLocaleString();
   document.getElementById("vow-fill").style.width = `${Math.max(0, 100 * state.combat.vow / state.combat.maxVow)}%`;
   const vowLab = document.getElementById("vow-label");
   if (vowLab) vowLab.textContent = `${Math.floor(state.combat.vow)}/${state.combat.maxVow}`;
@@ -548,7 +581,9 @@ function renderTop(ctx) {
       const pct = Math.min(100, 100 * act.progress / (act.duration || 1));
       const sp = skillLevel(state, act.skill);
       const into = Math.floor(xpPct(state, act.skill));
-      lab.textContent = `${skillName(act.skill)} ${sp} · ${into}% to next · ${a?.name || act.id}`;
+      const beatTick = firstHourBeat(state);
+      const tally = beatTick?.actionId === act.id ? beatWhy(state, beatTick) : "";
+      lab.textContent = `${skillName(act.skill)} ${sp} · ${into}% to next · ${a?.name || act.id}${tally ? ` · ledger ${tally}` : ""}`;
       bar.style.width = pct + "%";
       bar.classList.remove("combat");
     } else {
@@ -606,6 +641,7 @@ function renderTop(ctx) {
     }
   }
   spawnYieldDrip(state);
+  renderSeal(ctx);
   const ly = document.getElementById("last-yield");
   if (ly) {
     const d = state.lastDrip;
@@ -801,7 +837,7 @@ function trapModal(el) {
     .filter((n) => !n.disabled && n.offsetParent !== null);
   modalKeyHandler = (e) => {
     if (e.key === "Escape") {
-      const no = el.querySelector("[data-act='fork-no'], [data-act='dismiss-level']");
+      const no = el.querySelector("[data-act='fork-no'], [data-act='dismiss-level'], [data-act='wake-ack']");
       no?.click();
       return;
     }
@@ -845,6 +881,7 @@ function renderLevelModal(ctx) {
   const ev = folded[0];
   if (!ev) {
     shownLevelKey = "";
+    clearTimeout(levelFade);
     releaseModal();
     modal.hidden = true;
     return;
@@ -852,6 +889,20 @@ function renderLevelModal(ctx) {
   const key = folded.map((e) => `${e.skill}-${e.from}-${e.to}`).join("|");
   if (shownLevelKey === key && !modal.hidden) return;
   shownLevelKey = key;
+  clearTimeout(levelFade);
+  // Plain single level-ups fade on their own — the first hour levels fast and
+  // a blocking sheet per ding turns idle into a clicking chore. Sheets with
+  // unlocks (or several at once) stay until read.
+  if (folded.length === 1 && !(ev.unlocks?.length)) {
+    levelFade = setTimeout(() => {
+      if (shownLevelKey !== key) return;
+      const cur = document.getElementById("level-modal");
+      if (!cur || cur.hidden) return;
+      ctx.state.levelUps = (ctx.state.levelUps || []).slice(1);
+      shownLevelKey = "";
+      renderLevelModal(ctx);
+    }, 5200);
+  }
   modal.hidden = false;
   const more = folded.length - 1;
   const lines = folded.slice(0, 8).map((e) =>
@@ -890,6 +941,7 @@ function renderDeathModal(ctx) {
   </div>`;
 }
 
+let levelFade = null;
 let shownEdict = "";
 function renderEdict(ctx) {
   const el = document.getElementById("edict-modal");
@@ -978,10 +1030,15 @@ function renderCodex(ctx) {
     const sink = (act?.outputs || []).flatMap((o) => sinksOf(o.item))[0];
     idle = `Idling: ${act?.name || state.action.id}${sink ? ` → ${sink}` : ""}.`;
   }
+  const nudge = toolNudge(state);
+  const nudgeBtn = nudge
+    ? `<button type="button" class="nudge" data-act="equip" data-arg="${nudge.id}" title="Waiting in your vault">Equip ${escapeHtml(nudge.name)} · +${Math.round((nudge.bonus || 0) * 100)}% speed</button>`
+    : "";
   el.innerHTML = `<span class="codex-k">Goal</span>
     <span>${next}</span>
     <span class="muted">${then ? `Then: ${then}` : idle}</span>
     <div class="codex-acts">
+      ${nudgeBtn}
       ${jump}
       <button type="button" data-act="desk" data-arg="bank">Open vault</button>
       <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
@@ -1741,12 +1798,27 @@ function renderLog(ctx) {
 
 function toast(ctx, msg) {
   log(ctx.state, msg);
+  showToast(ctx, msg);
+}
+
+function showToast(ctx, msg) {
   const t = document.getElementById("toast");
   if (!t) return;
   t.textContent = msg;
   t.classList.add("show");
-  clearTimeout(toast._h);
-  toast._h = setTimeout(() => t.classList.remove("show"), 3200);
+  clearTimeout(showToast._h);
+  showToast._h = setTimeout(() => t.classList.remove("show"), 3400);
+}
+
+/* Ledger-seal celebration: one chime + one toast per sealed page. */
+let lastSeal = 0;
+function renderSeal(ctx) {
+  const seal = ctx.state._seal;
+  if (!seal || seal.seq === lastSeal) return;
+  lastSeal = seal.seq;
+  const copy = sealCopy(seal);
+  showToast(ctx, `Ledger sealed: ${seal.name}${copy ? ` · ${copy}` : ""}`);
+  if (ctx.state.settings?.toasts !== false && !ctx.state.settings?.reducedMotion) pingYield(true);
 }
 
 export { renderTop, recalcHp, desk, inspectModelOf };
