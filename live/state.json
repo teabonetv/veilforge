@@ -16,8 +16,8 @@
       "scope": "Onboarding, quest beats, teaching copy, pacing, next-step clarity",
       "lane": "wt-a",
       "build_round": 1,
-      "critic_round": 0,
-      "status": "building",
+      "critic_round": 1,
+      "status": "critiquing",
       "verdict": "",
       "gap": ""
     },
