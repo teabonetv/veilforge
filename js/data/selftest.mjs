@@ -562,6 +562,10 @@ test("E10 death tax", () => {
   poor.coins = 2;
   die(poor);
   if (poor.coins !== 0) throw new Error("2-coin player did not pay: " + poor.coins);
+  const broke = createState();
+  broke.coins = 0;
+  die(broke);
+  if (broke.coins !== 0) throw new Error("0-coin death changed coins: " + broke.coins);
   if (!SAVE_KEY.includes("veilforge-save")) throw new Error("SAVE_KEY missing");
 });
 test("no bankFull", () => {
