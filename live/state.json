@@ -38,8 +38,8 @@
       "scope": "Market/Quay, rarity, ledger, commissions, offline & vault, mastery",
       "lane": "wt-c",
       "build_round": 1,
-      "critic_round": 0,
-      "status": "building",
+      "critic_round": 1,
+      "status": "critiquing",
       "verdict": "",
       "gap": ""
     },
