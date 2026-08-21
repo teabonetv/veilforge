@@ -49,8 +49,8 @@
       "scope": "Shell/desks, icons, floaters, feedback juice, readability",
       "lane": "wt-d",
       "build_round": 1,
-      "critic_round": 0,
-      "status": "building",
+      "critic_round": 1,
+      "status": "critiquing",
       "verdict": "",
       "gap": ""
     }
