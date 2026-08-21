@@ -29,3 +29,15 @@ Shipped on `cursor/longevity-wave-03e0`. The dusk keeps a ledger. Halt is still 
 ## Comparison
 
 Melvor's overnight trust is closer (offline hunts, vault halt, Dawn). Completion log and rarity exist. First hour is still a beat scan, not a gated tutorial.
+
+## Builder round B — combat feel & fairness (branch wt-b)
+
+- Boss mechanic state now resets every fight/floor: no stale curse, telegraphs, enrage/phase flags, or add hits bleeding across respawns or dungeon chains.
+- Phase/enrage mutations to catalog monster stats are captured and restored on fight end; phase no longer heals the boss back to 50%.
+- Curse is a timed wound (8s, 4s + softer tax with a live combat draught — "counter: vial" is real) and actually applies its taken multiplier.
+- Veilward ("counter: style") now keys off the held weapon's live style, so swapping styles genuinely counters it.
+- Remnant adds obey held-the-line mercy + auto-eat; they can no longer kill from full HP.
+- Burst wind-up is visible ("COILED") and auto-eat braces toward 90% HP while coiled, one ration per beat.
+- Fight board shows flavored telegraphs with countdown + counter, live status lines (poison/curse/ward/bleed/shred), and death sheets name the tax paid, floors cleared, curse, and triangle disadvantage.
+- Selftests CF1–CF7 pin all of the above.
+
