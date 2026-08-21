@@ -1,4 +1,4 @@
-import { CONTENT, skillLevel, addXp, addItem, takeItem, bankCount, log, sumGear, recalcHp, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses, stashItem, skillLocked } from "./state.js";
+import { CONTENT, skillLevel, addXp, addItem, takeItem, bankCount, log, sumGear, recalcHp, guildBonuses, courseBonuses, chartBonuses, potionStats, petBonuses, stashItem, skillLocked, lockMessage } from "./state.js";
 import { checkQuests } from "./quests.js";
 
 const PRAYER_CAP = 2;
@@ -17,7 +17,7 @@ export function startFight(state, monsterId, opts = {}) {
   if (!state.equipment.weapon) return "Equip a weapon.";
   const heldStyle = CONTENT.items[state.equipment.weapon]?.style;
   if (heldStyle && skillLocked(state, heldStyle) && !opts.respawn && !opts.chain) {
-    return `${heldStyle} is still locked.`;
+    return lockMessage(skillLocked(state, heldStyle));
   }
   if ((m.slayerReq || 0) > skillLevel(state, "bounty") && !opts.dungeon && !opts.respawn && !opts.chain) {
     return `Slayer ${m.slayerReq} required (Bounty skill).`;
@@ -25,7 +25,7 @@ export function startFight(state, monsterId, opts = {}) {
   const foodN = bankCount(state, state.combat.foodId) + bankCount(state, state.combat.foodId2);
   const heal = Math.max(CONTENT.items[state.combat.foodId]?.heal || 0, CONTENT.items[state.combat.foodId2]?.heal || 0);
   if (m.maxHit >= state.combat.maxHp * 0.6) {
-    combatLog(state, `GEAR CHECK: ${m.name} can chunk ${m.maxHit} of your ${state.combat.maxHp} HP.`);
+    combatLog(state, `Danger: ${m.name} can chunk ${m.maxHit} of your ${state.combat.maxHp} HP.`);
   }
   if (foodN * heal < m.maxHit * 3) {
     log(state, `${m.name} outpaces your larder (${foodN} food). Cook, or pick a weaker dock rat.`);
@@ -81,7 +81,7 @@ export function startDungeon(state, dungeonId) {
   if (!d) return "Unknown dungeon.";
   if (bankCount(state, "dungeon-key") < 1) return "Need a Citadel Key.";
   if (Math.max(skillLevel(state, "might"), skillLevel(state, "mark"), skillLevel(state, "weave")) < d.req) {
-    return `Need a combat art at ${d.req}.`;
+    return `Need Might, Mark, or Weave at ${d.req}.`;
   }
   state.combat.dungeon = dungeonId;
   state.combat.dungeonIndex = 0;
@@ -248,6 +248,10 @@ export function playerStats(state) {
 }
 
 function gearSetBonus(state) {
+  return gearSetInfo(state).ratio;
+}
+
+export function gearSetInfo(state) {
   const counts = {};
   for (const slot of Object.keys(state.equipment || {})) {
     const it = CONTENT.items[state.equipment[slot]];
@@ -256,8 +260,22 @@ function gearSetBonus(state) {
     counts[key] = (counts[key] || 0) + 1;
   }
   let best = 0;
-  for (const n of Object.values(counts)) if (n > best) best = n;
-  return best >= 6 ? 0.2 : best >= 4 ? 0.15 : best >= 3 ? 0.08 : 0;
+  let bestKey = null;
+  for (const [k, n] of Object.entries(counts)) {
+    if (n > best) {
+      best = n;
+      bestKey = k;
+    }
+  }
+  const ratio = best >= 6 ? 0.2 : best >= 4 ? 0.15 : best >= 3 ? 0.08 : 0;
+  const tier = bestKey ? Number(bestKey.split(":")[0]) : 0;
+  const names = ["Drift", "Copper", "Iron", "Steel", "Moonsteel", "Adamant", "Runebound", "Wyrm", "Ancient", "Celestial", "Voidglass", "Mythic", "Astral", "Veilborn"];
+  const nm = names[tier] || "Set";
+  const pct = Math.round(ratio * 100);
+  const label = pct
+    ? `${nm} set ${best}/6 — +${pct}% power`
+    : `${best}/6 matching pieces — wear 3 of one tier for a set bonus`;
+  return { count: best, ratio, pct, name: nm, label };
 }
 
 function hitChance(att, eva) {
@@ -432,7 +450,7 @@ function playerHit(state, echoFollow = false) {
     state.combat.hp = Math.min(state.combat.maxHp, state.combat.hp + Math.ceil(dmg * ((st.ps.leech || 0) + (st.cb.leech || 0))));
   }
   const extra = notes.length ? ` (${notes.join(", ")})` : "";
-  combatLog(state, `${echoFollow ? "Echo hits" : "Hit"} ${m.name} for ${dmg}${triTag(st.tri.edge)}${extra}.`);
+  combatLog(state, `${echoFollow ? "Echo hits" : "Hit"} ${m.name} for ${dmg}${triTag(st.tri.edge)}${extra}.`, { dmg, foeHit: false });
 
   if (state.combat.monsterHp <= 0) kill(state, m);
 }
@@ -448,7 +466,7 @@ function tickBleed(state, now) {
   state.combat.monsterHp -= dmg;
   state.combat.bleed -= 1;
   state.combat.nextBleedAt = now + BLEED_TICK_MS;
-  combatLog(state, `Bleed ticks ${dmg} on ${m.name}.`);
+  combatLog(state, `Bleed ticks ${dmg} on ${m.name}.`, { dmg, foeHit: false });
   if (state.combat.monsterHp <= 0) kill(state, m);
 }
 
@@ -457,18 +475,23 @@ function tickPoison(state, now) {
   if (!state.combat.nextPoisonAt) state.combat.nextPoisonAt = now + POISON_TICK_MS;
   if (now < state.combat.nextPoisonAt) return;
   const m = CONTENT.monsters[state.combat.monsterId];
+  const fromFull = state.combat.hp >= state.combat.maxHp;
   const bite = Math.max(2, 2 + Math.floor((m?.maxHit || 4) * 0.35) + Math.min(6, state.combat.poison));
-  state.combat.hp -= bite;
+  let dmg = bite;
+  if (fromFull && dmg >= state.combat.hp) dmg = Math.max(1, state.combat.hp - 1);
+  state._lastBlow = { kind: "poison", dmg, fromFull };
+  state.combat.hp -= dmg;
   state.combat.poison -= 1;
   state.combat.nextPoisonAt = now + POISON_TICK_MS;
-  combatLog(state, `Poison bites ${bite} — food must keep up.`);
+  combatLog(state, `Poison bites ${dmg} — food must keep up.`, { dmg, foeHit: true });
+  autoEat(state, { after: true, force: state.combat.hp <= 0 });
   if (state.combat.hp <= 0) die(state);
 }
 
 function riposte(state, m, st, why) {
   const dmg = Math.max(1, Math.floor(st.power / 5));
   state.combat.monsterHp -= dmg;
-  combatLog(state, `Riposte (${why}) ${dmg}.`);
+  combatLog(state, `Riposte (${why}) ${dmg}.`, { dmg, foeHit: false });
   if (state.combat.monsterHp <= 0) kill(state, m);
 }
 
@@ -504,9 +527,19 @@ function enemyHit(state) {
   }
 
   const specialNotes = [];
-  if (m.special === "burst" && Math.random() < (boss ? 0.28 : 0.2)) {
-    dmg = Math.floor(dmg * (m.burstMul || 2.35) + (m.maxHit * 0.4));
-    specialNotes.push("BURST");
+  let blowKind = "hit";
+  if (m.special === "burst") {
+    if (state.combat.burstWind) {
+      state.combat.burstWind = false;
+      const scale = Math.min(1, state.combat.maxHp / Math.max(8, m.maxHit * 2.2));
+      dmg = Math.floor(dmg * (m.burstMul || 2.35) * scale + m.maxHit * 0.25 * scale);
+      specialNotes.push("BURST");
+      blowKind = "burst";
+    } else if (Math.random() < (boss ? 0.28 : 0.2)) {
+      state.combat.burstWind = true;
+      combatLog(state, `${m.name} coils for a burst.`);
+      return;
+    }
   }
   if (m.special === "drain" && Math.random() < 0.32) {
     const steal = Math.max(3, Math.floor(dmg * 0.45));
@@ -518,6 +551,7 @@ function enemyHit(state) {
       combatLog(state, "Drain snuffs your vows.");
     }
     specialNotes.push(`drain +${steal} (vow thins, food weakens)`);
+    blowKind = "drain";
   }
   if (m.special === "poison" && Math.random() < 0.38) {
     state.combat.poison = Math.min(12, (state.combat.poison || 0) + 4);
@@ -525,14 +559,22 @@ function enemyHit(state) {
     specialNotes.push(`poison ${state.combat.poison}`);
   }
 
+  const fromFull = state.combat.hp >= state.combat.maxHp;
+  if (fromFull && dmg >= state.combat.hp) {
+    dmg = Math.max(1, state.combat.hp - 1);
+    specialNotes.push("held the line");
+  }
+  state._lastBlow = { kind: blowKind, dmg, fromFull, triangle: st.tri.edge };
+
   state.combat.hp -= dmg;
   const spec = specialNotes.length ? ` ${specialNotes.join(", ")}` : "";
-  combatLog(state, `${m.name} hits you for ${dmg}${triTag(st.tri.edge)}${spec}.`);
+  combatLog(state, `${m.name} hits you for ${dmg}${triTag(st.tri.edge)}${spec}.`, { dmg, foeHit: true });
+  autoEat(state, { after: true, force: state.combat.hp <= 0 || state.combat.hp <= (m.maxHit + 1) });
   if (state.combat.hp <= 0) {
+    const foodN = bankCount(state, state.combat.foodId) + bankCount(state, state.combat.foodId2);
+    if (foodN <= 0) state._lastBlow = { ...(state._lastBlow || {}), kind: "starve" };
     die(state);
-    return;
   }
-  autoEat(state, { after: true, force: state.combat.hp <= (m.maxHit + 1) });
 }
 
 function kill(state, m) {
@@ -565,6 +607,7 @@ function kill(state, m) {
   }
   log(state, `${m.name} falls.`);
   combatLog(state, `${m.name} falls.`);
+  state._killFlash = Date.now();
   checkQuests(state);
   rollCombatPet(state);
 
@@ -596,33 +639,64 @@ function kill(state, m) {
   startFight(state, m.id, { respawn: true });
 }
 
-function die(state) {
+export function deathTaxAmount(coins) {
+  const n = Math.max(0, Number(coins) || 0);
+  return Math.min(n, Math.max(3, Math.floor(n * 0.12)));
+}
+
+export function die(state) {
   state.stats.deaths += 1;
+  const blow = state._lastBlow || {};
+  if (blow.fromFull) state.stats.fullHpDeaths = (state.stats.fullHpDeaths || 0) + 1;
   const foe = CONTENT.monsters[state.combat.monsterId];
-  const tax = Math.max(3, Math.floor(state.coins * 0.12));
-  if (state.coins >= tax) {
+  const foodN = bankCount(state, state.combat.foodId) + bankCount(state, state.combat.foodId2);
+  const tax = deathTaxAmount(state.coins);
+  if (tax > 0) {
     state.coins -= tax;
     log(state, `Death tax: ${tax} veilmarks. The citadel is not a charity.`);
+  } else {
+    log(state, "Death tax: empty purse — nothing to take.");
   }
   state.combat.hp = Math.max(1, Math.floor(state.combat.maxHp * 0.35));
+  const tip = deathTip(blow);
   const d = CONTENT.dungeons.find((x) => x.id === state.combat.dungeon);
+  const sheet = {
+    dungeon: d ? d.name : null,
+    floor: d ? (state.combat.dungeonIndex || 0) + 1 : null,
+    of: d ? d.sequence.length : null,
+    foe: foe?.name || "a foe",
+    blow: blow.kind || "hit",
+    triangle: blow.triangle || playerStats(state).tri?.edge,
+    food: foodN,
+    fromFull: !!blow.fromFull,
+    dmg: blow.dmg,
+    tip,
+    t: Date.now()
+  };
   if (d) {
     const floor = (state.combat.dungeonIndex || 0) + 1;
     log(state, `You fall on ${d.name} floor ${floor}/${d.sequence.length}. The run is dust.`);
     combatLog(state, `Death — ${d.name} reset.`);
     state.combat.dungeonDeaths = (state.combat.dungeonDeaths || 0) + 1;
-    state._deathSheet = { dungeon: d.name, floor, of: d.sequence.length, foe: foe?.name || "a closer", t: Date.now() };
   } else {
     log(state, "You fall. The citadel drags you back.");
     combatLog(state, "You fall.");
-    state._deathSheet = { dungeon: null, foe: foe?.name || "a foe", t: Date.now() };
   }
+  state._deathSheet = sheet;
   state.combat.poison = 0;
   state.combat.bleed = 0;
   state.combat.shred = 0;
   state.combat.eatWound = 0;
   state._uiDirty = true;
   stopFight(state, "death");
+}
+
+function deathTip(blow) {
+  if (blow.kind === "burst") return "Burst special — bring Aegis Oath or tankier plate.";
+  if (blow.kind === "poison") return "Poison tick — carry more food or a ward.";
+  if (blow.kind === "drain") return "Drain thins vows and food. Eat earlier or swap style.";
+  if (blow.kind === "starve") return "Dry larder — cook before you hunt.";
+  return "The hit landed. Food, triangle, or heavier plate next time.";
 }
 
 function autoEat(state, opts = {}) {
@@ -653,15 +727,13 @@ function autoEat(state, opts = {}) {
   if (opts.after && state.combat.hp <= lethal) autoEat(state, { force: true });
 }
 
-function combatLog(state, msg) {
+export function combatLog(state, msg, meta = null) {
   state._clog = state._clog || [];
   state._clog.unshift(msg);
   if (state._clog.length > 14) state._clog.pop();
-  const m = /for (\d+)/.exec(msg);
-  if (m) {
+  if (meta && meta.dmg != null) {
     state._floaters = state._floaters || [];
-    const foeHit = /hits you/.test(msg);
-    state._floaters.push({ n: m[1], foe: foeHit, id: (state._floaterSeq = (state._floaterSeq || 0) + 1) });
+    state._floaters.push({ n: String(meta.dmg), foe: !!meta.foeHit, id: (state._floaterSeq = (state._floaterSeq || 0) + 1) });
     if (state._floaters.length > 8) state._floaters.shift();
   }
 }
@@ -797,7 +869,7 @@ export function rollBounty(state, opts = {}) {
 }
 
 export function swapWeaponStyle(state, style) {
-  if (skillLocked(state, style)) return `${style} is still locked.`;
+  if (skillLocked(state, style)) return lockMessage(skillLocked(state, style));
   const held = state.equipment.weapon;
   const pool = Object.keys(state.bank).concat(held ? [held] : []);
   const best = pool

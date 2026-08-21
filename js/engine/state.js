@@ -3,7 +3,13 @@ import { utf8ToB64, b64ToUtf8, clampName, safeMergeKey } from "../util/text.js";
 
 export const CONTENT = buildContent();
 export const TICK_MS = 50;
-const SAVE_KEY = "veilforge-save-v1";
+export const SAVE_KEY = "veilforge-save-v1";
+export const SAVE_VERSION = 2;
+
+let saveFail = null;
+export function lastSaveFail() {
+  return saveFail;
+}
 
 export function emptySkills() {
   const o = {};
@@ -13,7 +19,7 @@ export function emptySkills() {
 
 export function createState() {
   return {
-    version: 2,
+    version: SAVE_VERSION,
     name: "Aelric",
     bornAt: Date.now(),
     lastSave: Date.now(),
@@ -37,7 +43,7 @@ export function createState() {
       hp: 10, maxHp: 10, area: null, monsterId: null, monsterHp: 0,
       nextHitAt: 0, enemyNextAt: 0, fighting: false, dungeon: null, dungeonIndex: 0,
       kills: {}, style: "might", spell: "gust-bolt", prayers: [], vow: 100, maxVow: 100,
-      foodId: "food-0", foodId2: null, autoEat: 0.5, potionId: null, potionCharges: 0,
+      foodId: "food-0", foodId2: null, autoEat: 0.4, potionId: null, potionCharges: 0,
       stunUntil: 0, poison: 0, ward: 0, dungeonDeaths: 0,
       spec: 0, useSpec: true
     },
@@ -47,7 +53,7 @@ export function createState() {
     drove: { pens: [null, null] },
     chart: { active: [null, null], slots: 2, studied: {}, ranks: {} },
     lastOffline: null,
-    whisper: { heat: 0, streak: 0 },
+    whisper: { heat: 0, streak: 0, heatByMark: {} },
     quests: { active: ["q-wake"], done: [], stats: { harvests: 0, laps: 0, bounties: 0, drove: {}, guildMax: 0 } },
     pets: {},
     shopBought: {},
@@ -124,15 +130,23 @@ export function skillLocked(state, skillId) {
   if (!s?.unlock) return null;
   const u = s.unlock;
   if (u.skill && skillLevel(state, u.skill) < u.level) {
-    return `${skillName(u.skill)} ${u.level}`;
+    return { kind: "skill", skill: u.skill, skillName: skillName(u.skill), level: u.level, label: `${skillName(u.skill)} ${u.level}` };
   }
   if (u.kills && (state.stats.kills || 0) < u.kills) {
-    return `${u.kills} kills`;
+    return { kind: "kills", need: u.kills, have: state.stats.kills || 0, label: `${u.kills} kills` };
   }
   if (u.quest && !(state.quests.done || []).includes(u.quest)) {
-    return "a sealed ledger page";
+    return { kind: "quest", quest: u.quest, label: "a sealed ledger page" };
   }
   return null;
+}
+
+export function lockMessage(lock) {
+  if (!lock) return null;
+  if (lock.kind === "skill") return `Locked until ${lock.skillName} ${lock.level}.`;
+  if (lock.kind === "kills") return `Locked until you record ${lock.need} kills.`;
+  if (lock.kind === "quest") return "Locked until you seal a ledger page.";
+  return "Locked.";
 }
 
 function collectUnlocks(state, skill, from, to) {
@@ -165,7 +179,6 @@ export function addItem(state, id, qty) {
   }
   const exists = (state.bank[id] || 0) > 0;
   if (!exists && bankUsed(state) >= bankCap(state)) {
-    state.bankFull = true;
     return false;
   }
   const cat = CONTENT.items[id]?.category;
@@ -322,13 +335,22 @@ export function petBonuses(state, skill) {
   return acc;
 }
 
+export function persistable(state) {
+  const out = {};
+  for (const [k, v] of Object.entries(state || {})) {
+    if (k.startsWith("_")) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
 export function save(state) {
   state.lastSave = Date.now();
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-    state._saveFail = null;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(persistable(state)));
+    saveFail = null;
   } catch (e) {
-    state._saveFail = e.message || "quota";
+    saveFail = e.message || "quota";
     console.warn("save failed", e);
   }
 }
@@ -349,7 +371,13 @@ export function normalizeState(merged) {
   merged.name = clampName(merged.name);
   if (merged.shopBought?.["shop-offline"] && (merged.offlineHours || 18) < 24) merged.offlineHours = 24;
   if (!merged.offlineHours) merged.offlineHours = 18;
-  merged.version = 2;
+  let v = Number(merged.version);
+  if (!Number.isFinite(v) || v < 1) v = 1;
+  while (v < SAVE_VERSION) {
+    v += 1;
+    migrateState(merged, v);
+  }
+  merged.version = SAVE_VERSION;
   if (!merged.skills || typeof merged.skills !== "object") merged.skills = emptySkills();
   for (const s of SKILLS) {
     if (!merged.skills[s.id] || typeof merged.skills[s.id] !== "object") merged.skills[s.id] = emptySkills()[s.id];
@@ -369,7 +397,8 @@ export function normalizeState(merged) {
   merged.chart.ranks = merged.chart.ranks || {};
   merged.bounty = merged.bounty || { monsterId: null, need: 0, have: 0, streak: 0, block: [] };
   merged.bounty.block = merged.bounty.block || [];
-  remapQuestId(merged, "whisper-dock-beggar", "q-whisper");
+  merged.whisper = merged.whisper || { heat: 0, streak: 0, heatByMark: {} };
+  merged.whisper.heatByMark = merged.whisper.heatByMark || {};
   for (const sk of Object.values(merged.skills || {})) {
     if (!sk) continue;
     sk.level = levelFromXp(sk.xp || 0);
@@ -379,6 +408,12 @@ export function normalizeState(merged) {
     lo0.equipment = { ...createState().loadouts[0].equipment };
   }
   return merged;
+}
+
+function migrateState(state, toVersion) {
+  if (toVersion === 2) {
+    remapQuestId(state, "whisper-dock-beggar", "q-whisper");
+  }
 }
 
 function remapQuestId(state, from, to) {
@@ -402,7 +437,7 @@ function deepMerge(a, b) {
 }
 
 export function exportSave(state) {
-  const json = JSON.stringify(state);
+  const json = JSON.stringify(persistable(state));
   return utf8ToB64(json);
 }
 

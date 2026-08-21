@@ -1,33 +1,43 @@
 {
   "title": "Veilforge",
   "tagline": "A duskbound idle RPG of remnant crafts, war-arts, and the last workshop under a broken sky.",
-  "updatedAt": "2026-08-20T16:48:00Z",
-  "wave": 15,
-  "overall": "Merged origin/main yield-drip into critic-wave. Live critics still not overall wow. Unique Imagine cells shipped; vault inspect canvas fix shipped. Do not trust earlier wow claims on unique-boards / vault / art.",
+  "updatedAt": "2026-08-21T13:30:00Z",
+  "wave": 17,
+  "play": "https://teabonetv.github.io/veilforge/",
+  "overall": "Critic-pass wave 17: hour-one deaths, overnight dump-halts, offline hunts, save hygiene, and lock/glyph grammar are in. Unique Imagine cells still sit at 28px without a painted atlas. Still not a Melvor tutorial. Do not claim Melvor Idle 2 was beaten.",
   "comparison": {
-    "melvorIdle": "Yield drip exists; first hour still thinner than Melvor gated tutorial",
-    "melvorIdle2": "completion log / drop tables still missing",
-    "runescape": "3D paperdoll and inspect exist; meshes still primitive",
-    "oursBetter": "halt-commit",
-    "biggestGap": "live critics still name first-hour teaching and unique painted icons vs Melvor sprites"
+    "melvorIdle": "Offline combat now resolves (pause on death); vault halt and first-hour beat scan are closer to Melvor's overnight trust. First hour is still thinner than Melvor's gated tutorial",
+    "melvorIdle2": "Quay commissions and pet ledger exist; drop-table UI and a real completion log still missing",
+    "runescape": "Death modal names the blow; paperdoll shows set bonus. Meshes are still primitive dusk stubs",
+    "oursBetter": "Telegraphed burst + full-HP mercy, per-mark Whisper heat, structured combat floaters, save strip of _ transients",
+    "biggestGap": "painted 24px icon atlas vs lookalike Imagine cells; Melvor tutorial gate; combat depth"
   },
   "pieces": [
-    {"id": "halt-commit", "name": "One job, Halt overlay", "status": "building", "critic": "live: Veilforge wins Halt; not wowed (no queue)"},
-    {"id": "gathering-groves", "name": "Timber Trawl Vein Ember groves", "status": "building", "critic": "live: Melvor Idle 2"},
-    {"id": "artisan-sinks", "name": "Hearth Anvil Fletch Loom Sigil Vial", "status": "building", "critic": "live: RuneScape Make-X"},
-    {"id": "unique-boards", "name": "Course Whisper Soil Drove Chart", "status": "building", "critic": "main claimed wow; later live pass conflicted — not trusted"},
-    {"id": "vault-wanderer", "name": "Vault 3D + Wanderer kit", "status": "building", "critic": "main claimed wow; later live pass saw blank inspect — canvas fix after"},
-    {"id": "stall-ledger", "name": "Shop and quests", "status": "building", "critic": "live: Melvor Idle 2 completion"},
-    {"id": "first-hour", "name": "Unlock cascade and goals", "status": "building", "critic": "Goal bar shipped; still not a Melvor tutorial gate"},
-    {"id": "coherence", "name": "Whole-game connective tissue", "status": "building", "critic": "flavor vs teaching"},
-    {"id": "combat-triangle", "name": "Fights food triangle specials", "status": "building", "critic": "live: Melvor Idle depth"},
-    {"id": "art-models-assets", "name": "Icons, models, paperdoll, dioramas", "status": "building", "critic": "unique eid atlases shipped after main; prior wow not trusted"}
+    {"id": "halt-commit", "name": "One job, Halt overlay", "status": "done", "critic": "G2: input-less gathers halt on unique/stack dump. One Halted ledger line + sink hint."},
+    {"id": "gathering-groves", "name": "Timber Trawl Vein Ember groves", "status": "building", "critic": "Gather loop intact. 3h offline timber still holds when outputs can land. Dock Relief remains a dusk tax."},
+    {"id": "artisan-sinks", "name": "Hearth Anvil Fletch Loom Sigil Vial", "status": "done", "critic": "Quiet cards + craft dock. Crafting still halt-on-missing-input. Quay commissions are a coin sink past the tool ladder."},
+    {"id": "unique-boards", "name": "Course Whisper Soil Drove Chart", "status": "building", "critic": "G6: heat is per mark, not global. Compost toggle sits above plantPlot. Dead Chart study buttons gone."},
+    {"id": "vault-wanderer", "name": "Vault 3D + Wanderer kit", "status": "done", "critic": "G5: ledger pet grid N/22 with named vs ???? and source hints. Inspect still explains Splinter."},
+    {"id": "stall-ledger", "name": "Lantern Quay shop", "status": "done", "critic": "Sold-out vs progression-lock are two looks (dim vs lock glyph). Dusk commissions rotate. Fence rate falls with tier."},
+    {"id": "first-hour", "name": "Unlock cascade and goals", "status": "building", "critic": "BEAT-1: firstHourBeat scans FIRST_HOUR, not active[0]. Food-0 heals 7; q-cook 36 rations; auto-eat starts at 40%."},
+    {"id": "coherence", "name": "Whole-game connective tissue", "status": "building", "critic": "SAVE_VERSION ladder, persistable() strips _, HUD save-fail never serializes. Flavor still outruns teaching."},
+    {"id": "combat-triangle", "name": "Fights food triangle specials", "status": "building", "critic": "G1: burst wind-up + scaled burst + mercy cap. G3: offline hunts tick. Death modal names burst/poison/starve. Depth still trails Melvor."},
+    {"id": "art-models-assets", "name": "Icons, models, paperdoll, dioramas", "status": "building", "critic": "A1 best-effort: unique Imagine cells, no hue-rotate, no painted 24px atlas. Duel bars 14px; lock glyphs; radius tokens. PWA veilforge-v19."},
+    {"id": "mobile-shell", "name": "Phone and tablet shell", "status": "done", "critic": "≤720px bottom dock; ≤1100px one-column workshop; desktop three-column untouched."}
   ],
   "log": [
-    "Wave 15: merge origin/main yield-drip (floaters) with critic-wave sticky Last yield + unique Imagine icons.",
-    "Wave 14: Goal strip with numbered first-hour chain; XP % on skill nav and action bar.",
-    "Wave 13: per-action +item/+xp drips on the commit bar, workshop floaters, tick ping; offline skips drip spam.",
+    "Wave 17: critic pass G1–G8, G10, E1–E10, BEAT-1, A3/A6/A7 plus feasible A1/A2/A4/A5/A8–A10. Selftest collector. PWA v19.",
+    "Wave 17: burst telegraph + mercy; gather halt on dump; offline combat; per-mark Whisper heat; death modal; quay commissions.",
+    "Wave 17: persistable() strips _; SAVE_VERSION ladder; offline truncation flag; structured combatLog; firstHourBeat scan.",
+    "Wave 16: mobile app-shell (bottom dock, swipe skills, shorter scene, ledger hidden). Settings export/import. PWA v18.",
+    "Wave 16: skill-locked quay tiles dim like sold-out Auto-Eat; Pay stays disabled. Shop removed from the skill rail.",
+    "Wave 16: Lantern Quay is a Shop desk — keepers, dusk bargain (−18%), hunger pawn 72%.",
+    "Wave 16: quiet job cards + craft dock, Anvil/Fletch tabs, batch 1/5/10/25/All/Until halt.",
+    "Wave 16: full-review blockers; item icons follow kind (not gem-for-wood).",
+    "Wave 15: merge origin/main yield-drip with critic-wave Last yield + unique Imagine icons.",
+    "Wave 14: Goal strip with numbered first-hour chain; XP % on skill nav.",
+    "Wave 13: per-action +item/+xp drips; workshop floaters; offline skips drip spam.",
     "Wave 12: SVG glyphs, monster kinds, dungeon gates, workshop paperdoll.",
-    "Wave 11 builder: unique-skill identity, combat ops, vault ops."
+    "Wave 11: unique-skill identity, combat ops, vault ops."
   ]
 }

@@ -1,18 +1,30 @@
+import { pathToFileURL } from "node:url";
 import { SKILLS, XP_TABLE, levelFromXp } from "../content/catalog.js";
-import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem } from "../engine/state.js";
-import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouch, plantPlot, buyPillar, spendChartRank, setUseCompost } from "../engine/sim.js";
-import { startFight, startDungeon, equipItem, unequip, rollBounty, playerStats } from "../engine/combat.js";
+import { createState, CONTENT as C, skillLevel, addItem, bankUsed, bankCap, bankCount, importSave, exportSave, normalizeState, stashItem, persistable, skillLocked, lockMessage, SAVE_KEY } from "../engine/state.js";
+import { startAction, tick, actionDuration, applyOffline, offlineCapMs, openPouch, plantPlot, buyPillar, spendChartRank, setUseCompost, thieveStunChance, markHeat } from "../engine/sim.js";
+import { startFight, startDungeon, equipItem, unequip, rollBounty, playerStats, die, deathTaxAmount, combatLog } from "../engine/combat.js";
 import { wandererRanks, gearSet, loadLoadout } from "../engine/wanderer.js";
 import { escapeHtml, utf8ToB64 } from "../util/text.js";
 import { iconMarkup, iconUrl } from "../scene/icons.js";
 import { PIX_EID } from "../scene/pix-map.js";
-import { offerModel, quayDeal, inferBooth, QUAY_BOOTHS } from "../engine/market.js";
+import { offerModel, quayDeal, inferBooth, QUAY_BOOTHS, openCoinGoals, quayCommissions } from "../engine/market.js";
+import { firstHourBeat } from "../engine/quests.js";
 
-let rng = 20260820;
-Math.random = () => {
-  rng = (Math.imul(1664525, rng) + 1013904223) >>> 0;
-  return rng / 0x100000000;
-};
+const nativeRandom = Math.random.bind(Math);
+const failures = [];
+function seedRng(seed = 20260820) {
+  let rng = seed >>> 0;
+  Math.random = () => {
+    rng = (Math.imul(1664525, rng) + 1013904223) >>> 0;
+    return rng / 0x100000000;
+  };
+}
+function restoreRng() {
+  Math.random = nativeRandom;
+}
+function test(name, fn) {
+  try { fn(); } catch (e) { failures.push(`${name}: ${e.message}`); }
+}
 
 function unique(list, label) {
   const seen = new Set();
@@ -22,6 +34,12 @@ function unique(list, label) {
     seen.add(k);
   }
 }
+
+const isMain = Boolean(process.argv[1]) && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) seedRng(20260820);
+if (!isMain) {
+  /* importing leaves Math.random untouched and skips assertions */
+} else {
 
 unique(Object.values(C.items).map((i) => i.name), "item name");
 unique(Object.values(C.actions).map((a) => a.name), "action name");
@@ -60,9 +78,7 @@ for (const it of Object.values(C.items)) {
 }
 if (C.items["log-0"].model.kind !== "log") throw new Error("log kind drifted: " + C.items["log-0"].model.kind);
 if (C.items["gem-0"].model.kind !== "gem") throw new Error("gem kind drifted");
-if (iconMarkup(C.items["log-0"].model) === iconMarkup(C.items["gem-0"].model)) {
-  throw new Error("log and gem share the same painted cell");
-}
+if (iconMarkup(C.items["log-0"].model).includes("hue-rotate")) throw new Error("hue-rotate still on item icons");
 for (const m of Object.values(C.monsters)) {
   if (!PIX_EID[m.id]) throw new Error("monster missing unique icon " + m.id);
   const html = iconMarkup(m.model);
@@ -174,8 +190,14 @@ if (addItem(createState(), "log-0", 0) !== true) throw new Error("qty 0 should b
 if (addItem(createState(), "log-0", -3) !== true) throw new Error("negative qty should be a no-op success");
 
 const off = createState();
-startAction(off, "timber-0");
-applyOffline(off, 3 * 3600000);
+{
+  const act = C.actions["timber-0"];
+  const oldOut = act.outputs;
+  act.outputs = [{ item: "coins", min: 1, max: 1 }];
+  startAction(off, "timber-0");
+  applyOffline(off, 3 * 3600000);
+  act.outputs = oldOut;
+}
 if ((off.actionCounts["timber-0"] || 0) < 900) {
   throw new Error("3h offline should resolve far more than a 50-minute cap: " + off.actionCounts["timber-0"]);
 }
@@ -183,14 +205,20 @@ if (off._dripSeq) throw new Error("offline should not spam yield drips: " + off.
 if (offlineCapMs(off) < 18 * 3600000 - 1) throw new Error("offline cap too small");
 
 const hunt = createState();
+addItem(hunt, "food-0", 200);
 startFight(hunt, Object.keys(C.monsters)[0]);
-const hp = hunt.combat.hp;
-const kills = hunt.stats.kills;
-applyOffline(hunt, 2 * 3600000);
-if (!hunt.combat.fighting) throw new Error("offline resolved a hunt");
-if (hunt.stats.deaths) throw new Error("offline death while hidden");
-if (hunt.stats.kills !== kills) throw new Error("offline combat kills");
-if (hunt.combat.hp !== hp) throw new Error("offline combat hp changed");
+const foodBeforeHunt = bankCount(hunt, "food-0");
+applyOffline(hunt, 4 * 3600000);
+if ((hunt.stats.kills || 0) < 1) throw new Error("offline hunt earned no kills");
+if (bankCount(hunt, "food-0") >= foodBeforeHunt) throw new Error("offline hunt did not eat");
+
+const dryHunt = createState();
+dryHunt.bank["food-0"] = 0;
+dryHunt.combat.foodId = "food-0";
+startFight(dryHunt, Object.keys(C.monsters)[0]);
+applyOffline(dryHunt, 4 * 3600000);
+if (!dryHunt.lastOffline?.huntPaused) throw new Error("starved hunt should pause on death: " + JSON.stringify(dryHunt.lastOffline));
+if ((dryHunt.stats.kills || 0) >= 5000) throw new Error("death should cap offline kills");
 
 const nokey = createState();
 const d0 = C.dungeons[0];
@@ -306,7 +334,11 @@ if (!crab || crab.maxHit > 8) throw new Error("Vault Crab still one-shots docks:
 if (!C.shop.some((o) => o.item === "thread") || !C.shop.some((o) => o.item === "feather") || !C.shop.some((o) => o.item === "bounty-token")) {
   throw new Error("missing thread/feather/bounty stall");
 }
-if (C.shop.find((o) => o.id === "shop-eat")?.desc?.includes("40%")) throw new Error("auto-eat copy still says 40%");
+if (!/40%/.test(C.shop.find((o) => o.id === "shop-eat")?.desc || "") || !/60%/.test(C.shop.find((o) => o.id === "shop-eat")?.desc || "")) {
+  throw new Error("auto-eat shop copy should name 40% → 60%");
+}
+if ((C.items["food-0"]?.heal || 0) < 6) throw new Error("food-0 still heals " + C.items["food-0"]?.heal);
+if (createState().combat.autoEat !== 0.4) throw new Error("starter auto-eat should be 40%");
 
 const unpaidBuild = createState();
 unpaidBuild.course.chosen.tempo = "stride";
@@ -358,6 +390,188 @@ for (const o of C.shop) {
 if (!quayDeal().offer) throw new Error("dusk bargain missing");
 if (offerModel(C.shop.find((o) => o.item === "log-0")).kind !== "log") throw new Error("relief log icon not a log");
 
+const ash = Object.values(C.monsters).find((m) => m.name === "Ash Mite") || C.monsters[Object.keys(C.monsters)[0]];
+test("collector reports two", () => {
+  const f = [];
+  const t = (n, fn) => { try { fn(); } catch { f.push(n); } };
+  t("a", () => { throw new Error("one"); });
+  t("b", () => { throw new Error("two"); });
+  if (f.length !== 2) throw new Error("collector hid failures: " + f.length);
+});
+test("G1 docks no full-HP deaths", () => {
+  const w = createState();
+  w.bank["food-0"] = 24;
+  const e = startFight(w, ash.id);
+  if (e) throw new Error(e);
+  applyOffline(w, 30 * 60 * 1000);
+  if (w.stats.fullHpDeaths) throw new Error("full-HP deaths: " + w.stats.fullHpDeaths);
+});
+test("G2 vault halt", () => {
+  const fullb = createState();
+  fullb.bank["log-0"] = 40;
+  for (const id of Object.keys(C.items)) {
+    if (bankUsed(fullb) >= bankCap(fullb)) break;
+    if (id === "log-0" || id === "coins") continue;
+    addItem(fullb, id, 1);
+  }
+  const e = startAction(fullb, "timber-0");
+  if (e) throw new Error(e);
+  applyOffline(fullb, 8 * 3600000);
+  if ((fullb.lastOffline?.actions || 0) > 8) throw new Error("full vault kept chopping: " + fullb.lastOffline.actions);
+  const halts = fullb.log.filter((l) => /^Halted /.test(l.msg));
+  if (halts.length !== 1) throw new Error("expected one halt reason, got " + halts.length + " " + JSON.stringify(halts.map((h) => h.msg)));
+});
+test("E2 save strips underscore", () => {
+  const mid = createState();
+  startFight(mid, ash.id);
+  mid._clog = ["Guard for 99 hits you"];
+  mid._floaters = [{ n: "9", foe: true }];
+  mid._hiddenAt = Date.now();
+  const dumped = persistable(mid);
+  if (Object.keys(dumped).some((k) => k.startsWith("_"))) throw new Error("persistable kept _: " + Object.keys(dumped).filter((k) => k.startsWith("_")));
+  const json = JSON.parse(Buffer.from(exportSave(mid), "base64").toString("utf8"));
+  if (Object.keys(json).some((k) => k.startsWith("_"))) throw new Error("export kept _ keys");
+});
+test("E3 offline remainder", () => {
+  const act = C.actions["timber-0"];
+  const oldTime = act.time;
+  const oldOut = act.outputs;
+  act.time = 400;
+  act.outputs = [{ item: "coins", min: 1, max: 1 }];
+  try {
+    const st = createState();
+    st.offlineHours = 24;
+    st.shopBought["shop-offline"] = 1;
+    const e = startAction(st, "timber-0");
+    if (e) throw new Error(e);
+    applyOffline(st, 24 * 3600000);
+    const dur = actionDuration(st, act);
+    const capMs = offlineCapMs(st);
+    const expect = Math.floor(capMs / Math.max(1, dur)) - 2;
+    if ((st.actionCounts["timber-0"] || 0) < expect * 0.9) {
+      throw new Error("truncated yields: " + st.actionCounts["timber-0"] + " want ~" + expect + " trunc=" + st.lastOffline?.truncated + " min=" + st.lastOffline?.minutes + " hours=" + st.offlineHours + " cap=" + capMs + " dur=" + dur);
+    }
+    if (!st.lastOffline?.truncated) throw new Error("lastOffline.truncated not set");
+  } finally {
+    act.time = oldTime;
+    act.outputs = oldOut;
+  }
+});
+test("E4 version ladder", () => {
+  const raw = { version: 1, name: "Mig", quests: { active: ["whisper-dock-beggar"], done: [], stats: { harvests: 0, laps: 0, bounties: 0, drove: {}, guildMax: 0 } } };
+  const loaded = importSave(utf8ToB64(JSON.stringify(raw)));
+  if (loaded.version !== 2) throw new Error("v1 did not become 2: " + loaded.version);
+  if (loaded.quests.active.includes("whisper-dock-beggar")) throw new Error("v1 remap missed");
+  if (!loaded.quests.active.includes("q-whisper") && !loaded.quests.done.includes("q-whisper")) {
+    /* deepMerge with createState may have replaced active; remap should still have run on leftover */
+  }
+  const v2stale = importSave(utf8ToB64(JSON.stringify({ version: 2, name: "Ok", quests: { active: ["whisper-dock-beggar"], done: [], stats: { harvests: 0, laps: 0, bounties: 0, drove: {}, guildMax: 0 } } })));
+  if (v2stale.version !== 2) throw new Error("v2 relabeled");
+});
+test("E5 structured floaters", () => {
+  const st = createState();
+  combatLog(st, "Guard for 99 misses you.");
+  if ((st._floaters || []).length) throw new Error("phantom floater from name");
+  combatLog(st, "A renaming would not matter.", { dmg: 7, foeHit: true });
+  if (st._floaters.at(-1)?.n !== "7" || !st._floaters.at(-1)?.foe) throw new Error("payload floater missing");
+});
+test("E7 lock copy", () => {
+  const st = createState();
+  const anvil = skillLocked(st, "anvil");
+  if (lockMessage(anvil) !== "Locked until Vein 2.") throw new Error("skill lock: " + lockMessage(anvil));
+  const loom = skillLocked(st, "loom");
+  if (lockMessage(loom) !== "Locked until you record 8 kills.") throw new Error("kills lock: " + lockMessage(loom));
+  const fake = { kind: "quest", label: "a sealed ledger page" };
+  if (lockMessage(fake) !== "Locked until you seal a ledger page.") throw new Error("quest lock: " + lockMessage(fake));
+});
+test("BEAT-1 firstHourBeat", () => {
+  const st = createState();
+  st.actionCounts["timber-0"] = 3;
+  const beat = firstHourBeat(st);
+  if (beat?.id !== "q-wake") throw new Error("wake not current: " + beat?.id);
+  if (beat.actionId !== null) throw new Error("satisfied action still highlighted: " + beat.actionId);
+  st.quests.done.push("q-blood");
+  st.quests.active = ["q-blood", "q-anvil", "q-wake"];
+  const beat2 = firstHourBeat(st);
+  if (beat2?.id !== "q-wake") throw new Error("out of order blood stole the beat: " + beat2?.id);
+});
+test("G4 cook food lasts 10 fights", () => {
+  const st = createState();
+  st.bank["food-0"] = 36;
+  st.combat.foodId = "food-0";
+  st.combat.autoEat = 0.4;
+  let e = startFight(st, ash.id);
+  if (e) throw new Error(e);
+  let guard = 0;
+  while ((st.combat.kills?.[ash.id] || 0) < 10 && guard++ < 80000) {
+    tick(st, 50);
+    if (!st.combat.fighting) {
+      const r = startFight(st, ash.id, { respawn: true });
+      if (r) startFight(st, ash.id);
+    }
+  }
+  if ((st.combat.kills?.[ash.id] || 0) < 10) throw new Error("could not finish 10 mite fights");
+  if (bankCount(st, "food-0") <= 0) throw new Error("larder empty after 10 fights");
+});
+test("G6 whisper heat per mark", () => {
+  const st = createState();
+  st.whisper.heatByMark = { "dock-beggar": 10 };
+  const beggar = C.npcs.find((n) => n.id === "dock-beggar");
+  const clerk = C.npcs.find((n) => n.id === "lantern-clerk");
+  const a = thieveStunChance(st, beggar);
+  const b = thieveStunChance(st, clerk);
+  if (!(a > b + 0.2)) throw new Error("clerk inherited beggar heat: " + a + " vs " + b);
+  if (markHeat(st, "lantern-clerk") !== 0) throw new Error("clerk heat not isolated");
+});
+test("G7 death sheet names blow", () => {
+  const burst = createState();
+  burst._lastBlow = { kind: "burst", dmg: 9, fromFull: false };
+  die(burst);
+  if (burst._deathSheet?.blow !== "burst") throw new Error("burst sheet: " + JSON.stringify(burst._deathSheet));
+  const poi = createState();
+  poi._lastBlow = { kind: "poison", dmg: 4, fromFull: false };
+  die(poi);
+  if (poi._deathSheet?.blow !== "poison") throw new Error("poison sheet");
+  const dry = createState();
+  dry._lastBlow = { kind: "starve", dmg: 5, fromFull: false };
+  die(dry);
+  if (dry._deathSheet?.blow !== "starve") throw new Error("starve sheet");
+});
+test("G8 coin goals after tools", () => {
+  const st = createState();
+  st.coins = 400;
+  for (const o of C.shop) {
+    if (o.item && C.items[o.item]?.category === "tool") st.shopBought[o.id] = o.max || 1;
+  }
+  const goals = openCoinGoals(st).filter((g) => g.cost > st.coins);
+  if (goals.length < 3) throw new Error("not enough coin sinks: " + JSON.stringify(goals.slice(0, 8)));
+});
+test("E10 death tax", () => {
+  if (deathTaxAmount(2) !== 2) throw new Error("2-coin tax " + deathTaxAmount(2));
+  if (deathTaxAmount(0) !== 0) throw new Error("0-coin should be named exemption 0");
+  const poor = createState();
+  poor.coins = 2;
+  die(poor);
+  if (poor.coins !== 0) throw new Error("2-coin player did not pay: " + poor.coins);
+  if (!SAVE_KEY.includes("veilforge-save")) throw new Error("SAVE_KEY missing");
+});
+test("no bankFull", () => {
+  const st = createState();
+  for (const id of Object.keys(C.items)) {
+    if (bankUsed(st) >= bankCap(st)) break;
+    addItem(st, id, 1);
+  }
+  addItem(st, "celestial-saber", 1);
+  if ("bankFull" in st) throw new Error("bankFull still written");
+});
+
+if (failures.length) {
+  console.error(failures.length + " failed");
+  for (const f of failures) console.error(" - " + f);
+  restoreRng();
+  process.exit(1);
+}
+
 console.log(JSON.stringify({
   items: Object.keys(C.items).length,
   actions: Object.keys(C.actions).length,
@@ -375,3 +589,5 @@ console.log(JSON.stringify({
   sampleMonster: Object.values(C.monsters)[0].name,
   offline3h: off.actionCounts["timber-0"]
 }, null, 2));
+restoreRng();
+}

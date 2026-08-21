@@ -162,7 +162,7 @@ export function buildContent() {
       desc: `Fish ${tier} shoals. Feathers snag in the nets.`
     };
 
-    const foodHeal = 4 + t * 5 + (t >= 8 ? 8 : 0);
+    const foodHeal = 7 + t * 5 + (t >= 8 ? 8 : 0);
     const cookId = addItem({
       id: `food-${t}`, name: `Braised ${tier}`, category: "food", tier: t, stack: true, value: val * 2,
       heal: foodHeal, desc: `Restores ${foodHeal} vitality. Auto-eat respects this number.`
@@ -353,7 +353,7 @@ export function buildContent() {
     { id: "shop-bank-tab", item: null, effect: "bankTab", cost: 2500, repeatable: true, max: 8, name: "Bank Tab", desc: "Another named bank tab." },
     { id: "shop-plot", item: null, effect: "plot", cost: 1200, repeatable: true, max: 12, name: "Soil Plot", desc: "Another farming plot." },
     { id: "shop-pen", item: null, effect: "pen", cost: 1800, repeatable: true, max: 8, name: "Ranch Pen", desc: "Another drove pen." },
-    { id: "shop-eat", item: null, effect: "autoEat", cost: 5000, max: 1, name: "Auto-Eat Threshold", desc: "Raise auto-eat from 50% to 60% vitality." },
+    { id: "shop-eat", item: null, effect: "autoEat", cost: 5000, max: 1, name: "Auto-Eat Threshold", desc: "Raise auto-eat from 40% to 60% vitality." },
     { id: "shop-eat2", item: null, effect: "autoEat2", cost: 40000, name: "Auto-Eat Mastery", desc: "Auto-eat at 75% and 8% extra healing." },
     { id: "shop-loadout", item: null, effect: "loadout", cost: 8000, repeatable: true, max: 5, name: "Gear Loadout", desc: "Save another equipment set." },
     { id: "shop-offline", item: null, effect: "offlineHours", cost: 15000, name: "Deep Rest", desc: "Offline cap 18 → 24 hours." },
@@ -659,11 +659,11 @@ export function buildContent() {
   });
 
   quests.push(
-    { id: "q-wake", name: "Chop three groves", how: "Open Timber. Click the first Drift grove. Wait until 3/3.", desc: "Step 1: chop Drift groves on Timber.", req: [{ type: "action", id: "timber-0", count: 3 }], reward: { coins: 40, xp: { timber: 30 }, items: [{ id: "drift-hatchet", qty: 1 }, { id: "seed-0", qty: 3 }] } },
-    { id: "q-fire", name: "Burn three piles", how: "Open Ember. Burn Drift logs you chopped. Wait until 3/3.", desc: "Step 2: Ember turns logs into ash for later runes.", req: [{ type: "action", id: "ember-0", count: 3 }], reward: { coins: 40, xp: { ember: 40 }, items: [{ id: "ashes", qty: 8 }] } },
-    { id: "q-fish", name: "Catch four fish", how: "Open Trawl. Click the first Drift net.", desc: "Step 3: raw fish must be cooked before it heals.", req: [{ type: "action", id: "trawl-0", count: 4 }], reward: { coins: 50, items: [{ id: "drift-rod", qty: 1 }, { id: "feather", qty: 12 }] } },
-    { id: "q-cook", name: "Cook four fish", how: "Open Hearth. Cook the Drift catch sitting in the vault.", desc: "Step 4: food is what keeps you alive in a fight.", req: [{ type: "action", id: "cook-0", count: 4 }], reward: { coins: 50, items: [{ id: "food-0", qty: 24 }] } },
-    { id: "q-blood", name: "Kill four dock foes", how: "Open Might. Hunt Ash Mite in Cinder Docks. Food is already equipped.", desc: "Step 5: fight until 4 kills. Halt if you were chopping.", req: [{ type: "kills", area: "Cinder Docks", count: 4 }], reward: { coins: 80, xp: { might: 80, vitality: 80 }, items: [{ id: "dock-warden", qty: 1 }, { id: "potion-0", qty: 3 }, { id: "hide", qty: 4 }, { id: "dungeon-key", qty: 1 }] } },
+    { id: "q-wake", name: "Chop three groves", skill: "timber", how: "Open Timber. Click the first Drift grove. Wait until 3/3.", desc: "Step 1: chop Drift groves on Timber.", req: [{ type: "action", id: "timber-0", count: 3 }], reward: { coins: 40, xp: { timber: 30 }, items: [{ id: "drift-hatchet", qty: 1 }, { id: "seed-0", qty: 3 }] } },
+    { id: "q-fire", name: "Burn three piles", skill: "ember", how: "Open Ember. Burn Drift logs you chopped. Wait until 3/3.", desc: "Step 2: Ember turns logs into ash for later runes.", req: [{ type: "action", id: "ember-0", count: 3 }], reward: { coins: 40, xp: { ember: 40 }, items: [{ id: "ashes", qty: 8 }] } },
+    { id: "q-fish", name: "Catch four fish", skill: "trawl", how: "Open Trawl. Click the first Drift net.", desc: "Step 3: raw fish must be cooked before it heals.", req: [{ type: "action", id: "trawl-0", count: 4 }], reward: { coins: 50, items: [{ id: "drift-rod", qty: 1 }, { id: "feather", qty: 12 }] } },
+    { id: "q-cook", name: "Cook four fish", skill: "hearth", how: "Open Hearth. Cook the Drift catch sitting in the vault.", desc: "Step 4: food is what keeps you alive in a fight.", req: [{ type: "action", id: "cook-0", count: 4 }], reward: { coins: 50, items: [{ id: "food-0", qty: 36 }] } },
+    { id: "q-blood", name: "Kill four dock foes", skill: "might", how: "Open Might. Hunt Ash Mite in Cinder Docks. Food is already equipped.", desc: "Step 5: fight until 4 kills. Halt if you were chopping.", req: [{ type: "kills", area: "Cinder Docks", count: 4 }], reward: { coins: 80, xp: { might: 80, vitality: 80 }, items: [{ id: "dock-warden", qty: 1 }, { id: "potion-0", qty: 3 }, { id: "hide", qty: 4 }, { id: "dungeon-key", qty: 1 }] } },
     { id: "q-anvil", name: "Open the Vein", desc: "Mine Drift ore, smelt it, and hammer a saber. The anvil is the spine.", req: [{ type: "action", id: "vein-0", count: 6 }, { type: "action", id: "smelt-0", count: 3 }, { type: "action", id: "smith-drift-saber", count: 1 }], reward: { coins: 120, items: [{ id: "copper-pick", qty: 1 }, { id: "thread", qty: 6 }] } },
     { id: "q-loom", name: "Cut and Stitch", desc: "Sew Drift hide into a cape. War-drops become a loadout.", req: [{ type: "action", id: "loom-drift-hide-cape", count: 1 }], reward: { coins: 120, items: [{ id: "lantern-cape", qty: 1 }, { id: "hide", qty: 8 }] } },
     { id: "q-bounty", name: "Take a Contract", desc: "Finish a bounty. Tokens buy identity, not just more damage.", req: [{ type: "bounty", count: 1 }], reward: { coins: 150, items: [{ id: "bounty-token", qty: 8 }, { id: "food-1", qty: 20 }] } },

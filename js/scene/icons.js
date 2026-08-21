@@ -24,13 +24,13 @@ const KIND_CELL = {
   saber: ["skills", 0, 3], shield: ["skills", 1, 3], food: ["skills", 2, 3], bow: ["skills", 3, 3], crozier: ["skills", 4, 3],
   amulet: ["skills", 0, 4], token: ["skills", 1, 4], compost: ["skills", 2, 4], dust: ["skills", 3, 4], pouch: ["skills", 4, 4],
   log: ["items", 0, 0], ore: ["items", 1, 0], bar: ["items", 2, 0], fish: ["items", 3, 0],
-  cleaver: ["items", 0, 1], needle: ["items", 1, 1], helm: ["items", 4, 1], body: ["items", 5, 1], hidebody: ["items", 5, 1], robe: ["items", 5, 1],
+  cleaver: ["items", 0, 1], needle: ["items", 1, 1], helm: ["items", 4, 1], body: ["items", 5, 1], hidebody: ["items", 5, 0], robe: ["items", 4, 0],
   legs: ["items", 0, 2], boots: ["items", 1, 2], gloves: ["items", 2, 2], cape: ["items", 4, 2],
   ring: ["items", 0, 3], ammo: ["items", 1, 3], axe: ["items", 2, 3], pick: ["items", 3, 3], rod: ["items", 4, 3], potion: ["items", 5, 3],
   rune: ["items", 0, 4], gem: ["items", 1, 4], herb: ["items", 2, 4], seed: ["items", 3, 4],
-  coins: ["items", 4, 5], currency: ["items", 4, 5], bones: ["items", 5, 5], hide: ["items", 4, 2],
-  ashes: ["items", 5, 4], key: ["items", 4, 4], essence: ["skills", 3, 4], material: ["skills", 3, 4], fodder: ["skills", 3, 2],
-  thread: ["skills", 2, 1], feather: ["items", 1, 3],
+  coins: ["items", 4, 5], currency: ["items", 2, 5], bones: ["items", 5, 5], hide: ["items", 3, 2],
+  ashes: ["items", 5, 4], key: ["items", 4, 4], essence: ["items", 0, 5], material: ["items", 1, 5], fodder: ["skills", 3, 2],
+  thread: ["skills", 2, 1], feather: ["items", 3, 5],
   "beast-rat": ["beasts", 0, 0], "beast-wolf": ["beasts", 2, 0], "beast-bat": ["beasts", 3, 0], "beast-spider": ["beasts", 4, 0],
   "beast-knight": ["beasts", 5, 0], "beast-moth": ["beasts", 0, 1], "beast-imp": ["beasts", 1, 1], "beast-crab": ["beasts", 2, 1],
   "beast-hydra": ["beasts", 3, 1], "beast-ghoul": ["beasts", 4, 1], "beast-troll": ["beasts", 5, 1], "beast-golem": ["beasts", 0, 2],
@@ -60,16 +60,12 @@ export function iconMarkup(model = {}, size = 64) {
   const kind = model.kind || "material";
   const unique = model.eid && PIX_EID[model.eid];
   const typed = pixCell(kind);
-  const named = kind.startsWith("beast") || kind.startsWith("boss") || kind.startsWith("gate") || kind.startsWith("pet-")
-    || kind === "grove" || kind === "tide" || kind === "seam" || kind === "pyre";
-  const cell = typed || unique;
+  const cell = unique || typed;
   if (cell) {
     const [sheetId, c, r] = cell;
     const sh = sheetOf(sheetId);
     if (!sh) return "";
-    const hue = ((model.hue ?? 40) - 40);
-    const rot = named && unique && !typed ? 0 : (named ? 0 : (hue * 0.45));
-    return `<span class="pix" style="background-image:url('${sh.src}');background-size:${sh.cols * 100}% ${sh.rows * 100}%;background-position:${(c / Math.max(1, sh.cols - 1)) * 100}% ${(r / Math.max(1, sh.rows - 1)) * 100}%;filter:hue-rotate(${rot}deg)"></span>`;
+    return `<span class="pix pix-${kind}" style="background-image:url('${sh.src}');background-size:${sh.cols * 100}% ${sh.rows * 100}%;background-position:${(c / Math.max(1, sh.cols - 1)) * 100}% ${(r / Math.max(1, sh.rows - 1)) * 100}%"></span>`;
   }
   const hue = ((model.hue ?? 270) % 360 + 360) % 360;
   const seed = model.seed || 1;
@@ -120,9 +116,11 @@ function drawKind(kind, seed, fill, deep, gold) {
     case "helm":
       return bg + `<path d="M16 40 Q16 14 32 12 Q48 14 48 40 Z" fill="${fill}"/><rect x="22" y="30" width="20" height="6" fill="${gold}"/>`;
     case "body":
+      return bg + `<rect x="18" y="16" width="28" height="36" rx="4" fill="${fill}"/><rect x="24" y="22" width="16" height="8" fill="${gold}"/>`;
     case "hidebody":
+      return bg + `<path d="M16 18 L32 12 L48 18 L46 52 L18 52 Z" fill="${fill}"/><ellipse cx="32" cy="28" rx="8" ry="5" fill="${gold}"/>`;
     case "robe":
-      return bg + `<rect x="18" y="16" width="28" height="36" rx="${k === "robe" ? 14 : 4}" fill="${fill}"/><rect x="24" y="22" width="16" height="8" fill="${gold}"/>`;
+      return bg + `<path d="M20 14 Q32 8 44 14 L50 54 Q32 46 14 54 Z" fill="${fill}"/><rect x="28" y="20" width="8" height="18" fill="${gold}"/>`;
     case "legs":
       return bg + `<rect x="18" y="18" width="12" height="32" fill="${fill}"/><rect x="34" y="18" width="12" height="32" fill="${fill}"/>`;
     case "boots":
@@ -182,9 +180,11 @@ function drawKind(kind, seed, fill, deep, gold) {
     case "hide":
       return bg + `<ellipse cx="32" cy="34" rx="18" ry="14" fill="${fill}"/><ellipse cx="32" cy="28" rx="10" ry="6" fill="${gold}"/>`;
     case "essence":
+      return bg + `<circle cx="32" cy="32" r="16" fill="none" stroke="${gold}" stroke-width="3"/><circle cx="32" cy="32" r="7" fill="${fill}"/>`;
     case "dust":
+      return bg + `<circle cx="24" cy="28" r="6" fill="${fill}"/><circle cx="38" cy="24" r="5" fill="${gold}"/><circle cx="34" cy="40" r="7" fill="${fill}"/>`;
     case "material":
-      return bg + `<circle cx="32" cy="32" r="14" fill="${fill}"/><circle cx="32" cy="32" r="6" fill="${gold}"/>`;
+      return bg + `<rect x="16" y="16" width="32" height="32" rx="2" fill="${fill}"/><rect x="22" y="22" width="20" height="8" fill="${gold}"/>`;
     case "ashes":
       return bg + `<ellipse cx="32" cy="42" rx="18" ry="8" fill="${fill}"/><circle cx="24" cy="28" r="5" fill="${gold}"/><circle cx="38" cy="24" r="4" fill="${gold}"/>`;
     case "pouch":

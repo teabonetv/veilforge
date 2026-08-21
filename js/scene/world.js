@@ -98,10 +98,11 @@ export function createWorld(canvas) {
   scene.add(hpBars.root);
 
   function resize() {
-    const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 480;
-    const h = canvas.clientHeight || 280;
+    const box = canvas.getBoundingClientRect();
+    const w = Math.max(64, Math.floor(box.width || canvas.clientWidth || canvas.parentElement?.clientWidth || 480));
+    const h = Math.max(64, Math.floor(box.height || canvas.clientHeight || 160));
     renderer.setSize(w, h, false);
-    camera.aspect = w / Math.max(1, h);
+    camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
   resize();
@@ -128,22 +129,25 @@ export function createWorld(canvas) {
     }
 
     tintForSkill(skill, fighting, scene, gold, rim, hemi, floor);
-    gold.intensity = skill === "anvil" || skill === "ember" || skill === "hearth" || skill === "vow"
-      ? 5.4 + Math.sin(t * 7) * 1.8
-      : 3.8 + Math.sin(t * 2.2) * 0.35;
+    const job = state?.action?.skill || skill;
+    const foodN = Object.entries(state?.bank || {}).reduce((n, [id, qty]) => n + ((CONTENT.items[id]?.heal && qty > 0) ? qty : 0), 0);
+    const topSkill = Object.values(state?.skills || {}).reduce((m, s) => Math.max(m, s?.level || 1), 1);
+    gold.intensity = job === "anvil" || job === "ember" || job === "hearth" || job === "vow"
+      ? 5.6 + Math.sin(t * 7) * 1.8
+      : 3.4 + Math.sin(t * 2.2) * 0.35 + Math.min(1.6, topSkill * 0.012);
     if (state?._fx > 0) {
       gold.intensity += state._fx * 6;
       rim.intensity = 7 + state._fx * 8;
       state._fx *= 0.82;
       if (state._fx < 0.04) state._fx = 0;
     }
-    torchLight.intensity = 2.8 + Math.sin(t * 9.5) * 0.7 + Math.sin(t * 17) * 0.25;
+    torchLight.intensity = 1.15 + Math.min(3.6, foodN * 0.045) + Math.sin(t * 9.5) * 0.35 + Math.sin(t * 17) * 0.12;
     torchLight.position.y = 2.35 + Math.sin(t * 11) * 0.04;
 
     citadel.rotation.y = Math.sin(t * 0.11) * 0.035;
     stars.rotation.y = t * 0.012;
     chartStars.rotation.y = t * 0.018;
-    chartStars.material.opacity = skill === "chart" && !fighting ? 0.95 : fighting ? 0.15 : 0.08;
+    chartStars.material.opacity = skill === "chart" && !fighting ? 0.95 : fighting ? 0.15 : Math.min(0.55, 0.06 + topSkill * 0.004);
     aurora.tick(t, skill);
 
     for (const flame of torches.userData.flames) {

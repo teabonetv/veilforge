@@ -78,3 +78,41 @@ export function hungerStacks(state, hunger) {
 export function pawnRate() {
   return 0.72;
 }
+
+export function vaultFenceRate(item) {
+  const raw = ["log", "ore", "fish", "herb", "seed", "hide", "bar"].includes(item?.category);
+  if (!raw) return 0.4;
+  return Math.max(0.08, 0.4 - (item.tier || 0) * 0.022);
+}
+
+export const QUAY_JOBS = [
+  { key: "moon", name: "Moonsteel Indenture", cost: 5000, need: { item: "bar-4", qty: 20 }, pay: 9000, desc: "Underwrite 5k, deliver 20 Moonsteel bars, purse 9k." },
+  { key: "iron", name: "Iron Shipment", cost: 2500, need: { item: "bar-2", qty: 30 }, pay: 4800, desc: "Dock foundry wants Iron bars by last light." },
+  { key: "rune", name: "Runebound Tithe", cost: 12000, need: { item: "bar-6", qty: 12 }, pay: 20000, desc: "Choir pays a premium if the bars arrive sealed." },
+  { key: "larder", name: "Third-watch Larder", cost: 1800, need: { item: "food-2", qty: 40 }, pay: 3400, desc: "Brae will not cook this watch. You will." },
+  { key: "hide", name: "Hide Bales", cost: 3000, need: { item: "hide", qty: 80 }, pay: 5200, desc: "Loom houses pay for volume, not heroics." },
+  { key: "ash", name: "Ash for Sigil", cost: 2200, need: { item: "ashes", qty: 60 }, pay: 4000, desc: "Star ash without a fire. The quay still wants a plan." }
+];
+
+export function quayCommissions(now = Date.now()) {
+  const day = Math.floor(now / 86400000);
+  return [0, 1, 2].map((i) => {
+    const base = QUAY_JOBS[(day + i * 2) % QUAY_JOBS.length];
+    return { ...base, id: `qj-${base.key}-${day}`, day };
+  });
+}
+
+export function openCoinGoals(state) {
+  const coins = state.coins || 0;
+  const goals = [];
+  for (const o of CONTENT.shop || []) {
+    if (o.max && (state.shopBought?.[o.id] || 0) >= o.max) continue;
+    const { cost } = offerPrice(state, o);
+    if (cost > coins) goals.push({ id: o.id, name: offerName(o), cost });
+  }
+  for (const j of quayCommissions()) {
+    if (state.shopBought?.[j.id]) continue;
+    if (j.cost > coins) goals.push({ id: j.id, name: j.name, cost: j.cost });
+  }
+  return goals.sort((a, b) => a.cost - b.cost);
+}

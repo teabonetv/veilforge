@@ -1,4 +1,4 @@
-import { createState, load, save, exportSave, importSave, CONTENT, recalcHp } from "./engine/state.js";
+import { createState, load, save, exportSave, importSave, CONTENT, recalcHp, SAVE_KEY } from "./engine/state.js";
 import { tick, applyOffline } from "./engine/sim.js";
 import { bindUI, renderShell, renderTop, renderRight } from "./ui/shell.js";
 import { createWorld } from "./scene/world.js";
@@ -46,7 +46,7 @@ const ctx = {
     renderShell(ctx);
   },
   wipe: () => {
-    localStorage.removeItem("veilforge-save-v1");
+    localStorage.removeItem(SAVE_KEY);
     state = createState();
     ctx.state = state;
     recalcHp(state);
@@ -149,6 +149,14 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("pagehide", () => save(state));
 window.addEventListener("veilforge-save", () => save(state));
 window.Capacitor?.Plugins?.App?.addListener?.("pause", () => save(state));
+
+const relayout = () => {
+  world.resize();
+  ctx.portraits?.resize?.();
+};
+window.addEventListener("resize", relayout);
+window.visualViewport?.addEventListener("resize", relayout);
+window.addEventListener("orientationchange", () => setTimeout(relayout, 120));
 
 const scaleEl = document.getElementById("scale");
 if (scaleEl) {

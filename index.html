@@ -43,7 +43,9 @@
             <div class="bar hp"><i id="hp-fill"></i></div>
             <div class="bar swing" title="Your next strike"><i id="you-swing"></i></div>
           </div>
-          <div class="duel-vs" aria-hidden="true">✦</div>
+          <div class="duel-vs" aria-hidden="true">
+            <svg class="gly vs" viewBox="0 0 24 24" width="18" height="18"><path d="M5 12h14M13 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
           <div class="duelist foe">
             <div class="duel-meta"><b id="foe-tag">No foe</b> <span id="foe-hp-label">—</span></div>
             <div class="bar hp foe"><i id="foe-fill"></i></div>
@@ -59,7 +61,8 @@
         </div>
         <button type="button" class="chip" id="food-chip" data-act="food-chip">Food —</button>
         <button type="button" class="chip" id="spec-chip" data-act="spec">Special —</button>
-        <div class="chip marks">✦ <span id="coins">0</span></div>
+        <div class="chip marks"><svg class="gly marks" viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M8 4.2v7.6M6.1 6.4h3.8M6.1 9.6h3.8" stroke="currentColor" stroke-width="1.3" fill="none"/></svg> <span id="coins">0</span></div>
+        <div id="save-fail" hidden></div>
         <div class="tempo-row">
           <button type="button" id="stop-all" data-act="stop">Halt</button>
           <label class="links">Tempo
@@ -76,8 +79,9 @@
     <nav id="desk-nav">
       <button type="button" data-act="desk" data-arg="workshop">Workshop</button>
       <button type="button" data-act="desk" data-arg="bank">Bank</button>
-      <button type="button" data-act="desk" data-arg="stall">Quay</button>
+      <button type="button" data-act="desk" data-arg="stall">Shop</button>
       <button type="button" data-act="desk" data-arg="loadout">Wanderer</button>
+      <button type="button" class="dock-halt" data-act="stop">Halt</button>
       <span class="desk-tag">Prepare. Idle. Trade. The dusk endures.</span>
     </nav>
     <div id="bank-desk" hidden>
@@ -86,7 +90,7 @@
         <p>Every stack has a face. Click a tile to meet it.</p>
         <span id="vault-meta"></span>
       </div>
-      <input id="vault-search" placeholder="Search items, monsters, dungeons, jobs" />
+      <input id="vault-search" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search items, monsters, dungeons, jobs" />
       <div id="vault-chips"></div>
       <div class="vault-layout">
         <div id="vault-grid"></div>
@@ -118,7 +122,7 @@
         <span id="stall-meta"></span>
       </div>
       <div id="stall-watch"></div>
-      <input id="stall-search" placeholder="Search the quay" />
+      <input id="stall-search" type="search" enterkeyhint="search" autocomplete="off" placeholder="Search the quay" />
       <div id="stall-booths" class="tabs"></div>
       <div class="stall-layout">
         <div id="stall-grid"></div>
@@ -132,30 +136,33 @@
         <section id="center"></section>
       </div>
       <aside id="right">
-        <section class="pane">
+        <section class="pane pane-loadout">
           <h3>Loadout</h3>
           <div id="gear"></div>
         </section>
-        <section class="pane">
+        <section class="pane pane-bank">
           <h3>Bank</h3>
           <div id="bank"></div>
         </section>
-        <section class="pane">
-          <h3>Ledger</h3>
+        <section class="pane pane-ledger">
+          <h3>Ledger <span id="ledger-count" class="badge">1</span></h3>
           <div id="quests"></div>
         </section>
-        <section class="pane">
-          <h3>Lantern Quay</h3>
+        <section class="pane pane-shop quiet">
+          <h3>Shop</h3>
           <div id="shop"></div>
         </section>
-        <section class="pane">
-          <h3>Journal</h3>
-          <div id="journal"></div>
+        <section class="pane pane-journal">
+          <details>
+            <summary>Journal</summary>
+            <div id="journal"></div>
+          </details>
         </section>
       </aside>
     </div>
   </div>
   <div id="level-modal" hidden></div>
+  <div id="death-modal" hidden></div>
   <div id="fork-modal" hidden></div>
   <div id="toast"></div>
   <script type="module" src="js/main.js"></script>
